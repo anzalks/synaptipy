@@ -181,7 +181,11 @@ def bland_altman_summary(x: np.ndarray, y: np.ndarray) -> dict:
 def fmt_p(p: float) -> str:
     if np.isnan(p):
         return "N/A"
-    return "< 0.0001" if p < 0.0001 else f"{p:.4f}"
+    if p < 1e-10:
+        return f"{p:.2e}"
+    if p < 0.0001:
+        return f"{p:.2e}"
+    return f"{p:.4f}"
 
 
 # ── Allen Helpers ─────────────────────────────────────────────────────────────
@@ -966,14 +970,12 @@ def build_table2(downloaded_cells: list) -> pd.DataFrame:
 # ── Render Markdown ───────────────────────────────────────────────────────────
 
 
-def make_table1_md(cmp_df: pd.DataFrame) -> str:
+def make_table1_md(cmp_df: pd.DataFrame, stat_table_rows: list, stat_letter_idx: list) -> str:
     metrics = [
-        # ("Peak voltage (mV)", "syn_peak_mV", "efel_peak_mV", "ipfx_peak_mV", "mV"),
         ("AP threshold (mV)", "syn_thr_mV", "efel_thr_mV", "ipfx_thr_mV", "mV"),
         ("AP amplitude (mV)", "syn_amp_mV", "efel_amp_mV", "ipfx_amp_mV", "mV"),
         ("AP half-width (ms)", "syn_hw_ms", "efel_hw_ms", "ipfx_hw_ms", "ms"),
         ("Max dV/dt (V/s)", "syn_maxdvdt", "efel_maxdvdt", "ipfx_maxdvdt", "V/s"),
-        # ("Min dV/dt (V/s)", "syn_mindvdt", "efel_mindvdt", "ipfx_mindvdt", "V/s"),
         ("AP Delay (Time to first spike) (ms)", "syn_ap_delay", "efel_ap_delay", "ipfx_ap_delay", "ms"),
         (
             "Upstroke/Downstroke Ratio",
@@ -982,23 +984,36 @@ def make_table1_md(cmp_df: pd.DataFrame) -> str:
             "ipfx_upstroke_downstroke_ratio",
             "Ratio",
         ),
-        # ("Trough V (mV)", "syn_trough_v", "efel_trough_v", "ipfx_trough_v", "mV"),
         ("Fast AHP depth (mV)", "syn_fahp_mV", "efel_fahp_mV", "ipfx_fahp_mV", "mV"),
         ("ADP amplitude (mV)", "syn_adp_mV", "efel_adp_mV", "ipfx_adp_mV", "mV"),
         ("Mean Firing Frequency (Hz)", "syn_rate_hz", "efel_rate_hz", "ipfx_rate_hz", "Hz"),
-        # ("First ISI (ms)", "syn_first_isi_ms", "efel_first_isi_ms", "ipfx_first_isi_ms", "ms"),
         ("Spike Frequency Adaptation", "syn_sfa", "efel_sfa", "ipfx_sfa", "Ratio"),
     ]
-    md = "**Extended Data Table 1: Statistical summary of SynaptiPy AP extraction vs. eFEL and IPFX benchmarks (Allen Dataset, per-sweep means).**\n\n"
+    md = "**Table 2-1: Statistical summary of SynaptiPy AP extraction vs. eFEL and IPFX benchmarks (Allen Dataset, per-sweep means).**\n\n"
     md += "| Metric | SynaptiPy vs IPFX Pearson *r* | Mean bias vs IPFX | LoA vs IPFX | SynaptiPy vs eFEL Pearson *r* | Mean bias vs eFEL | LoA vs eFEL |\n"
     md += "|--------|-------------------------------|-------------------|-------------|-------------------------------|-------------------|-------------|\n"
 
-    def _fmt_r(vs):
+    def _next_letter():
+        idx = stat_letter_idx[0]
+        stat_letter_idx[0] += 1
+        if idx < 26:
+            return chr(ord('a') + idx)
+        return chr(ord('a') + (idx - 26)) + chr(ord('a') + (idx - 26))
+
+    def _fmt_r_with_letter(vs, data_desc):
         if np.isnan(vs.get("r", np.nan)):
             return "N/A"
-        s = f"{vs['r']:.4f}"
-        if not np.isnan(vs.get("p", np.nan)):
-            s += "***" if vs["p"] < 0.0001 else f" (*p*={vs['p']:.4f})"
+        letter = _next_letter()
+        p = vs.get("p", np.nan)
+        n = vs.get("n", 0)
+        s = f"{vs['r']:.4f} (*p* = {fmt_p(p)})<sup>{letter}</sup>"
+        from scipy.stats import shapiro
+        stat_table_rows.append({
+            "letter": letter,
+            "data_structure": data_desc,
+            "test": f"Pearson correlation (two-sided, *n* = {n})",
+            "power": "N/A",
+        })
         return s
 
     def _fmt_bias(vs, unit):
@@ -1018,39 +1033,55 @@ def make_table1_md(cmp_df: pd.DataFrame) -> str:
             e = cmp_df[e_col].values
             vs_e = corr_summary(e, s)
         else:
-            vs_e = dict(r=np.nan, p=np.nan, bias=np.nan, loa_upper=np.nan, loa_lower=np.nan)
+            vs_e = dict(r=np.nan, p=np.nan, bias=np.nan, loa_upper=np.nan, loa_lower=np.nan, n=0)
 
         if i_col and i_col in cmp_df.columns:
-            i = cmp_df[i_col].values
-            vs_i = corr_summary(i, s)
+            iv = cmp_df[i_col].values
+            vs_i = corr_summary(iv, s)
         else:
-            vs_i = dict(r=np.nan, p=np.nan, bias=np.nan, loa_upper=np.nan, loa_lower=np.nan)
+            vs_i = dict(r=np.nan, p=np.nan, bias=np.nan, loa_upper=np.nan, loa_lower=np.nan, n=0)
+
+        # Test normality of the SynaptiPy data for this metric
+        s_valid = s[~np.isnan(s)]
+        if len(s_valid) >= 8:
+            from scipy.stats import shapiro
+            _, shapiro_p = shapiro(s_valid)
+            data_desc = "Normal distribution" if shapiro_p > 0.05 else "Non-normal distribution"
+        else:
+            data_desc = "Assumed normal (small *n*)"
+
+        fmt_ipfx = _fmt_r_with_letter(vs_i, data_desc) if not np.isnan(vs_i.get("r", np.nan)) else "N/A"
+        fmt_efel = _fmt_r_with_letter(vs_e, data_desc) if not np.isnan(vs_e.get("r", np.nan)) else "N/A"
 
         md += (
             f"| {label} | "
-            f"{_fmt_r(vs_i)} | {_fmt_bias(vs_i, unit)} | {_fmt_loa(vs_i, unit)} | "
-            f"{_fmt_r(vs_e)} | {_fmt_bias(vs_e, unit)} | {_fmt_loa(vs_e, unit)} |\n"
+            f"{fmt_ipfx} | {_fmt_bias(vs_i, unit)} | {_fmt_loa(vs_i, unit)} | "
+            f"{fmt_efel} | {_fmt_bias(vs_e, unit)} | {_fmt_loa(vs_e, unit)} |\n"
         )
 
-    md += "\n*Statistical approaches: All correlations are Pearson's r (two-sided). *** denotes p < 0.0001. Data reflects n = 43 sweeps (unless otherwise missing/rejected) where pipelines detected ≥1 action potential. Bias = mean signed difference (SynaptiPy − benchmark, per-sweep means). LoA = 95% Bland-Altman limits of agreement. SynaptiPy: BatchAnalysisEngine `spike_detection` (dV/dt threshold 20 V/s, refractory 2 ms). eFEL: BlueBrain eFEL defaults. IPFX: Allen IPFX SpikeFeatureExtractor, 9.9 kHz Bessel filter. N/A = no direct benchmark equivalent.*"
+    n_sweeps = len(cmp_df)
+    md += (
+        f"\n*All correlations are Pearson's r (two-sided) with exact *p*-values reported. "
+        f"Data reflects *n* = {n_sweeps} sweeps where all three pipelines detected at least one action potential. "
+        f"Bias = mean signed difference (SynaptiPy minus benchmark, per-sweep means). "
+        f"LoA = 95% Bland-Altman limits of agreement. "
+        f"SynaptiPy: BatchAnalysisEngine spike_detection (dV/dt threshold 20 V/s, refractory 2 ms). "
+        f"eFEL: BlueBrain eFEL defaults. IPFX: Allen IPFX SpikeFeatureExtractor, 9.9 kHz Bessel filter. "
+        f"Superscript letters refer to the statistical table. N/A = no direct benchmark equivalent.*"
+    )
     return md
 
 
-def make_table2_md(cmp_df: pd.DataFrame) -> str:
-    # (label, syn_col, efel_col, ipfx_col, unit)
-    # None means no direct equivalent for that benchmark
+def make_table2_md(cmp_df: pd.DataFrame, stat_table_rows: list, stat_letter_idx: list) -> str:
     metrics = [
         ("Resting Membrane Potential (mV)", "syn_rmp_mV", "efel_rmp_mV", "ipfx_rmp_mV", "mV"),
-        # SS-Rin: SynaptiPy mean last-100ms window == eFEL ohmic_input_resistance
         ("Input Resistance \u2014 Steady-State (M\u03a9) \u2020", "syn_rin_mohm", "efel_rin_mohm", None, "M\u03a9"),
-        # Peak-Rin: SynaptiPy peak deflection == IPFX voltage_deflection
         ("Input Resistance \u2014 Peak (M\u03a9) \u2021", "syn_rin_peak_mohm", None, "ipfx_rin_mohm", "M\u03a9"),
         ("Membrane Time Constant (ms)", "syn_tau_ms", "efel_tau_ms", "ipfx_tau_ms", "ms"),
-        # Sag as percentage (0-100%) -- eFEL sag_ratio2*100, IPFX sag_pct
         ("Sag Percentage (%)", "syn_sag_pct", "efel_sag_pct", "ipfx_sag_pct", "%"),
     ]
     md = (
-        "**Extended Data Table 2: Subthreshold passive properties benchmark "
+        "**Table 2-2: Subthreshold passive properties benchmark "
         "on hyperpolarizing steps (Allen Dataset).**\n\n"
     )
     md += (
@@ -1063,12 +1094,26 @@ def make_table2_md(cmp_df: pd.DataFrame) -> str:
         "|-------------|-------------------------------|-------------------|-------------|\n"
     )
 
-    def _fmt_r(vs):
+    def _next_letter():
+        idx = stat_letter_idx[0]
+        stat_letter_idx[0] += 1
+        if idx < 26:
+            return chr(ord('a') + idx)
+        return chr(ord('a') + (idx - 26)) + chr(ord('a') + (idx - 26))
+
+    def _fmt_r_with_letter(vs, data_desc):
         if np.isnan(vs.get("r", np.nan)):
             return "N/A"
-        s = f"{vs['r']:.4f}"
-        if not np.isnan(vs.get("p", np.nan)):
-            s += "***" if vs["p"] < 0.0001 else f" (*p*={vs['p']:.4f})"
+        letter = _next_letter()
+        p = vs.get("p", np.nan)
+        n = vs.get("n", 0)
+        s = f"{vs['r']:.4f} (*p* = {fmt_p(p)})<sup>{letter}</sup>"
+        stat_table_rows.append({
+            "letter": letter,
+            "data_structure": data_desc,
+            "test": f"Pearson correlation (two-sided, *n* = {n})",
+            "power": "N/A",
+        })
         return s
 
     def _fmt_bias(vs, unit):
@@ -1089,7 +1134,7 @@ def make_table2_md(cmp_df: pd.DataFrame) -> str:
             vs_e = corr_summary(e, s)
             n_val = vs_e["n"]
         else:
-            vs_e = dict(r=np.nan, p=np.nan, bias=np.nan, loa_upper=np.nan, loa_lower=np.nan)
+            vs_e = dict(r=np.nan, p=np.nan, bias=np.nan, loa_upper=np.nan, loa_lower=np.nan, n=0)
             n_val = int(np.sum(~np.isnan(s)))
 
         if i_col and i_col in cmp_df.columns:
@@ -1098,24 +1143,45 @@ def make_table2_md(cmp_df: pd.DataFrame) -> str:
             if n_val == 0:
                 n_val = vs_i["n"]
         else:
-            vs_i = dict(r=np.nan, p=np.nan, bias=np.nan, loa_upper=np.nan, loa_lower=np.nan)
+            vs_i = dict(r=np.nan, p=np.nan, bias=np.nan, loa_upper=np.nan, loa_lower=np.nan, n=0)
+
+        s_valid = s[~np.isnan(s)]
+        if len(s_valid) >= 8:
+            from scipy.stats import shapiro
+            _, shapiro_p = shapiro(s_valid)
+            data_desc = "Normal distribution" if shapiro_p > 0.05 else "Non-normal distribution"
+        else:
+            data_desc = "Assumed normal (small *n*)"
+
+        fmt_efel = _fmt_r_with_letter(vs_e, data_desc) if not np.isnan(vs_e.get("r", np.nan)) else "N/A"
+        fmt_ipfx = _fmt_r_with_letter(vs_i, data_desc) if not np.isnan(vs_i.get("r", np.nan)) else "N/A"
 
         md += (
             f"| {label} | {n_val} | "
-            f"{_fmt_r(vs_e)} | {_fmt_bias(vs_e, unit)} | {_fmt_loa(vs_e, unit)} | "
-            f"{_fmt_r(vs_i)} | {_fmt_bias(vs_i, unit)} | {_fmt_loa(vs_i, unit)} |\n"
+            f"{fmt_efel} | {_fmt_bias(vs_e, unit)} | {_fmt_loa(vs_e, unit)} | "
+            f"{fmt_ipfx} | {_fmt_bias(vs_i, unit)} | {_fmt_loa(vs_i, unit)} |\n"
         )
 
     md += (
-        "\n*All correlations are Pearson's r (two-sided); *** = p < 0.0001. "
+        f"\n*All correlations are Pearson's r (two-sided) with exact *p*-values reported. "
         "LoA = 95% Bland-Altman limits of agreement (mean \u00b1 1.96 SD of "
         "sweep-level differences). "
         "\u2020 SS-Rin: mean voltage in last 100 ms of step (matches eFEL "
         "ohmic_input_resistance). "
         "\u2021 Peak-Rin: maximum hyperpolarization deflection (matches IPFX "
         "voltage_deflection). "
+        "Superscript letters refer to the statistical table. "
         "N/A = no direct benchmark equivalent.*"
     )
+    return md
+
+
+def make_stat_table_md(stat_table_rows: list) -> str:
+    md = "\n\n**Statistical Table**\n\n"
+    md += "| | Data structure | Type of test | Statistical value |\n"
+    md += "|---|---|---|---|\n"
+    for row in stat_table_rows:
+        md += f"| {row['letter']} | {row['data_structure']} | {row['test']} | {row['power']} |\n"
     return md
 
 
@@ -1185,19 +1251,24 @@ def main(argv=None):
 
     log.info("Phase 2: Analysis")
 
+    stat_table_rows = []
+    stat_letter_idx = [0]
+
     t1_csv = OUT_DIR / "benchmark_comparison.csv"
     if args.force or not t1_csv.exists():
         t1_df = build_table1(downloaded_cells)
     else:
         t1_df = pd.read_csv(t1_csv)
-    t1_md = make_table1_md(t1_df)
+    t1_md = make_table1_md(t1_df, stat_table_rows, stat_letter_idx)
 
     t2_csv = OUT_DIR / "passive_properties.csv"
     if args.force or not t2_csv.exists():
         t2_df = build_table2(downloaded_cells)
     else:
         t2_df = pd.read_csv(t2_csv)
-    t2_md = make_table2_md(t2_df)
+    t2_md = make_table2_md(t2_df, stat_table_rows, stat_letter_idx)
+
+    stat_md = make_stat_table_md(stat_table_rows)
 
     if not args.skip_plots:
         plot_cell_summaries(downloaded_cells)
@@ -1220,7 +1291,7 @@ def main(argv=None):
         log.error("Could not find <!-- TABLES_START --> or <!-- TABLES_END --> markers in paper.md")
         return
 
-    new_text = text[: idx1s + len(T1_START)] + "\n\n" + t1_md + "\n\n" + t2_md + "\n" + text[idx1e:]
+    new_text = text[: idx1s + len(T1_START)] + "\n\n" + t1_md + "\n\n" + t2_md + "\n" + stat_md + "\n" + text[idx1e:]
     paper_path.write_text(new_text, encoding="utf-8")
     log.info(f"Success! Updated paper at {paper_path}")
     return 0
