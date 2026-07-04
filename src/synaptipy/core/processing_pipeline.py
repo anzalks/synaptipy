@@ -24,6 +24,7 @@ class SignalProcessingPipeline:
 
     def __init__(self):
         self._steps: List[Dict[str, Any]] = []
+        self.last_warnings: List[str] = []
 
     def add_step(self, step_config: Dict[str, Any], index: Optional[int] = None):
         """
@@ -77,9 +78,11 @@ class SignalProcessingPipeline:
         if data is None or len(data) == 0:
             return data
 
+        self.last_warnings = []
         result = data.copy()
 
         for step in self._steps:
+            pre_step = result.copy()
             try:
                 op_type = step.get("type")
 
@@ -158,15 +161,20 @@ class SignalProcessingPipeline:
                         method = step.get("method", "hold")
                         result = signal_processor.blank_artifact(result, time_vector, onset, duration, method=method)
                     else:
-                        log.warning("Artifact blanking requested but no time " "vector provided. Skipping.")
+                        log.warning("Artifact blanking requested but no time vector provided. Skipping.")
 
-                # Check for bad data after each step
-                if result is not None:
-                    if np.any(np.isnan(result)) or np.any(np.isinf(result)):
-                        log.error(f"Step {op_type}/{step.get('method')} produced invalid data (NaN/Inf)")
+                # Revert if the step produced NaN/Inf
+                if result is not None and (np.any(np.isnan(result)) or np.any(np.isinf(result))):
+                    msg = f"Preprocessing step '{op_type}/{step.get('method')}' produced NaN/Inf — reverted"
+                    log.warning(msg)
+                    self.last_warnings.append(msg)
+                    result = pre_step
 
             except Exception as e:
-                log.error(f"Error processing step {step}: {e}")
+                msg = f"Preprocessing step '{step.get('type')}/{step.get('method')}' failed ({e}) — skipped"
+                log.warning(msg)
+                self.last_warnings.append(msg)
+                result = pre_step
 
         return result
 

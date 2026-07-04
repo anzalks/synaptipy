@@ -33,7 +33,7 @@ import pandas as pd
 
 # Import analysis package to trigger all registrations
 import synaptipy.core.analysis  # noqa: F401 - Import triggers all registrations
-from synaptipy.core.analysis.cross_file_utils import average_padded_trials as get_cross_file_average
+from synaptipy.core.analysis.cross_file_utils import average_padded_trials
 from synaptipy.core.analysis.registry import AnalysisRegistry
 from synaptipy.core.data_model import Recording
 from synaptipy.infrastructure.file_readers import NeoAdapter
@@ -627,7 +627,7 @@ class BatchAnalysisEngine:
             if not master_trial_list:
                 continue
 
-            master_array = get_cross_file_average(master_trial_list)
+            master_array = average_padded_trials(master_trial_list)
             if master_array is None:
                 log.warning("Cross-file avg: no valid trials for channel %s", channel_name)
                 continue

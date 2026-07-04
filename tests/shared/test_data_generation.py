@@ -251,7 +251,7 @@ def make_rc_passive_trace(
     """
     # Clamp pipette Rs so it is always less than Rin
     pipette_rs_mohm = min(pipette_rs_mohm, rin_mohm * 0.3)
-    cm_pf = tau_ms / rin_mohm * 1e6  # tau = RC -> C = tau / R  [pF = ms / MOhm]
+    cm_pf = tau_ms / rin_mohm * 1e3  # C = tau/R: (ms→s)/(MOhm→Ohm) * (F→pF) = 1e-3/1e6 * 1e12 = 1e3
 
     n = int(duration_s * sampling_rate)
     t = np.arange(n) / sampling_rate
