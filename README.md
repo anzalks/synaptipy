@@ -8,7 +8,7 @@
 [![App Downloads](https://img.shields.io/github/downloads/anzalks/synaptipy/total?label=app%20downloads&color=orange)](https://github.com/anzalks/synaptipy/releases)
 [![Release](https://flat.badgen.net/github/tag/anzalks/synaptipy?color=orange&label=release)](https://github.com/anzalks/synaptipy/releases)
 [![Python](https://img.shields.io/badge/python-3.10--3.12-blue?logo=python&logoColor=white)](https://www.python.org/)
-[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](https://github.com/anzalks/synaptipy/blob/main/LICENSE)
 [![Documentation Status](https://app.readthedocs.org/projects/synaptipy/badge/?version=latest)](https://synaptipy.readthedocs.io/en/latest/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](https://github.com/anzalks/synaptipy)
 <!-- BADGES_END -->
@@ -35,11 +35,11 @@ pip install synaptipy
 
 ### Standalone Application
 
-Pre-compiled binaries for Windows, macOS, and Linux are available on the [Releases page](https://github.com/anzalks/synaptipy/releases). Download the file matching your operating system from the v0.1.6.1 release assets:
+Pre-compiled binaries for Windows, macOS, and Linux are available on the [Releases page](https://github.com/anzalks/synaptipy/releases). Download the file matching your operating system from the latest release assets:
 
-- **Windows:** `Synaptipy_Setup_v0.1.6.1.exe`
-- **macOS:** `Synaptipy_v0.1.6.1.dmg` - open the disk image and drag to Applications
-- **Linux:** `Synaptipy-v0.1.6.1-x86_64.AppImage` - mark as executable (`chmod +x`) and run
+- **Windows:** `Synaptipy_Setup.exe` — run the installer
+- **macOS:** `synaptipy.dmg` — open the disk image and drag to Applications
+- **Linux:** `Synaptipy-Linux.AppImage` — mark as executable (`chmod +x`) and run
 
 ### Advanced: From Source
 
@@ -254,13 +254,13 @@ PySide6 is pinned to 6.7.3 on all platforms. PySide6 6.8.0 contains a known cras
 - [Full documentation](https://synaptipy.readthedocs.io/en/latest/)
 - [API reference](https://synaptipy.readthedocs.io/en/latest/api_reference.html)
 - [Developer guide](https://synaptipy.readthedocs.io/en/latest/developer_guide.html)
-- [Extending Synaptipy (plugin guide)](docs/extending_synaptipy.md)
+- [Extending Synaptipy (plugin guide)](https://github.com/anzalks/synaptipy/blob/main/docs/extending_synaptipy.md)
 
 ---
 
 ## Contributing
 
-Contributions are welcome. The preferred contribution pathway for new analysis routines is the plugin interface, which requires no modification to the core package. For changes to the core, infrastructure, or application layers, refer to [CONTRIBUTING.md](CONTRIBUTING.md) and the [developer guide](https://synaptipy.readthedocs.io/en/latest/developer_guide.html) for project conventions, coding standards, and the contribution workflow.
+Contributions are welcome. The preferred contribution pathway for new analysis routines is the plugin interface, which requires no modification to the core package. For changes to the core, infrastructure, or application layers, refer to [CONTRIBUTING.md](https://github.com/anzalks/synaptipy/blob/main/CONTRIBUTING.md) and the [developer guide](https://synaptipy.readthedocs.io/en/latest/developer_guide.html) for project conventions, coding standards, and the contribution workflow.
 
 
 ---
@@ -329,4 +329,4 @@ in the documentation for a complete annotated bibliography.
 
 ## License
 
-Synaptipy is free and open-source software licensed under the GNU Affero General Public License v3 (AGPLv3). See the [LICENSE](LICENSE) file for full terms.
+Synaptipy is free and open-source software licensed under the GNU Affero General Public License v3 (AGPLv3). See the [LICENSE](https://github.com/anzalks/synaptipy/blob/main/LICENSE) file for full terms.
