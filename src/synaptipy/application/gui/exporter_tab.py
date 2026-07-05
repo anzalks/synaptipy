@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd  # Added missing import
-from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6 import QtCore, QtWidgets
 
 from synaptipy.application.controllers.analysis_formatter import AnalysisResultFormatter
 from synaptipy.application.session_manager import SessionManager

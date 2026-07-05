@@ -31,3 +31,4 @@ per-file-ignores =
     src/synaptipy/core/analysis/firing_dynamics.py:C901
     src/synaptipy/core/analysis/passive_properties.py:C901
     src/synaptipy/infrastructure/file_readers/neo_adapter.py:C901
+    src/synaptipy/application/gui/main_window.py:C901

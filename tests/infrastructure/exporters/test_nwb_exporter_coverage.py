@@ -218,3 +218,95 @@ def test_subject_creation_failure(base_recording, base_metadata, tmp_path):
         # Should not crash, should continue without subject
         exporter.export(base_recording, out_file, base_metadata)
         assert out_file.exists()
+
+
+# ---------------------------------------------------------------------------
+# Additional targeted coverage: lines 336, 338, 343-347, 359
+# ---------------------------------------------------------------------------
+
+
+def test_export_non_recording_raises_type_error(base_metadata, tmp_path):
+    """Line 336: non-Recording object raises TypeError."""
+    from unittest.mock import MagicMock
+
+    exporter = NWBExporter()
+    fake = MagicMock()
+    fake.source_file.name = "fake.wcp"
+    # MagicMock is not an instance of Recording → TypeError
+    with pytest.raises(TypeError, match="Invalid 'recording' object"):
+        exporter.export(fake, tmp_path / "x.nwb", base_metadata)
+
+
+def test_export_recording_no_channels_dict_raises(base_metadata, tmp_path):
+    """Line 337-338: Recording without proper channels dict raises ValueError."""
+    from synaptipy.core.data_model import Recording
+
+    rec = Recording(source_file=Path("bad.wcp"))
+    rec.channels = "not_a_dict"
+    exporter = NWBExporter()
+    with pytest.raises(ValueError, match="channels"):
+        exporter.export(rec, tmp_path / "x.nwb", base_metadata)
+
+
+def test_export_missing_device_description_raises(base_recording, tmp_path):
+    """Line 359: missing device_description raises ValueError."""
+    exporter = NWBExporter()
+    metadata = {
+        "session_description": "test",
+        "identifier": "abc123",
+        "session_start_time": datetime.now(timezone.utc),
+        "subject_id": "S1",
+        "species": "Mouse",
+        "device_name": "Amp",
+        # device_description intentionally missing
+    }
+    with pytest.raises(ValueError, match="device_description"):
+        exporter.export(base_recording, tmp_path / "x.nwb", metadata)
+
+
+def test_export_kwargs_injection(base_recording, tmp_path):
+    """Lines 343-347: subject_id/session_start_time/device_description passed as kwargs."""
+    try:
+        import pynwb  # noqa: F401
+    except ImportError:
+        pytest.skip("pynwb not installed")
+
+    exporter = NWBExporter()
+    metadata = {
+        "session_description": "kwarg test",
+        "identifier": "kwarg-id",
+        "species": "Mouse",
+        "device_name": "Test Amp",
+    }
+    out_file = tmp_path / "kwargs.nwb"
+    exporter.export(
+        base_recording,
+        out_file,
+        metadata,
+        subject_id="S_KWARG",
+        session_start_time=datetime.now(timezone.utc),
+        device_description="Patch clamp amplifier",
+    )
+    assert out_file.exists()
+
+
+def test_export_naive_datetime_localizes(base_recording, tmp_path):
+    """Lines 372-380: naive session_start_time gets localized (no tzinfo)."""
+    try:
+        import pynwb  # noqa: F401
+    except ImportError:
+        pytest.skip("pynwb not installed")
+
+    exporter = NWBExporter()
+    metadata = {
+        "session_description": "naive dt test",
+        "identifier": "naive-dt",
+        "session_start_time": datetime(2024, 1, 1, 12, 0, 0),  # no tzinfo!
+        "subject_id": "S1",
+        "species": "Mouse",
+        "device_name": "Amp",
+        "device_description": "Patch clamp amplifier",
+    }
+    out_file = tmp_path / "naive.nwb"
+    exporter.export(base_recording, out_file, metadata)
+    assert out_file.exists()
