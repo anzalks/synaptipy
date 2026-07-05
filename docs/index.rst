@@ -28,6 +28,12 @@ Intan, Igor Pro, NWB, Open Ephys, and additional formats. NWB 2.x export is prov
 
 The source code is hosted on `GitHub <https://github.com/anzalks/synaptipy>`_.
 
+.. image:: tutorial/workflow_demo.gif
+   :alt: Synaptipy Interactive Workflow Demonstration
+   :align: center
+
+|
+
 .. note::
    **Graphics Engine Architecture:** SynaptiPy's interactive workspace relies entirely on
    PyQtGraph's highly optimized, CPU-vectorized native raster engine for rendering
