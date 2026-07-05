@@ -100,7 +100,7 @@ class AnalysisStatusWindow(QtWidgets.QWidget):
     Usage::
 
         handler = QtLoggingHandler(parent=analyser_tab)
-        logging.getLogger("Synaptipy").addHandler(handler)
+        logging.getLogger("synaptipy").addHandler(handler)
         window = AnalysisStatusWindow(parent=analyser_tab)
         window.connect_handler(handler)
         # user opens View -> Show Analysis Status:
@@ -181,7 +181,7 @@ class AnalysisStatusWindow(QtWidgets.QWidget):
         """Connect *handler*.log_emitted to this window's append slot.
 
         Call once from ``AnalyserTab.__init__`` after attaching the handler
-        to ``logging.getLogger("Synaptipy")``.
+        to ``logging.getLogger("synaptipy")``.
 
         Args:
             handler: The :class:`QtLoggingHandler` whose ``log_emitted``

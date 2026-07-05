@@ -120,10 +120,10 @@ class AnalyserTab(QtWidgets.QWidget):
         )
 
         self._log_handler = QtLoggingHandler(parent=self)
-        root_logger = logging.getLogger()
-        if root_logger.level == logging.NOTSET or root_logger.level > logging.DEBUG:
-            root_logger.setLevel(logging.DEBUG)
-        root_logger.addHandler(self._log_handler)
+        app_logger = logging.getLogger("synaptipy")
+        if app_logger.level == logging.NOTSET or app_logger.level > logging.DEBUG:
+            app_logger.setLevel(logging.DEBUG)
+        app_logger.addHandler(self._log_handler)
         self.analysis_status_window = AnalysisStatusWindow(parent=self)
         self.analysis_status_window.connect_handler(self._log_handler)
 

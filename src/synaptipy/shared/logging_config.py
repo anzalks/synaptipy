@@ -96,7 +96,7 @@ def setup_logging(dev_mode=False, log_dir=None, log_filename=None):
         logging.Logger: The configured root logger
     """
     # Create the root logger and set its level
-    root_logger = logging.getLogger("Synaptipy")
+    root_logger = logging.getLogger("synaptipy")
 
     # Remove existing handlers if any
     for handler in list(root_logger.handlers):

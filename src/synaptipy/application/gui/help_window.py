@@ -49,8 +49,8 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 # Relative to sys._MEIPASS root
-_QHC_MEIPASS = Path("Synaptipy") / "resources" / "docs" / "synaptipy.qhc"
-_HTML_MEIPASS = Path("Synaptipy") / "resources" / "docs" / "html"
+_QHC_MEIPASS = Path("synaptipy") / "resources" / "docs" / "synaptipy.qhc"
+_HTML_MEIPASS = Path("synaptipy") / "resources" / "docs" / "html"
 
 
 def _pkg_root() -> Path:
