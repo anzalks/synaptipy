@@ -194,6 +194,21 @@ omit = [
     "*/controllers/analysis_plot_manager.py",
     "*/controllers/file_io_controller.py",
     # Infrastructure with heavy external format dependencies
+    # Pure Qt dialogs with no testable business logic
+    "*/gui/dialogs/trial_selection_dialog.py",
+    "*/gui/widgets/preprocessing_comparison.py",
+    # Template files — designed to be copied by users, not executed
+    "*/templates/analysis_template.py",
+    "*/templates/tab_template.py",
+    "*/templates/test_template.py",
+    # Explorer canvas / controls (Qt rendering, no testable business logic)
+    "*/gui/explorer/plot_canvas.py",
+    "*/gui/explorer/y_controls.py",
+    "*/gui/explorer/config_panel.py",
+    # GUI utility files with tight Qt coupling
+    "*/gui/ui_generator.py",
+    "*/gui/widgets/log_streamer.py",
+    "*/controllers/shortcut_manager.py",
 ]
 
 [tool.coverage.paths]

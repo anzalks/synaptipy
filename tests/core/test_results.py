@@ -9,6 +9,7 @@ from synaptipy.core.results import (
     EventDetectionResult,
     RinResult,
     RmpResult,
+    SingleSpikeResult,
     SpikeTrainResult,
 )
 
@@ -158,6 +159,27 @@ class TestEventDetectionResult:
     def test_n_artifacts_rejected_default(self):
         r = EventDetectionResult(value=0, unit="count")
         assert r.n_artifacts_rejected == 0
+
+
+class TestSingleSpikeResult:
+    """Cover SingleSpikeResult.__repr__ — lines 119-122 (currently 0% hit)."""
+
+    def test_repr_valid_with_amplitude(self):
+        r = SingleSpikeResult(value=1, unit="mV", amplitude=42.5, ap_threshold=-45.0)
+        s = repr(r)
+        assert "42.50" in s
+        assert "amp=" in s
+
+    def test_repr_valid_no_amplitude(self):
+        r = SingleSpikeResult(value=1, unit="mV")
+        s = repr(r)
+        assert "N/A" in s
+
+    def test_repr_invalid(self):
+        r = SingleSpikeResult(value=None, unit="mV", is_valid=False, error_message="spike not found")
+        s = repr(r)
+        assert "Error" in s
+        assert "spike not found" in s
 
 
 class TestCursorResultRepr:

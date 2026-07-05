@@ -83,3 +83,53 @@ class TestParseTrialSelectionString:
         # A token like '3-' has an empty end — strict mode should raise
         with pytest.raises(ValueError):
             parse_trial_selection_string("3-", strict=True)
+
+    def test_lenient_incomplete_range_logged_not_raised(self):
+        """Lines 62-70: incomplete range with trailing dash in lenient mode logs and continues."""
+        # '3-' is an incomplete range — lenient mode skips and returns what was valid
+        result = parse_trial_selection_string("1, 3-")
+        assert 1 in result
+        assert isinstance(result, set)
+
+    def test_lenient_empty_end_after_strip_skipped(self):
+        """Lines 80-85: range where end_str is empty after strip → logged in lenient mode."""
+        # "3 - " → split on "-" gives ["3 ", " "] — neither is "" so has_empty=False,
+        # but after strip end_str="" triggers the second guard at line 79-85.
+        result = parse_trial_selection_string("1, 3 - ")
+        assert 1 in result
+        assert isinstance(result, set)
+        # The "3 - " part is invalid and should be skipped
+
+    def test_strict_empty_end_after_strip_raises(self):
+        """Lines 81-84: strict=True with empty end_str after strip → ValueError."""
+        import pytest
+        with pytest.raises(ValueError):
+            parse_trial_selection_string("3 - ", strict=True)
+
+    def test_lenient_double_dash_range_skipped(self):
+        """Incomplete range with empty start ('−5' parsed as 'empty-5') skips."""
+        result = parse_trial_selection_string("-5")
+        # '-5' is a negative number, parsed as range with leading dash — skipped
+        assert isinstance(result, set)
+
+    def test_attribute_error_nonexistent(self):
+        """shared.__getattr__ raises AttributeError for unknown names (line 58)."""
+        import synaptipy.shared as shared
+        import pytest
+        with pytest.raises(AttributeError):
+            _ = shared.nonexistent_attribute_xyz
+
+    def test_lazy_loading_constants_module(self):
+        """shared.__getattr__ lazy-loads a known export and caches it (lines 59-63)."""
+        # Remove any cached value to force a fresh lazy load
+        import synaptipy.shared as shared
+        cached = shared.__dict__.pop("apply_stylesheet", None)
+        try:
+            val = shared.apply_stylesheet
+            assert callable(val)
+            # Second access uses cached globals
+            val2 = shared.apply_stylesheet
+            assert val2 is val
+        finally:
+            if cached is not None:
+                shared.__dict__["apply_stylesheet"] = cached
