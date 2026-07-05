@@ -538,18 +538,18 @@ def calculate_n_pulse_ratio(  # noqa: C901
     Wesseling & Lo 2002).
 
     Algorithm:
-        1. Measure bl1 (resting baseline before stim 1).
-        2. For pulse *i*:
-           a. Find the peak in the raw trace.
-           b. Evaluate the cumulative residual from all prior decay fits
-              at the peak time.
-           c. amplitude_corrected = (bl1 − peak) − cumulative_residual
-              (signs adjusted per polarity).
-           d. Subtract the cumulative residual from the raw trace in the
-              decay-fit window to isolate this pulse's contribution.
-           e. Fit mono-/bi-exponential to the isolated decay.
-           f. Store the fit for use in subsequent pulses' corrections.
-        3. ratio_i = amplitude_corrected_i / amplitude_corrected_1.
+
+    1. Measure bl1 (resting baseline before stim 1).
+    2. For pulse *i*:
+
+       a. Find the peak in the raw trace.
+       b. Evaluate the cumulative residual from all prior decay fits at the peak time.
+       c. amplitude_corrected = (bl1 - peak) - cumulative_residual (per polarity).
+       d. Subtract the cumulative residual from the raw trace in the decay-fit window.
+       e. Fit mono-/bi-exponential to the isolated decay.
+       f. Store the fit for use in subsequent pulses' corrections.
+
+    3. ratio_i = amplitude_corrected_i / amplitude_corrected_1.
 
     The overlay curves shown on the raw trace are the isolated fits with
     the prior cumulative residual added back, so they visually align with

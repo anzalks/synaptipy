@@ -1104,8 +1104,6 @@ Same interactive markers / threshold line / artifact overlay.
 
 ---
 
----
-
 ### 4.15 Optogenetic Synchronization
 
 ![Evoked Synchronization interface](screenshots/analyser_evoked_responses_evoked_sync.png)
