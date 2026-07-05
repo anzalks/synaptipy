@@ -162,9 +162,7 @@ class SignalProcessingPipeline:
                         freq, q_factor = step.get("freq"), step.get("q_factor")
                         if freq is None or q_factor is None:
                             raise ValueError("notch filter requires 'freq' and 'q_factor'")
-                        result = signal_processor.notch_filter(
-                            result, float(freq), float(q_factor), fs
-                        )
+                        result = signal_processor.notch_filter(result, float(freq), float(q_factor), fs)
 
                 elif op_type == "artifact":
                     if time_vector is not None:

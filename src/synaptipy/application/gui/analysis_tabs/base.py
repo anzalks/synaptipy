@@ -1019,9 +1019,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self.save_button = QtWidgets.QPushButton(f"Save {self.get_display_name()} Result")
         from synaptipy.shared.theme_manager import get_themed_icon
 
-        self.save_button.setIcon(
-            get_themed_icon("document-save", QtWidgets.QStyle.StandardPixmap.SP_DialogSaveButton)
-        )
+        self.save_button.setIcon(get_themed_icon("document-save", QtWidgets.QStyle.StandardPixmap.SP_DialogSaveButton))
         self.save_button.setToolTip(
             f"Save the currently calculated {self.get_display_name()} result to the main results list."
         )
