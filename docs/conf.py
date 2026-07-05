@@ -231,6 +231,7 @@ linkcheck_ignore = [
     r"https://www\.tandfonline\.com/",  # Taylor & Francis — blocks crawler checks with 403
     r"https://rupress\.org/",  # Rockefeller University Press — blocks crawler checks with 403
     r"https://github\.com/anzalks/synaptipy#dependencies-and-citations",  # anchor check can be flaky in CI
+    r"https://codecov\.io/",  # badge endpoint returns 504 under CI load
 ]
 # Allow redirects without treating them as broken (DOI resolvers always redirect)
 linkcheck_allowed_redirects = {
