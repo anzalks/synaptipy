@@ -301,6 +301,65 @@ def _apply_dark_palette(app: QtWidgets.QApplication) -> None:
     app.setPalette(palette)
 
 
+def style_as_subdued(widget, italic: bool = False, font_size: Optional[int] = None) -> None:
+    """Style a widget's text as subdued/secondary using the current palette."""
+    p = widget.palette()
+    p.setColor(widget.foregroundRole(), p.color(QtGui.QPalette.ColorRole.PlaceholderText))
+    widget.setPalette(p)
+    if italic or font_size:
+        f = widget.font()
+        if italic:
+            f.setItalic(True)
+        if font_size:
+            f.setPixelSize(font_size)
+        widget.setFont(f)
+
+
+def warning_banner_stylesheet() -> str:
+    """Return a QFrame stylesheet for warning/info banners that respects the current theme."""
+    if is_dark_mode():
+        return (
+            "QFrame { background: #3d3520; border: 1px solid #665b30;"
+            " border-radius: 4px; color: #e0c870; }"
+        )
+    return (
+        "QFrame { background: #fff3cd; border: 1px solid #ffc107;"
+        " border-radius: 4px; color: #856404; }"
+    )
+
+
+def warning_label_stylesheet() -> str:
+    """Return a QLabel stylesheet for warning/info labels that respects the current theme."""
+    if is_dark_mode():
+        return (
+            "QLabel { background-color: #3d3520; color: #e0c870;"
+            " border: 1px solid #665b30; border-radius: 4px;"
+            " padding: 8px; font-weight: bold; }"
+        )
+    return (
+        "QLabel { background-color: #FFF3CD; color: #856404;"
+        " border: 1px solid #FFEAA7; border-radius: 4px;"
+        " padding: 8px; font-weight: bold; }"
+    )
+
+
+def themed_plot_colors() -> tuple:
+    """Return (background_color, foreground_color) for plots based on the current theme."""
+    if is_dark_mode():
+        return ("#232323", "#cccccc")
+    return ("white", "black")
+
+
+def get_themed_icon(theme_name: str, fallback_standard_pixmap=None) -> QtGui.QIcon:
+    """Get a themed icon with a fallback for platforms without Freedesktop icon themes."""
+    icon = QtGui.QIcon.fromTheme(theme_name)
+    if icon.isNull() and fallback_standard_pixmap is not None:
+        app = QtWidgets.QApplication.instance()
+        if app:
+            icon = app.style().standardIcon(fallback_standard_pixmap)
+    return icon
+
+
 __all__ = [
     "ThemeMode",
     "get_theme_mode",
@@ -308,4 +367,9 @@ __all__ = [
     "is_dark_mode",
     "apply_theme",
     "get_theme_signals",
+    "style_as_subdued",
+    "warning_banner_stylesheet",
+    "warning_label_stylesheet",
+    "themed_plot_colors",
+    "get_themed_icon",
 ]

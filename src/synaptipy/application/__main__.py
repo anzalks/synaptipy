@@ -183,8 +183,10 @@ class CrashReportDialog(QtWidgets.QDialog):
         self._text_area = QtWidgets.QPlainTextEdit()
         self._text_area.setReadOnly(True)
         self._text_area.setPlainText(self._markdown_report)
-        font = QtGui.QFont("Courier New", 9)
+        font = QtGui.QFont()
         font.setStyleHint(QtGui.QFont.StyleHint.Monospace)
+        font.setFamily("monospace")
+        font.setPointSize(9)
         self._text_area.setFont(font)
         layout.addWidget(self._text_area)
 

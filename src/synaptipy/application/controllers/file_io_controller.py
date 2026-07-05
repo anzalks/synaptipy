@@ -62,6 +62,7 @@ class FileIOController:
         dialog = QtWidgets.QFileDialog(self.parent, "Open Recording File", filter=file_filter)
         dialog.setDirectory(last_dir)
         dialog.setFileMode(QtWidgets.QFileDialog.FileMode.ExistingFile)
+        dialog.setOption(QtWidgets.QFileDialog.Option.DontUseNativeDialog, True)
 
         # Add Custom Checkbox
         lazy_load_checkbox = QtWidgets.QCheckBox("Lazy Load (recommended for large files)")

@@ -134,6 +134,14 @@ class StartupManager(QtCore.QObject):
         """Begin the optimized loading process."""
         log.debug("Beginning optimized loading process")
 
+        # Restore the user's saved theme preference before building any UI
+        try:
+            from synaptipy.shared.theme_manager import apply_theme
+
+            apply_theme()
+        except Exception as e:
+            log.warning(f"Could not restore saved theme: {e}")
+
         # Step 0: Initial setup
         self._update_progress(0)
 

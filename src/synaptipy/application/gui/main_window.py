@@ -65,17 +65,23 @@ class MainWindow(QtWidgets.QMainWindow):
         self.session_manager = SessionManager()
         self.setWindowTitle("Synaptipy - Electrophysiology Visualizer")
 
-        # Set Window Icon
-        # When running as a PyInstaller bundle, __file__ is inside a temp dir;
-        # resources are placed under sys._MEIPASS/Synaptipy/resources/.
+        # Set Window Icon — prefer the native format for each platform
         if hasattr(sys, "_MEIPASS"):
-            icon_path = Path(sys._MEIPASS) / "Synaptipy" / "resources" / "icons" / "logo.png"
+            icons_dir = Path(sys._MEIPASS) / "synaptipy" / "resources" / "icons"
         else:
-            icon_path = Path(__file__).parent.parent.parent / "resources" / "icons" / "logo.png"
+            icons_dir = Path(__file__).parent.parent.parent / "resources" / "icons"
+        if sys.platform == "darwin":
+            icon_path = icons_dir / "logo.icns"
+        elif sys.platform == "win32":
+            icon_path = icons_dir / "logo.ico"
+        else:
+            icon_path = icons_dir / "logo.png"
+        if not icon_path.exists():
+            icon_path = icons_dir / "logo.png"
         if icon_path.exists():
             app_icon = QtGui.QIcon(str(icon_path))
             self.setWindowIcon(app_icon)
-            QtWidgets.QApplication.setWindowIcon(app_icon)  # Set for taskbar/dock as well
+            QtWidgets.QApplication.setWindowIcon(app_icon)
 
         # --- Calculate initial size based on screen (70%) ---
         screen = QtWidgets.QApplication.primaryScreen()
@@ -193,8 +199,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.preferences_action = edit_menu.addAction("&Preferences...")
         self.preferences_action.setShortcut(QtGui.QKeySequence.StandardKey.Preferences)
         self.preferences_action.setToolTip("Open application preferences")
-        # Force it to appear in Edit menu on macOS (disable auto-move to App menu)
-        self.preferences_action.setMenuRole(QtGui.QAction.MenuRole.NoRole)
+        self.preferences_action.setMenuRole(QtGui.QAction.MenuRole.PreferencesRole)
         self.preferences_action.triggered.connect(self._show_preferences)
 
         edit_menu.addSeparator()
@@ -349,9 +354,9 @@ class MainWindow(QtWidgets.QMainWindow):
         # Update-available banner (hidden until VersionCheckerWorker fires)
         self._update_banner = QtWidgets.QFrame(self)
         self._update_banner.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
-        self._update_banner.setStyleSheet(
-            "QFrame { background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; }"
-        )
+        from synaptipy.shared.theme_manager import warning_banner_stylesheet
+
+        self._update_banner.setStyleSheet(warning_banner_stylesheet())
         _ub_layout = QtWidgets.QHBoxLayout(self._update_banner)
         _ub_layout.setContentsMargins(12, 4, 12, 4)
         self._update_banner_label = QtWidgets.QLabel()

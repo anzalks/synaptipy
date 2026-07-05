@@ -42,7 +42,9 @@ class PreprocessingComparisonDialog(QtWidgets.QDialog):
 
         # Info label
         info = QtWidgets.QLabel("Compare raw data (left) with preprocessed data (right)")
-        info.setStyleSheet("color: gray; font-style: italic;")
+        from synaptipy.shared.theme_manager import style_as_subdued
+
+        style_as_subdued(info, italic=True)
         layout.addWidget(info)
 
         # Horizontal layout for side-by-side plots

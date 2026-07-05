@@ -114,7 +114,7 @@ jobs:
           # exits 0 cleanly even in no-console / offscreen mode.
           # We redirect to a file (not a pipe) so $? captures the binary's
           # exit code rather than tee's (which is always 0).
-          xvfb-run -a dist/Synaptipy/Synaptipy --version > /tmp/smoke.txt 2>&1
+          xvfb-run -a dist/synaptipy/synaptipy --version > /tmp/smoke.txt 2>&1
           CODE=$?
           cat /tmp/smoke.txt
           if [ "$CODE" -ne 0 ]; then
@@ -127,7 +127,7 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          dist/synaptipy.app/Contents/MacOS/Synaptipy --version > /tmp/smoke.txt 2>&1
+          dist/synaptipy.app/Contents/MacOS/synaptipy --version > /tmp/smoke.txt 2>&1
           CODE=$?
           cat /tmp/smoke.txt
           if [ "$CODE" -ne 0 ]; then
@@ -144,7 +144,7 @@ jobs:
           # PowerShell's exit-code propagation is unpredictable for GUI apps.
           # Verify existence + minimum size (a broken PyInstaller bundle would
           # be tiny or absent) which gives equivalent packaging assurance.
-          $binaryPath = "dist\Synaptipy\synaptipy.exe"
+          $binaryPath = "dist\synaptipy\synaptipy.exe"
           if (-not (Test-Path $binaryPath)) {
             Write-Error "Binary not found: $binaryPath"
             exit 1
@@ -192,7 +192,7 @@ jobs:
           mkdir -p AppDir/usr/bin
 
           # 2. Copy the PyInstaller output into the AppDir
-          cp -r dist/Synaptipy/* AppDir/usr/bin/
+          cp -r dist/synaptipy/* AppDir/usr/bin/
 
           # 3. Copy the desktop file and icon to the root of AppDir
           cp installer/linux/synaptipy.desktop AppDir/
@@ -200,7 +200,7 @@ jobs:
 
           # 4. Create the standard AppRun symlink pointing to our binary
           cd AppDir
-          ln -s usr/bin/Synaptipy AppRun
+          ln -s usr/bin/synaptipy AppRun
           cd ..
 
           # 5. Download the AppImage runtime

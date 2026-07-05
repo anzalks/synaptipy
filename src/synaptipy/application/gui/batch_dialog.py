@@ -21,6 +21,7 @@ from PySide6 import QtCore, QtWidgets
 from synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
 from synaptipy.core.analysis.registry import AnalysisRegistry
 from synaptipy.shared.styling import style_button, style_label
+from synaptipy.shared.theme_manager import style_as_subdued
 
 log = logging.getLogger(__name__)
 
@@ -144,7 +145,7 @@ class PipelineStepWidget(QtWidgets.QFrame):
         else:
             params_str = "(default params)"
         params_label = QtWidgets.QLabel(params_str)
-        params_label.setStyleSheet("color: gray;")
+        style_as_subdued(params_label)
         layout.addWidget(params_label, stretch=1)
 
         # Remove button
@@ -222,7 +223,7 @@ class AddStepDialog(QtWidgets.QDialog):
         # Description
         self.description_label = QtWidgets.QLabel()
         self.description_label.setWordWrap(True)
-        self.description_label.setStyleSheet("color: gray; font-style: italic;")
+        style_as_subdued(self.description_label, italic=True)
         type_layout.addRow("", self.description_label)
 
         layout.addWidget(type_group)
@@ -448,7 +449,7 @@ class AddStepDialog(QtWidgets.QDialog):
         else:
             # Generic message for unknown analysis types
             info_label = QtWidgets.QLabel("Default parameters will be used.")
-            info_label.setStyleSheet("color: gray; font-style: italic;")
+            style_as_subdued(info_label, italic=True)
             self.params_layout.addRow("", info_label)
             self.param_widgets["_info"] = info_label
 
@@ -622,7 +623,7 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         channel_help = QtWidgets.QLabel(
             "Enter comma-separated channel names. Leave empty to process all channels found in each file."
         )
-        channel_help.setStyleSheet("color: gray; font-style: italic; font-size: 10pt;")
+        style_as_subdued(channel_help, italic=True)
         channel_layout.addWidget(channel_help)
 
         main_layout.addWidget(channel_group)
@@ -670,7 +671,7 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         # Available analyses info
         available_count = len(AnalysisRegistry.list_registered())
         info_label = QtWidgets.QLabel(f"{available_count} analysis types available")
-        info_label.setStyleSheet("color: gray;")
+        style_as_subdued(info_label)
         pipeline_btn_layout.addWidget(info_label)
 
         pipeline_layout.addLayout(pipeline_btn_layout)
@@ -700,7 +701,7 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         progress_layout.addWidget(self.progress_bar)
 
         self.status_label = QtWidgets.QLabel("Ready")
-        self.status_label.setStyleSheet("color: gray;")
+        style_as_subdued(self.status_label)
         progress_layout.addWidget(self.status_label)
 
         main_layout.addWidget(progress_group)
@@ -717,7 +718,7 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
 
         # Results info
         self.results_info_label = QtWidgets.QLabel("No results yet")
-        self.results_info_label.setStyleSheet("color: gray;")
+        style_as_subdued(self.results_info_label)
         results_layout.addWidget(self.results_info_label)
 
         main_layout.addWidget(results_group, stretch=1)

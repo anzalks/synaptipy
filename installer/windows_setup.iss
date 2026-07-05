@@ -19,12 +19,12 @@ SolidCompression=yes
 OutputDir=..
 
 [Files]
-Source: "..\dist\Synaptipy\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\synaptipy\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\src\synaptipy\resources\icons\logo.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\Synaptipy"; Filename: "{app}\Synaptipy.exe"; IconFilename: "{app}\logo.ico"
-Name: "{autodesktop}\Synaptipy"; Filename: "{app}\Synaptipy.exe"; IconFilename: "{app}\logo.ico"; Tasks: desktopicon
+Name: "{group}\Synaptipy"; Filename: "{app}\synaptipy.exe"; IconFilename: "{app}\logo.ico"
+Name: "{autodesktop}\Synaptipy"; Filename: "{app}\synaptipy.exe"; IconFilename: "{app}\logo.ico"; Tasks: desktopicon
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked

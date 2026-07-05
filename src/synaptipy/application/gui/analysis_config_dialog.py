@@ -42,7 +42,9 @@ class AnalysisConfigDialog(QtWidgets.QDialog):
             "Configure default parameters for analysis modules.\n"
             "Changes will apply to new analysis tabs or when resetting parameters."
         )
-        desc.setStyleSheet("color: gray;")
+        from synaptipy.shared.theme_manager import style_as_subdued
+
+        style_as_subdued(desc)
         main_layout.addWidget(desc)
 
         # Tab Widget for Analyses

@@ -348,7 +348,9 @@ class AnalyserTab(QtWidgets.QWidget):
 
         # Info label showing number of files
         self.files_info_label = QtWidgets.QLabel("No files loaded")
-        self.files_info_label.setStyleSheet("color: gray;")
+        from synaptipy.shared.theme_manager import style_as_subdued
+
+        style_as_subdued(self.files_info_label)
         toolbar_layout.addWidget(self.files_info_label)
 
         main_layout.addLayout(toolbar_layout)
@@ -356,16 +358,9 @@ class AnalyserTab(QtWidgets.QWidget):
         # --- Preprocessing Indicator Banner ---
         self.preprocessing_indicator = QtWidgets.QLabel()
         self.preprocessing_indicator.setWordWrap(True)
-        self.preprocessing_indicator.setStyleSheet("""
-            QLabel {
-                background-color: #FFF3CD;
-                color: #856404;
-                border: 1px solid #FFEAA7;
-                border-radius: 4px;
-                padding: 8px;
-                font-weight: bold;
-            }
-        """)
+        from synaptipy.shared.theme_manager import warning_label_stylesheet
+
+        self.preprocessing_indicator.setStyleSheet(warning_label_stylesheet())
         self.preprocessing_indicator.setVisible(False)
         main_layout.addWidget(self.preprocessing_indicator)
 
@@ -812,7 +807,9 @@ class AnalyserTab(QtWidgets.QWidget):
             self.files_info_label.setStyleSheet("")  # Reset to default color
         else:
             self.files_info_label.setText("No files loaded")
-            self.files_info_label.setStyleSheet("color: gray;")
+            from synaptipy.shared.theme_manager import style_as_subdued
+
+            style_as_subdued(self.files_info_label)
 
         # Update the Tree Widget display
         self.source_list_widget.clear()
