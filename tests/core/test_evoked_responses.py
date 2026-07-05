@@ -187,8 +187,9 @@ class TestRunPprWrapperTtl:
 
         metrics = result["metrics"]
         assert metrics.get("ppr_error") is None or "window" in str(metrics.get("ppr_error", ""))
-        assert abs(metrics["stim1_onset_used_s"] - 0.1) < 0.001
-        assert abs(metrics["stim2_onset_used_s"] - 0.25) < 0.001
+        onsets = metrics["_stim_onsets"]
+        assert abs(onsets[0] - 0.1) < 0.001
+        assert abs(onsets[1] - 0.25) < 0.001
 
     def test_no_ttl_data_falls_back_to_manual(self):
         """When use_ttl=True but ttl_data is None, manual values should be used."""
@@ -209,8 +210,9 @@ class TestRunPprWrapperTtl:
         )
 
         metrics = result["metrics"]
-        assert abs(metrics["stim1_onset_used_s"] - 0.1) < 1e-6
-        assert abs(metrics["stim2_onset_used_s"] - 0.25) < 1e-6
+        onsets = metrics["_stim_onsets"]
+        assert abs(onsets[0] - 0.1) < 1e-6
+        assert abs(onsets[1] - 0.25) < 1e-6
 
 
 # ---------------------------------------------------------------------------

@@ -906,22 +906,7 @@ class TestBatchAllAnalysisTypes:
         assert "event_count" in df.columns
 
     # ------------------------------------------------------------------
-    # 5. event_detection_baseline_peak
-    # ------------------------------------------------------------------
-    def test_batch_event_detection_baseline_peak(self):
-        """Event detection (baseline-peak) on flat trace — 0 events is valid."""
-        data, _ = _flat_trace(0.0, 1.0, 10000.0)
-        df = self._run_batch_single(
-            "event_detection_baseline_peak",
-            "first_trial",
-            {"direction": "negative"},
-            [data],
-        )
-        self._assert_common_columns(df, "event_detection_baseline_peak", "first_trial")
-        assert "event_count" in df.columns
-
-    # ------------------------------------------------------------------
-    # 6. burst_analysis
+    # 5. burst_analysis
     # ------------------------------------------------------------------
     def test_batch_burst_analysis(self):
         """Burst analysis on flat trace — 0 bursts is valid."""
@@ -1198,7 +1183,6 @@ class TestBatchAllAnalysisTypes:
             "spike_detection",
             "event_detection_threshold",
             "event_detection_deconvolution",
-            "event_detection_baseline_peak",
             "burst_analysis",
             "excitability_analysis",
             "rin_analysis",

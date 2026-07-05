@@ -7,7 +7,7 @@ This document explains the styling system used in Synaptipy, how it's organized,
 Synaptipy uses Qt's native theming system (`src/synaptipy/shared/styling.py`) for consistent application appearance. The styling system is designed to:
 
 1. Ensure visual consistency throughout the application using Qt's built-in palette system
-2. Support seamless light/dark theme switching
+2. Support light/dark theme switching
 3. Provide convenient helpers for PyQtGraph visualization styling
 4. Minimize custom styling in favor of native Qt appearance
 

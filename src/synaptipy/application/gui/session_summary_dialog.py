@@ -127,6 +127,6 @@ class SessionSummaryDialog(QtWidgets.QDialog):
         # You can expand this logic to extract more actual parameters
         return (
             f"Data was analyzed using Synaptipy {version}. "
-            f"Event detection utilized a matched filter (freq: {freq} Hz) "
+            f"Event detection used a matched filter (freq: {freq} Hz) "
             f"with a prominence factor of {prominence}."
         )

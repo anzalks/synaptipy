@@ -60,10 +60,9 @@ def test_tab_has_threshold_line(event_tab):
 
 
 def test_tab_has_method_selector(synaptic_events_tab):
-    """Verify that the synaptic_events module tab has a method combobox with 3 entries."""
+    """Verify that the synaptic_events module tab has a method combobox with 2 entries."""
     assert synaptic_events_tab.method_combobox is not None
-    # Should have 3 methods
-    assert synaptic_events_tab.method_combobox.count() == 3
+    assert synaptic_events_tab.method_combobox.count() == 2
 
 
 def test_get_covered_analysis_names(synaptic_events_tab):
@@ -71,7 +70,6 @@ def test_get_covered_analysis_names(synaptic_events_tab):
     covered = synaptic_events_tab.get_covered_analysis_names()
     assert "event_detection_threshold" in covered
     assert "event_detection_deconvolution" in covered
-    assert "event_detection_baseline_peak" in covered
 
 
 def test_visualization_with_wrapper_result(event_tab):

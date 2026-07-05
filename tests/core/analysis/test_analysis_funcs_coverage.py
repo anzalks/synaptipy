@@ -39,7 +39,6 @@ from synaptipy.core.analysis.synaptic_events import (
     calculate_event_charge_dynamic,
     compute_local_pre_event_baseline,
     fit_biexponential_decay,
-    run_event_detection_baseline_peak_wrapper,
     run_event_detection_template_wrapper,
     run_event_detection_threshold_wrapper,
     synaptic_events_module,
@@ -451,7 +450,8 @@ class TestRunPprWrapper:
         v, t = _flat()
         result = run_ppr_wrapper(v, t, FS, stim1_onset_s=0.1, stim2_onset_s=0.2)
         assert result["module_used"] == "evoked_responses"
-        assert "paired_pulse_ratio" in result["metrics"]
+        assert "ratio_p1" in result["metrics"]
+        assert "ratio_p2" in result["metrics"]
 
     def test_negative_polarity(self):
         v, t = _psc_trace(n_events=2)
@@ -524,28 +524,6 @@ class TestRunEventDetectionTemplateWrapper:
     def test_with_artifact_rejection(self):
         v, t = _psc_trace()
         result = run_event_detection_template_wrapper(v, t, FS, reject_artifacts=True, direction="negative")
-        assert result["module_used"] == "synaptic_events"
-
-
-class TestRunEventDetectionBaselinePeakWrapper:
-    def test_normal_events(self):
-        v, t = _psc_trace(n_events=3)
-        result = run_event_detection_baseline_peak_wrapper(v, t, FS)
-        assert result["module_used"] == "synaptic_events"
-
-    def test_flat_trace(self):
-        v, t = _flat(value=0.0)
-        result = run_event_detection_baseline_peak_wrapper(v, t, FS)
-        assert result["module_used"] == "synaptic_events"
-
-    def test_positive_direction(self):
-        v, t = _psc_trace(amplitude=20.0)
-        result = run_event_detection_baseline_peak_wrapper(v, t, FS, direction="positive")
-        assert result["module_used"] == "synaptic_events"
-
-    def test_auto_baseline_false(self):
-        v, t = _psc_trace()
-        result = run_event_detection_baseline_peak_wrapper(v, t, FS, auto_baseline=False)
         assert result["module_used"] == "synaptic_events"
 
 

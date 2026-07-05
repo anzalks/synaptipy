@@ -605,7 +605,7 @@ def _extrapolate_rs_at_t0(t_art: np.ndarray, v_art: np.ndarray, artifact_window_
     def _rc_charge(t: np.ndarray, A: float, tau: float, C: float) -> np.ndarray:
         return A * np.exp(-t / tau) + C
 
-    if len(t_art) < 3:
+    if len(t_art) < 5:
         return float(np.mean(v_art))
 
     _v_range_art = float(np.ptp(v_art)) if float(np.ptp(v_art)) > 1e-9 else 1.0
@@ -631,7 +631,7 @@ def calculate_cc_series_resistance_fast(
     time_vector: np.ndarray,
     step_onset_time: float,
     current_step_pa: float,
-    artifact_window_ms: float = 0.1,
+    artifact_window_ms: float = 0.5,
     tau_ms: Optional[float] = None,
     rin_mohm: Optional[float] = None,
 ) -> Dict[str, Any]:
@@ -1060,7 +1060,6 @@ def calculate_tau(  # noqa: C901
                 )
             except RuntimeError:
                 log.warning("Optimal parameters not found for Tau (mono exponential fit).")
-                return {"tau_ms": float(np.nan), "_fit_time": [], "_fit_values": []}
                 return {"tau_ms": float(np.nan), "_fit_time": [], "_fit_values": [], "r_squared": 0.0}
 
             # R² quality-control gate: reject fits that explain < min_r_squared of variance.
@@ -1783,7 +1782,6 @@ def run_rmp_analysis_wrapper(  # noqa: C901
             "label": "Show Sag Analysis",
             "type": "bool",
             "default": True,
-            "visible_when": {"param": "show_sag", "value": True},
         },
     ],
 )
@@ -1923,12 +1921,11 @@ def run_rin_analysis_wrapper(  # noqa: C901
         is_voltage_clamp = current_amplitude == 0 and voltage_step != 0
 
         if auto_detect_pulse:
-            window_size = int(0.001 * sampling_rate)
-            if window_size > 1:
-                kernel = np.ones(window_size) / window_size
-                smoothed_data = np.convolve(data, kernel, mode="same")
-            else:
-                smoothed_data = data
+            window_size = max(3, int(0.005 * sampling_rate))
+            if window_size % 2 == 0:
+                window_size += 1
+            kernel = np.ones(window_size) / window_size
+            smoothed_data = np.convolve(data, kernel, mode="same")
 
             dv = np.diff(smoothed_data)
             is_negative_step = (current_amplitude < 0) or (current_amplitude == 0 and voltage_step < 0)

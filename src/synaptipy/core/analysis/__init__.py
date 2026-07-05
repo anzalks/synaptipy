@@ -17,7 +17,7 @@ from . import evoked_responses  # noqa: F401 - registers: optogenetic_sync
 from . import firing_dynamics  # noqa: F401 - registers: excitability_analysis, burst_analysis, train_dynamics
 from . import passive_properties  # rmp_analysis, rin_analysis, tau_analysis, sag_ratio_analysis, iv_curve_analysis
 from . import single_spike  # noqa: F401 - registers: spike_detection, phase_plane_analysis
-from . import (  # noqa: F401; event_detection_threshold, event_detection_deconvolution, event_detection_baseline_peak
+from . import (  # noqa: F401; event_detection_threshold, event_detection_deconvolution
     synaptic_events,
 )
 from .epoch_manager import Epoch, EpochManager  # noqa: F401

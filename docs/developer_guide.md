@@ -92,7 +92,7 @@ src/synaptipy/                       # Main package
 │       ├── passive_properties.py    # Pillar 1: RMP, Rin, Tau, Sag, I-V, Capacitance
 │       ├── single_spike.py          # Pillar 2: Spike detection and phase plane
 │       ├── firing_dynamics.py       # Pillar 3: Excitability, burst, train dynamics
-│       ├── synaptic_events.py       # Pillar 4: Event detection (3 methods)
+│       ├── synaptic_events.py       # Pillar 4: Event detection (2 methods)
 │       └── evoked_responses.py      # Pillar 5: Evoked Sync, PPR, Stimulus Train (STP)
 ├── infrastructure/                  # I/O and external integrations
 │   ├── file_readers/                # Neo-based file readers (NeoAdapter)
@@ -150,7 +150,7 @@ inside each pillar tab and are **never** shown as independent top-level tabs.
 | 1 - Intrinsic Properties | `passive_properties.py` | `passive_properties` | Baseline (RMP), Input Resistance, Tau, Sag Ratio, I-V Curve, Capacitance |
 | 2 - Spike Analysis | `single_spike.py` | `single_spike` | Spike Detection, Phase Plane |
 | 3 - Excitability | `firing_dynamics.py` | `firing_dynamics` | Excitability, Burst Analysis, Spike Train Dynamics |
-| 4 - Synaptic Events | `synaptic_events.py` | `synaptic_events` | Threshold, Deconvolution, Baseline+Peak+Kinetics |
+| 4 - Synaptic Events | `synaptic_events.py` | `synaptic_events` | Amplitude, Template |
 | 5 - Evoked Responses | `evoked_responses.py` | `evoked_responses` | Evoked Sync, Paired-Pulse Ratio, Stimulus Train (STP) |
 
 Custom plugin analyses are appended after the five core pillars.
@@ -201,21 +201,21 @@ see the dedicated guide: **[Writing Custom Analysis Plugins](extending_synaptipy
 
 ### Asynchronous UI & Background Loading
 
-Synaptipy leverages `QThread` and `QRunnable` to execute heavy data loading and analysis in the background. Specifically, `.abf` and `.wcp` files are loaded asynchronously to prevent UI freezes. 
+Synaptipy uses `QThread` and `QRunnable` for background data loading and analysis. `.abf` and `.wcp` files are loaded asynchronously to prevent UI freezes. 
 
 Because of this asynchronous architecture, direct UI assertions in tests can be flaky if they do not account for background processing. Developers must use `qtbot.waitUntil` to synchronize test execution with the completion of background threads.
 
 ### UI Interaction Debouncing
 
-To ensure a smooth user experience, rapid interactions are debounced. For instance, zoom and pan signals in `explorer_tab.py` employ a 50ms interaction debouncing mechanism. This 50ms timer is imperceptible to the user but prevents the application from being overwhelmed by consecutive resize or scroll events, optimizing rendering performance.
+Rapid UI interactions are debounced. Zoom and pan signals in `explorer_tab.py` use a 50ms debounce timer, preventing the application from processing redundant consecutive resize or scroll events.
 
 ## UI & Styling Guidelines
 
-Synaptipy prioritizes visual accessibility. By default, multi-trial plotting utilizes a colorblind-safe palette (e.g., Okabe-Ito or Viridis). 
+Synaptipy prioritizes visual accessibility. By default, multi-trial plotting uses a colorblind-safe palette (e.g., Okabe-Ito or Viridis). 
 
 When writing custom plugins or extending the core UI:
 - **Do not** hardcode overlapping red/green traces.
-- Rely on the application's predefined palette generators to maintain a coherent and seamless visual experience for all users.
+- Rely on the application's predefined palette generators for consistent visual appearance across themes.
 
 ## Development Workflow
 
@@ -360,7 +360,7 @@ alone - that only imports the registry *class* and does NOT execute the analysis
 sub-modules' `@AnalysisRegistry.register` decorators.
 
 This was the root cause of a Windows-only bug where the Analyser tab showed 0
-tabs while macOS showed 15: on macOS the batch engine happened to import the
+tabs while macOS showed all tabs: on macOS the batch engine happened to import the
 full package earlier via a different path (masking the issue), but on Windows no
 other code path triggered the import and the registry remained empty.
 

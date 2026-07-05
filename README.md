@@ -136,9 +136,8 @@ Synaptipy provides built-in analysis routines covering passive membrane properti
 
 ### Tab 4: Synaptic Events
 
-- **Event Detection (Threshold)** - prominence-based detection that accommodates baseline drift and overlapping events; interactive event markers can be individually accepted or rejected
-- **Event (Template Match)** - matched-filter cross-correlation using a bi-exponential kernel with user-defined rise and decay time constants; three kernel scales (1x, 2x, 3x the decay constant) are evaluated to accommodate dendritic-filtering variability
-- **Event (Baseline Peak)** - direct baseline-to-peak amplitude detection with kinetics estimation for evoked or spontaneous events
+- **Event (Amplitude)** - prominence-based detection that accommodates baseline drift and overlapping events; interactive event markers can be individually accepted or rejected
+- **Event (Template)** - matched-filter cross-correlation using a bi-exponential kernel with user-defined rise and decay time constants; three kernel scales (1x, 2x, 3x the decay constant) are evaluated to accommodate dendritic-filtering variability
 
 ### Tab 5: Evoked Responses
 

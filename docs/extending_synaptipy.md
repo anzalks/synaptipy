@@ -731,18 +731,18 @@ multi-event (list of arrays) data.
 | `width` | int | Pen width (default 2). |
 | `opacity` | int | 0-100 (default 80). |
 
-**Example return dict** for a PPR decay fit:
+**Example return dict** for an N-pulse PPR decay fit:
 
 ```python
 return {
     "module_used": "evoked_responses",
     "metrics": {
-        "decay_tau_ms": tau_ms,
+        "decay_tau_ms_p1": tau_p1,
+        "decay_tau_ms_p2": tau_p2,
+        # List of arrays (one per pulse) for multi-event overlay:
+        "_ppr_fit_times": [t_arr_p1.tolist(), t_arr_p2.tolist()],
+        "_ppr_fit_values": [v_arr_p1.tolist(), v_arr_p2.tolist()],
     },
-    # Private keys at the TOP LEVEL (not inside "metrics") are fed to plot
-    # overlays and hidden from the results table.
-    "_ppr_fit_times": fit_time_array.tolist(),   # absolute time (s)
-    "_ppr_fit_values": fit_value_array.tolist(),  # fitted current/voltage
 }
 ```
 

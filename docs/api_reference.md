@@ -105,8 +105,7 @@ Excitability (F-I Curve), Burst Analysis, and Spike Train Dynamics.
 
 #### Module 4 - Synaptic Events
 
-Threshold-based detection, Template Match detection, and Baseline-Peak
-detection.
+Amplitude-based detection and Template (deconvolution) detection.
 
 ```{eval-rst}
 .. automodule:: synaptipy.core.analysis.synaptic_events
@@ -118,8 +117,8 @@ detection.
 #### Module 5 - Evoked Responses
 
 Evoked Sync (TTL-gated stimulus correlation, latency, response probability,
-and jitter), Paired-Pulse Ratio with residual decay subtraction, and
-Stimulus Train short-term plasticity (STP) analysis.
+and jitter), N-pulse Paired-Pulse Ratio with iterative cumulative decay
+subtraction, and Stimulus Train short-term plasticity (STP) analysis.
 
 ```{eval-rst}
 .. automodule:: synaptipy.core.analysis.evoked_responses

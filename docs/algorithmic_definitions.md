@@ -530,21 +530,7 @@ when the recording is digitally silent.
 *(Standard signal detection criterion: 3× noise SD corresponds to
 p < 0.003 under Gaussian noise assumption.)*
 
-### 7.3 Baseline-peak detection
-
-**Registry name:** `event_detection_baseline_peak`
-
-Uses sliding-window variance minimisation to find the most stable baseline
-segment, estimates noise as $\hat{\sigma} = 1.4826 \times \text{MAD}$
-(Hampel, 1974; Rousseeuw & Croux, 1993) in that region, and detects peaks
-with a specified prominence. The prominence is determined by `peak_prominence_factor`
-if provided; otherwise, it defaults to $\ge 0.5 \times \text{threshold}$.
-
-A low-pass Butterworth filter can be applied prior to peak detection by
-specifying `filter_freq_hz`. This attenuates high-frequency noise that might
-cause spurious local maxima.
-
-### 7.4 Local Pre-Event Baseline (Dynamic Amplitude for Summating Events)
+### 7.3 Local Pre-Event Baseline (Dynamic Amplitude for Summating Events)
 
 Synaptic events that occur during the exponential decay of a preceding event
 (summation) ride on a shifted baseline. Using the global resting potential as
@@ -850,7 +836,7 @@ relative to the neighboring baseline band identifies mains interference.
   Fundamental algorithms for scientific computing in Python. *Nature Methods*, 17,
   261-272. [doi:10.1038/s41592-019-0686-2](https://doi.org/10.1038/s41592-019-0686-2)
   - Provides `scipy.optimize.curve_fit` used in tau (§3), capacitance (§5.2),
-    and PPR decay fitting (§15.5).
+    and PPR decay fitting (§15.5, §15.6).
 
 ### Spike-train statistics
 
@@ -932,7 +918,7 @@ relative to the neighboring baseline band identifies mains interference.
 - **Zucker, R. S., & Regehr, W. G. (2002).** Short-term synaptic plasticity.
   *Annual Review of Physiology*, 64, 355-405.
   [doi:10.1146/annurev.physiol.64.092501.114547](https://doi.org/10.1146/annurev.physiol.64.092501.114547)
-  - **Used in:** PPR R2 baseline correction methodology (Section 15.5); direct
+  - **Used in:** N-pulse PPR iterative decay subtraction (Section 15.5); direct
     referencing of R2 amplitude to the pre-stimulus resting baseline (bl1).
 
 - **Regehr, W. G. (2012).** Short-term presynaptic plasticity.
@@ -1165,62 +1151,65 @@ threshold.  This ensures that both fast somatic (narrow) and slow dendritic
 (broadened) events cross the detection threshold, without requiring the user
 to re-tune $\tau_{\text{decay}}$ for distal inputs.
 
-### 15.5 PPR R2 Amplitude: Direct Baseline Correction
+### 15.5 N-Pulse PPR with Iterative Cumulative Decay Subtraction
 
-*(Zucker & Regehr, 2002; Regehr, 2012)*
+*(Zucker & Regehr, 2002; Regehr, 2012; Thanawala & Bhatt, 2013;
+Wesseling & Lo, 2002)*
 
-The amplitude of the second response ($R_2$) must be measured from a reference
-that is uncontaminated by the decaying tail of the first response ($R_1$).
-When the inter-stimulus interval is short relative to the $R_1$ decay constant,
-the local baseline immediately preceding the second stimulus ($\text{bl}_2$)
-lies above (or below) the true resting potential, causing a systematic
-underestimate (or overestimate) of $R_2$.
+The Paired-Pulse Ratio (PPR) analysis supports $N \ge 2$ stimulus pulses.
+For each pulse $i > 1$, the cumulative residual from all prior pulses' fitted
+decays is subtracted before measuring amplitude and fitting the current
+pulse's isolated decay.
 
-The corrected $R_2$ amplitude is obtained by referencing the raw $R_2$ peak
-voltage directly to $\text{bl}_1$ (the pre-stimulus resting baseline measured
-before the first pulse):
+**Iterative subtraction algorithm:**
+
+1. Measure $\text{bl}_1$ (resting baseline before the first stimulus).
+2. For pulse $i = 1 \ldots N$:
+   a. Find the peak $V_{i,\text{peak}}$ in the raw trace within the
+      response window.
+   b. Evaluate the cumulative residual from all prior decay fits at
+      the peak time:
 
 $$
-R_{2,\text{corrected}} =
+\rho_i(t) = \sum_{j=1}^{i-1} \bigl[f_j(t) - \text{bl}_1\bigr]
+$$
+
+   c. Compute the corrected amplitude:
+
+$$
+R_{i,\text{corrected}} =
 \begin{cases}
-  \text{bl}_1 - V_{R_2,\text{peak}} & \text{(inward / negative polarity)} \\
-  V_{R_2,\text{peak}} - \text{bl}_1 & \text{(outward / positive polarity)}
+  (\text{bl}_1 - V_{i,\text{peak}}) + \rho_i & \text{(negative polarity)} \\
+  (V_{i,\text{peak}} - \text{bl}_1) - \rho_i & \text{(positive polarity)}
 \end{cases}
 $$
 
-where $V_{R_2,\text{peak}}$ is the minimum (negative polarity) or maximum
-(positive polarity) voltage in the $R_2$ response window, and $\text{bl}_1$
-is the mean voltage in the user-specified pre-stimulus baseline window.
+   d. Subtract the cumulative residual from the raw trace in the
+      decay-fit window to isolate this pulse's contribution.
+   e. Fit mono- or bi-exponential decay $f_i(t)$ to the isolated
+      data (see §15.6).
+   f. Store $f_i$ for use in subsequent pulses' corrections.
 
-This formulation is equivalent to $R_{2,\text{raw}} + (\text{bl}_2 - \text{bl}_1)$:
-the correction term $(\text{bl}_2 - \text{bl}_1)$ equals the measured baseline
-contamination from the $R_1$ decay tail.  When the decay has fully returned to
-baseline ($\text{bl}_2 \approx \text{bl}_1$), $R_{2,\text{corrected}} \approx
-R_{2,\text{raw}}$, so equal-amplitude paired events yield $\text{PPR} = 1$.
-
-The raw amplitude $R_{2,\text{raw}}$ (measured from $\text{bl}_2$) and the
-residual at stimulus 2 ($\text{residual\_at\_stim2}$, from the exponential
-decay fit) are retained as diagnostic output fields. The decay-fit residual
-is **not** used as the reference for $R_{2,\text{corrected}}$ because the
-exponential extrapolation can be unreliable when the fit window partially
-overlaps the $R_1$ alpha-function rise phase.
-
-**Paired-pulse ratio:**
+3. Compute ratios normalised to the first pulse:
 
 $$
-\text{PPR} = \frac{R_{2,\text{corrected}}}{R_{1,\text{amplitude}}}
+\text{ratio}_i = \frac{R_{i,\text{corrected}}}{R_{1,\text{corrected}}}
 $$
 
 Values $> 1$ indicate short-term facilitation; values $< 1$ indicate
 short-term depression.
 
+The raw amplitude $R_{i,\text{raw}}$ (measured from each pulse's local
+baseline) and the cumulative residual $\rho_i$ are retained as diagnostic
+output fields for each pulse.
+
 ---
 
-### 15.6 PPR Residual Fitting - Bi-Exponential Upgrade
+### 15.6 Decay Fitting — Bi-Exponential with Mono-Exponential Fallback
 
-The P1 decay tail is now first fitted with a **bi-exponential** model before
-falling back to a mono-exponential.  Bi-exponential fits capture mixed
-conductance kinetics (e.g. AMPA fast-deactivation + NMDA slow-deactivation):
+Each pulse's isolated decay tail is first fitted with a **bi-exponential**
+model.  Bi-exponential fits capture mixed conductance kinetics (e.g. AMPA
+fast-deactivation + NMDA slow-deactivation):
 
 $$
 I_{\text{decay}}(t) = A_f \exp\!\left(-t / \tau_f\right) + A_s \exp\!\left(-t / \tau_s\right)
@@ -1384,8 +1373,8 @@ each corresponding to a module-level aggregator entry in the `AnalysisRegistry`:
 | 1 | `passive_properties` | Intrinsic Properties | RMP, Rin, Tau, Sag, I-V, Capacitance |
 | 2 | `single_spike` | Spike Analysis | Spike Detection, Phase Plane |
 | 3 | `firing_dynamics` | Excitability | Excitability, Burst Analysis, Spike Train Dynamics |
-| 4 | `synaptic_events` | Synaptic Events | Threshold, Deconvolution, Baseline+Peak+Kinetics |
-| 5 | `evoked_responses` | Optogenetics | Optogenetic Sync, Paired-Pulse Ratio |
+| 4 | `synaptic_events` | Synaptic Events | Amplitude, Template |
+| 5 | `evoked_responses` | Evoked Responses | Evoked Sync, N-Pulse PPR, Stimulus Train (STP) |
 
 Leaf registrations (e.g. `spike_detection`, `phase_plane_analysis`) are covered
 by their parent module tab via `MetadataDrivenAnalysisTab.get_covered_analysis_names()`

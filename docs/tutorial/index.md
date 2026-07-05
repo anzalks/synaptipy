@@ -27,9 +27,8 @@ Trial" workflow requires **Cycle Single Trial** plot mode.
 4. [Analysis Modules - Detailed Reference](#4-analysis-modules--detailed-reference)
    - [4.1 Baseline / RMP](#41-baseline--rmp-analysis)
    - [4.2 Spike Detection](#42-spike-detection)
-   - [4.3 Event Detection - Threshold Based](#43-event-detection--threshold-based)
-   - [4.4 Event Detection - Template Match](#44-event-detection--template-match--deconvolution)
-   - [4.5 Event Detection - Baseline Peak](#45-event-detection--baseline-peak--kinetics)
+   - [4.3 Event Detection - Amplitude](#43-event-detection--amplitude)
+   - [4.4 Event Detection - Template](#44-event-detection--template)
    - [4.6 Input Resistance](#46-input-resistance-rin)
    - [4.7 Tau (Time Constant)](#47-tau-membrane-time-constant)
    - [4.8 I-V Curve](#48-i-v-curve)
@@ -235,7 +234,7 @@ A side-by-side comparison dialog allows visual inspection of the signal before
 and after preprocessing. Two linked PyQtGraph plots display the raw and processed
 traces with synchronised X-axes, accompanied by a statistics table comparing
 mean, standard deviation, minimum, and maximum values for each condition. This
-facilitates verification that the preprocessing parameters produce the intended
+lets you verify that preprocessing parameters produce the intended
 effect without introducing artefacts.
 
 ---
@@ -581,8 +580,8 @@ passive membrane characterisation through synaptic and evoked-response studies.
 | **Intrinsic Properties** | Baseline/RMP (4.1), Input Resistance (4.6), Tau (4.7), I-V Curve (4.8), Capacitance (4.10), Sag Ratio (4.15) |
 | **Spike Analysis** | Spike Detection (4.2), Phase Plane (4.13) |
 | **Excitability** | Excitability - F-I Curve (4.11), Burst (4.9), Spike Train Dynamics (4.14) |
-| **Synaptic Events** | Threshold (4.3), Deconvolution (4.4), Baseline+Peak+Kinetics (4.5) |
-| **Evoked Responses** | Evoked Sync (4.12), Paired-Pulse Ratio, Stimulus Train / STP |
+| **Synaptic Events** | Amplitude (4.3), Template (4.4) |
+| **Evoked Responses** | Evoked Sync (4.12), N-Pulse PPR (4.16), Stimulus Train / STP (4.17) |
 
 ![Intrinsic Properties tab](screenshots/analyser_intrinsic_properties.png)
 
@@ -1024,15 +1023,15 @@ Spike markers on the voltage trace; popup ISI-number vs. ISI-duration scatter.
 
 ---
 
-### 4.12 Event Detection - Threshold Based
+### 4.12 Event Detection - Amplitude
 
-![Event Detection - Threshold interface](screenshots/analyser_synaptic_events_threshold_based.png)
+![Event Detection - Amplitude interface](screenshots/analyser_synaptic_events_threshold_based.png)
 
-**Registry name**: `event_detection_threshold` | **Tab label**: *Event Detection*
+**Registry name**: `event_detection_threshold` | **Tab label**: *Event (Amplitude)*
 
 Detects mEPSCs / mIPSCs using adaptive prominence-based thresholding.
-A **method selector** dropdown switches between all three event detection
-algorithms (sections 4.3 - 4.5).
+A **method selector** dropdown switches between both event detection
+algorithms (sections 4.3 - 4.4).
 
 #### Parameters
 
@@ -1067,11 +1066,11 @@ draggable threshold line; artifact overlay.
 
 ---
 
-### 4.13 Event Detection - Template Match / Deconvolution
+### 4.13 Event Detection - Template
 
-![Event Detection - Deconvolution interface](screenshots/analyser_synaptic_events_deconvolution_custom.png)
+![Event Detection - Template interface](screenshots/analyser_synaptic_events_deconvolution_custom.png)
 
-**Registry name**: `event_detection_deconvolution` | **Tab label**: *Event (Template Match)*
+**Registry name**: `event_detection_deconvolution` | **Tab label**: *Event (Template)*
 
 Detects events via a matched-filter approach using a bi-exponential template.
 
@@ -1104,39 +1103,6 @@ Same as threshold method plus `tau_rise_ms`, `tau_decay_ms`.
 Same interactive markers / threshold line / artifact overlay.
 
 ---
-
-### 4.14 Event Detection - Baseline Peak / Kinetics
-
-![Event Detection - Baseline Peak interface](screenshots/analyser_synaptic_events_baseline_peak_kinetics.png)
-
-**Registry name**: `event_detection_baseline_peak` | **Tab label**: *Event (Baseline Peak)*
-
-Detects events by finding the most stable baseline and locating peaks above the
-noise floor.
-
-#### Parameters
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| Direction | combo | Event polarity |
-| Auto Baseline | bool | Variance-minimization baseline search |
-| Threshold (SD Factor) | float | Multiples of noise SD |
-| Min Event Separation | float (ms) | Minimum inter-event gap |
-| Rolling Baseline Window | float (ms) | Rolling baseline size |
-| Baseline Window | float (s) | Manual window (if auto disabled) |
-| Baseline Step | float (s) | Manual step size |
-
-#### Methods
-
-1. Stable baseline via sliding-window variance minimization.
-2. MAD noise estimate from baseline region.
-3. Prominence-based peaks, min prominence = 0.5 × threshold.
-4. Optional Butterworth lowpass pre-filter.
-5. Biological minimum event width ≥ 0.2 ms.
-
-#### Results
-
-`event_count`, `event_indices`, `event_times`, `event_amplitudes`
 
 ---
 
@@ -1212,9 +1178,10 @@ Event markers on signal trace; cyan dashed vertical lines at TTL onsets.
 **Registry name**: `paired_pulse_ratio` | **Tab label**: *Paired-Pulse Ratio*
 **Optional secondary TTL channel** (when "Detect Stim from TTL" is enabled).
 
-Quantifies short-term synaptic plasticity from two closely spaced stimuli by
-computing R2 / R1 after subtracting the residual exponential decay of R1 from
-beneath the R2 measurement window.
+Quantifies short-term synaptic plasticity across N stimulus pulses using
+iterative cumulative decay subtraction (Thanawala & Bhatt, 2013).  Each
+pulse's amplitude is corrected by subtracting the cumulative residual from
+all prior pulses' fitted decays.  All ratios are normalised to R1.
 
 #### Parameters
 
@@ -1222,31 +1189,36 @@ beneath the R2 measurement window.
 |-----------|------|-------------|
 | Detect Stim from TTL | bool | Auto-detect stimulus times from TTL channel |
 | TTL Threshold | float (V) | Binarise threshold (visible when TTL mode enabled) |
-| Stim 1 / Stim 2 Onset | float (s) | Manual stimulus times (visible when TTL disabled) |
+| Number of Pulses | int | Number of stimulus pulses (default 2) |
+| Stim 1 / Stim 2 Onset | float (s) | Manual stimulus times; ISI derived from stim2 − stim1 for N > 2 (visible when TTL disabled) |
 | Event Polarity | combo | `negative` / `positive` |
 | Response Window | float (ms) | Post-stimulus peak-search window |
 | Baseline Window | float (ms) | Pre-stimulus baseline window |
-| Decay Fit Start | float (ms) | Offset from stim 1 to begin exponential decay fit |
+| Decay Fit Start | float (ms) | Offset from each stimulus to begin exponential decay fit |
 | Decay Fit Window | float (ms) | Duration of decay-fit window |
 | Artifact Blanking | float (ms) | Suppress stimulus artefact at peak detection |
 
 #### Methods
 
-1. Measure R1 relative to its local pre-stimulus baseline.
-2. Fit a mono- or bi-exponential decay to the R1 tail.
-3. Extrapolate the decay to estimate the residual level at stim 2.
-4. Measure R2_raw; subtract the residual to obtain R2_corrected.
-5. PPR = R2_corrected / R1.
+1. Measure bl1 (resting baseline before pulse 1).
+2. For each pulse *i*: find the peak, evaluate the cumulative residual
+   from all prior fitted decays at the peak time, subtract it from the
+   total deflection to obtain the corrected amplitude.
+3. Subtract the cumulative prior residual from the raw trace in the
+   fit window and fit mono-/bi-exponential decay to isolate this
+   pulse's contribution.
+4. ratio_i = corrected_i / corrected_1.
 
-#### Results
+#### Results (per pulse)
 
-`r1_amplitude`, `r2_amplitude_raw`, `r2_amplitude_corrected`,
-`residual_at_stim2`, `paired_pulse_ratio`, `decay_tau_ms`, `ppr_error`
+`amplitude_raw_pN`, `amplitude_corrected_pN`, `ratio_pN`,
+`residual_pN`, `decay_tau_ms_pN`, `ppr_error`
 
 #### Visualization
 
-Vertical lines at stimulus onsets; cyan baseline shading; orange exponential
-decay fit overlay; diamond scatter markers at R1 and R2 peak positions.
+Vertical lines at all N stimulus onsets; dark green baseline shading;
+amber exponential decay fit overlay per pulse; red diamond markers at
+each peak position.
 
 ---
 

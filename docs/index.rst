@@ -16,7 +16,7 @@ is implemented via the `Neo <https://neo.readthedocs.io/en/latest/>`_ library, w
 over 30 acquisition formats including extracellular and multi-channel data.
 
 The software is implemented in Python using the Qt6 framework (PySide6). Signal visualization
-employs PyQtGraph's CPU-vectorized native raster engine. The application includes 17 built-in analysis
+employs PyQtGraph's CPU-vectorized native raster engine. The application includes 16 built-in analysis
 modules spanning intrinsic membrane properties, action potential characterization, synaptic
 event detection, and evoked responses (Evoked Sync, Paired-Pulse Ratio, Stimulus Train STP).
 A batch processing engine implements composable analysis pipelines. An extensible plugin
@@ -31,7 +31,7 @@ The source code is hosted on `GitHub <https://github.com/anzalks/synaptipy>`_.
 .. note::
    **Graphics Engine Architecture:** SynaptiPy's interactive workspace relies entirely on
    PyQtGraph's highly optimized, CPU-vectorized native raster engine for rendering
-   high-density 2D electrophysiology traces. Matplotlib is utilized strictly for offline,
+   high-density 2D electrophysiology traces. Matplotlib is used only for offline,
    high-resolution static figure exporting and validation reporting.
 
 .. grid:: 2

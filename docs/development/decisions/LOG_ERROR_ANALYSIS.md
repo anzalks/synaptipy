@@ -12,6 +12,14 @@ Found and fixed **6 critical errors** (Bugs 7-12) that would have prevented the 
 
 ---
 
+## ~~Error 1~~ (Obsolete) and ~~Error 2~~ (Obsolete)
+
+> **Note (2026-07):** Errors 1 and 2 concerned the "Baseline + Peak + Kinetics"
+> event detection method, which was removed entirely due to scientific redundancy
+> with the Amplitude and Template methods. The referenced file
+> `event_detection_tab.py` was also replaced by `MetadataDrivenAnalysisTab`.
+> These entries are preserved for historical context only.
+
 ## Error 1: Method Name Mismatch in `_gather_analysis_parameters`
 
 ### Error Type

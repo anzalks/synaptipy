@@ -438,7 +438,6 @@ class AddStepDialog(QtWidgets.QDialog):
         elif analysis_name in [
             "event_detection_threshold",
             "event_detection_deconvolution",
-            "event_detection_baseline_peak",
         ]:
             self._add_param("threshold", "Threshold:", 5.0, 0.1, 1000.0, 1)
             # Direction combo

@@ -217,7 +217,7 @@ export (marked **✓**) or the planned container for future embedding.
 | 5 | Capacitance (Cm) | `capacitance_analysis` | `CurrentClampSeries` (CC) / `VoltageClampSeries` (VC) | `ProcessingModule` - scalars Cm_pF, Rs_MOhm (planned) |
 | 6 | Spike Detection | `spike_detection` | `CurrentClampSeries` | `Units` table - spike_times column (planned) |
 | 7 | Phase Plane | `phase_plane_analysis` | `CurrentClampSeries` | `ProcessingModule` - 2-D `TimeSeries` (V vs dV/dt) per sweep (planned) |
-| 8 | Paired-Pulse Ratio (PPR) | `paired_pulse_ratio` | `CurrentClampSeries` / `VoltageClampSeries` | `ProcessingModule` - scalars R1, R2, PPR, decay_tau_ms (planned) |
+| 8 | Paired-Pulse Ratio (PPR) | `paired_pulse_ratio` | `CurrentClampSeries` / `VoltageClampSeries` | `ProcessingModule` - per-pulse amplitude_corrected, ratio, decay_tau_ms, residual (planned) |
 | 9 | Event Detection | `event_detection_threshold` / `event_detection_deconvolution` | `CurrentClampSeries` | **✓** `ProcessingModule` → `DynamicTable` with `time_s` and `amplitude` columns per channel/trial (requires HDMF; populated from batch-engine `_raw_arrays`) |
 | 10 | I-V Curve | `iv_curve_analysis` | `CurrentClampSeries` | `ProcessingModule` - arrays delta_V, delta_I; scalar Rin_aggregate, R2 (planned) |
 | 11 | Burst Analysis | `burst_analysis` | `CurrentClampSeries` | `ProcessingModule` - burst times, durations, intra-burst frequency (planned) |
