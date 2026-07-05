@@ -13,7 +13,6 @@ from synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
 from synaptipy.core.analysis.registry import AnalysisRegistry
 from synaptipy.core.data_model import Channel, Recording
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

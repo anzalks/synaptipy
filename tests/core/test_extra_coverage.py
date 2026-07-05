@@ -1,8 +1,8 @@
 """Targeted tests for remaining coverage gaps to reach 95%."""
+
 from __future__ import annotations
 
 import numpy as np
-
 
 # ---------------------------------------------------------------------------
 # cross_file_utils.py 252-253 — exception in read_recording load loop
@@ -54,9 +54,7 @@ class TestFindStableBaselineNaN:
 
         data = np.full(10, np.nan)
         # window_samples=5 < n_points=10 → enters sliding loop (no early return)
-        mean, sd, window = find_stable_baseline(
-            data, sample_rate=100.0, window_duration_s=0.05, step_duration_s=0.01
-        )
+        mean, sd, window = find_stable_baseline(data, sample_rate=100.0, window_duration_s=0.05, step_duration_s=0.01)
         assert mean is None
         assert sd is None
         assert window is None
@@ -90,7 +88,6 @@ class TestCalculateNPulseRatioGuards:
         """Line 596: artifact_blanking > response_window → i1 <= i0 → return 0.0."""
         from synaptipy.core.analysis.evoked_responses import calculate_n_pulse_ratio
 
-        fs = 10000.0
         n = 2000
         data = np.full(n, -70.0)
         time = np.linspace(0, 0.2, n, endpoint=False)
@@ -109,14 +106,11 @@ class TestCalculateNPulseRatioGuards:
         """Lines 762-763: stimuli 1 ms apart with fit_decay_from_ms=1.0 → 0 samples < 4."""
         from synaptipy.core.analysis.evoked_responses import calculate_n_pulse_ratio
 
-        fs = 10000.0
         n = 2000
         data = np.full(n, -70.0)
         time = np.linspace(0, 0.2, n, endpoint=False)
         stim_onsets = np.array([0.05, 0.051])  # only 1 ms apart
-        out = calculate_n_pulse_ratio(
-            data, time, stim_onsets, fit_decay_from_ms=1.0
-        )
+        out = calculate_n_pulse_ratio(data, time, stim_onsets, fit_decay_from_ms=1.0)
         # Both pulses should have empty fit lists appended (fit window = 0 samples)
         assert "_all_fit_times" in out
         assert any(len(t) == 0 for t in out["_all_fit_times"])

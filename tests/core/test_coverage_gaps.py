@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import numpy as np
 from unittest.mock import MagicMock
 
+import numpy as np
 
 # ---------------------------------------------------------------------------
 # core/data_model.py — lines 213-215 (no valid trials), 276-278 (loader path)
@@ -99,8 +99,9 @@ class TestFiringDynamicsBroadening:
         the 5 kHz low-pass is skipped, plant 3 single-sample spike peaks above
         threshold, then patch the LOCAL import inside the wrapper.
         """
-        from synaptipy.core.analysis.firing_dynamics import run_train_dynamics_wrapper
         from unittest.mock import patch
+
+        from synaptipy.core.analysis.firing_dynamics import run_train_dynamics_wrapper
 
         fs = 1000.0
         n = 500
@@ -117,9 +118,7 @@ class TestFiringDynamicsBroadening:
             "synaptipy.core.analysis.single_spike.calculate_spike_features",
             side_effect=RuntimeError("mock broadening error"),
         ):
-            result = run_train_dynamics_wrapper(
-                data, time, fs, spike_threshold=-50.0
-            )
+            result = run_train_dynamics_wrapper(data, time, fs, spike_threshold=-50.0)
         assert result is not None
 
 
@@ -192,6 +191,7 @@ class TestBatchEngineSelectedTrials:
     def _make_rec(self, n_trials=5):
         from pathlib import Path
         from unittest.mock import MagicMock
+
         from synaptipy.core.data_model import Recording
 
         rec = MagicMock(spec=Recording)
@@ -258,6 +258,7 @@ class TestCrossFileAverageProgressCallback:
         """Lines 574-575, 584-585: progress_callback invoked during cross-file average."""
         from pathlib import Path
         from unittest.mock import MagicMock
+
         from synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
         from synaptipy.core.data_model import Recording
 

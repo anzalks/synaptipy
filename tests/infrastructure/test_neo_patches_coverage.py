@@ -1,7 +1,7 @@
 """Targeted coverage tests for neo_patches.py edge paths."""
+
 import struct
 from pathlib import Path
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -23,9 +23,22 @@ def _make_wcp_file_with_header(tmp_path: Path, header_lines: list, nr: int = 1) 
     analysis_block = struct.pack(
         "<4sHHHHHHHfHHHHHHHH128f",
         b"RTYP",
-        0, 0, 0, 0, 0, 0, 0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
         0.1e-3,  # SamplingInterval
-        0, 0, 0, 0, 0, 0, 0, 0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
         *([1.0] * 128),
     )
     analysis_block = analysis_block[:1024].ljust(1024, b"\x00")
@@ -48,6 +61,7 @@ def _make_wcp_file_with_header(tmp_path: Path, header_lines: list, nr: int = 1) 
 def test_parse_header_bad_int_value(tmp_path):
     """Lines 49-50: NP=not_a_number → int() raises → val = 0 fallback."""
     from neo.rawio.winwcprawio import WinWcpRawIO
+
     from synaptipy.infrastructure.neo_patches import apply_winwcp_patch
 
     apply_winwcp_patch()
@@ -86,6 +100,7 @@ def test_parse_header_bad_int_value(tmp_path):
 def test_parse_header_bad_float_value(tmp_path):
     """Lines 58-59: DT=not_a_float → float() raises → val = 0.0 fallback."""
     from neo.rawio.winwcprawio import WinWcpRawIO
+
     from synaptipy.infrastructure.neo_patches import apply_winwcp_patch
 
     apply_winwcp_patch()
@@ -124,6 +139,7 @@ def test_parse_header_bad_float_value(tmp_path):
 def test_parse_header_nc_zero(tmp_path):
     """Line 128: NC=0 → inner else branch NP = 0."""
     from neo.rawio.winwcprawio import WinWcpRawIO
+
     from synaptipy.infrastructure.neo_patches import apply_winwcp_patch
 
     apply_winwcp_patch()
@@ -157,6 +173,7 @@ def test_parse_header_nc_zero(tmp_path):
 def test_parse_header_truncated_file(tmp_path):
     """Lines 118-120: NR=2 but file only has data for 1 segment → read_f raises."""
     from neo.rawio.winwcprawio import WinWcpRawIO
+
     from synaptipy.infrastructure.neo_patches import apply_winwcp_patch
 
     apply_winwcp_patch()
@@ -191,9 +208,22 @@ def test_parse_header_truncated_file(tmp_path):
     analysis_block = struct.pack(
         "<4sHHHHHHHfHHHHHHHH128f",
         b"RTYP",
-        0, 0, 0, 0, 0, 0, 0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
         0.1e-3,
-        0, 0, 0, 0, 0, 0, 0, 0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
         *([1.0] * 128),
     )
     analysis_block = analysis_block[:1024].ljust(1024, b"\x00")
@@ -221,6 +251,7 @@ def test_parse_header_truncated_file(tmp_path):
 def test_parse_header_nr_zero_estimates_from_filesize(tmp_path):
     """Lines 87-88: NR=0 in ASCII header but file has 1 segment → estimated_nr=1."""
     from neo.rawio.winwcprawio import WinWcpRawIO
+
     from synaptipy.infrastructure.neo_patches import apply_winwcp_patch
 
     apply_winwcp_patch()
@@ -254,9 +285,22 @@ def test_parse_header_nr_zero_estimates_from_filesize(tmp_path):
     analysis_block = struct.pack(
         "<4sHHHHHHHfHHHHHHHH128f",
         b"RTYP",
-        0, 0, 0, 0, 0, 0, 0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
         0.1e-3,
-        0, 0, 0, 0, 0, 0, 0, 0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
         *([1.0] * 128),
     )
     analysis_block = analysis_block[:1024].ljust(1024, b"\x00")
@@ -285,33 +329,32 @@ def test_parse_header_nr_zero_estimates_from_filesize(tmp_path):
 def test_parse_header_nc_greater_than_vmax_length(tmp_path):
     """Lines 189-190: NC=9 → VMax[8] raises IndexError on 8-element tuple."""
     from neo.rawio.winwcprawio import WinWcpRawIO
+
     from synaptipy.infrastructure.neo_patches import apply_winwcp_patch
 
     apply_winwcp_patch()
 
     # NC=9 but neo's AnalysisDescription defines VMax as '8f' (8 floats only).
     # The channel loop runs c=0..8; at c=8, VMax[8] raises IndexError → lines 189-190.
-    header_lines = [
-        "VER=9",
-        "NC=9",  # 9 channels → loop hits c=8 → VMax[8] → IndexError
-        "NR=1",
-        "NBH=2",
-        "NBA=0",
-        "NBD=1",
-        "ADCMAX=2048",
-        "NP=28",  # small NP for minimal data block
-        "NZ=0",
-        "DT=0.1",
-        "AD=3276.8",
-    ] + [
-        f"YN{c}=Ch{c}" for c in range(9)
-    ] + [
-        f"YO{c}={c}" for c in range(9)
-    ] + [
-        f"YU{c}=mV" for c in range(9)
-    ] + [
-        f"YG{c}=1" for c in range(9)
-    ]
+    header_lines = (
+        [
+            "VER=9",
+            "NC=9",  # 9 channels → loop hits c=8 → VMax[8] → IndexError
+            "NR=1",
+            "NBH=2",
+            "NBA=0",
+            "NBD=1",
+            "ADCMAX=2048",
+            "NP=28",  # small NP for minimal data block
+            "NZ=0",
+            "DT=0.1",
+            "AD=3276.8",
+        ]
+        + [f"YN{c}=Ch{c}" for c in range(9)]
+        + [f"YO{c}={c}" for c in range(9)]
+        + [f"YU{c}=mV" for c in range(9)]
+        + [f"YG{c}=1" for c in range(9)]
+    )
     fpath = _make_wcp_file_with_header(tmp_path, header_lines, nr=1)
     reader = WinWcpRawIO(filename=str(fpath))
     try:
@@ -328,6 +371,7 @@ def test_parse_header_nc_greater_than_vmax_length(tmp_path):
 def test_parse_header_adcmax_zero(tmp_path):
     """Lines 198-199: ADCMAX=0 → gain = VMax / 0 / YG raises ZeroDivisionError."""
     from neo.rawio.winwcprawio import WinWcpRawIO
+
     from synaptipy.infrastructure.neo_patches import apply_winwcp_patch
 
     apply_winwcp_patch()

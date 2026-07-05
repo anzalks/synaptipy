@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # _load_pipeline
 # ---------------------------------------------------------------------------
@@ -95,9 +94,7 @@ def test_build_parser_run_subcommand(tmp_path):
     p = tmp_path / "pl.json"
     p.write_text("[]")
     parser = build_parser()
-    args = parser.parse_args(
-        ["run", "rec.abf", "--pipeline", str(p), "--output", "out.csv"]
-    )
+    args = parser.parse_args(["run", "rec.abf", "--pipeline", str(p), "--output", "out.csv"])
     assert args.command == "run"
     assert args.files == ["rec.abf"]
     assert args.pipeline == p
@@ -160,6 +157,7 @@ def test_main_list_analyses(capsys):
 
 def test_write_provenance_creates_file(tmp_path):
     import argparse
+
     from synaptipy.application.cli.main import _write_provenance
 
     output = tmp_path / "results.csv"
@@ -186,6 +184,7 @@ def test_write_provenance_creates_file(tmp_path):
 
 def test_run_batch_missing_file(tmp_path, capsys):
     import argparse
+
     from synaptipy.application.cli.main import _run_batch
 
     pl_path = tmp_path / "pl.json"
@@ -211,6 +210,7 @@ def test_run_batch_success_path(tmp_path, capsys):
     from unittest.mock import MagicMock, patch
 
     import pandas as pd
+
     from synaptipy.application.cli.main import _run_batch
 
     pl_path = tmp_path / "pl.json"

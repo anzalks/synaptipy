@@ -5,8 +5,6 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import numpy as np
-import pytest
-
 
 # ---------------------------------------------------------------------------
 # _resolve_effective_trials — line 27 (Current Trial branch)
@@ -93,11 +91,12 @@ def test_build_averaged_recording_no_loadable_file():
 
 def test_build_averaged_recording_all_channels_empty():
     """Lines 285-287: reference recording loads but all channels average to None → None."""
+    from pathlib import Path
+
     from synaptipy.core.analysis.cross_file_utils import build_averaged_recording
 
     # Build a reference recording with one channel
     from synaptipy.core.data_model import Channel, Recording
-    from pathlib import Path
 
     rec = Recording(source_file=Path("dummy.wcp"))
     ch = Channel(id="ch0", name="V", units="mV", sampling_rate=10000.0, data_trials=[np.zeros(100)])
@@ -113,6 +112,7 @@ def test_build_averaged_recording_all_channels_empty():
 
     # Patch get_cross_file_average to return (None, None, 0, None) for every channel
     from unittest.mock import patch
+
     with patch("synaptipy.core.analysis.cross_file_utils.get_cross_file_average") as mock_avg:
         mock_avg.return_value = (None, None, 0, None)
         result = build_averaged_recording(items, [0], adapter)
@@ -121,9 +121,10 @@ def test_build_averaged_recording_all_channels_empty():
 
 def test_build_averaged_recording_success():
     """Successful path: produces a synthetic Recording."""
+    from pathlib import Path
+
     from synaptipy.core.analysis.cross_file_utils import build_averaged_recording
     from synaptipy.core.data_model import Channel, Recording
-    from pathlib import Path
 
     rec = Recording(source_file=Path("dummy.wcp"))
     time_arr = np.linspace(0, 0.01, 100)
@@ -137,6 +138,7 @@ def test_build_averaged_recording_success():
     adapter.read_recording.return_value = rec
 
     from unittest.mock import patch
+
     with patch("synaptipy.core.analysis.cross_file_utils.get_cross_file_average") as mock_avg:
         mock_avg.return_value = (time_arr, data_arr, 2, None)
         result = build_averaged_recording([{"path": "a.wcp"}, {"path": "b.wcp"}], [0], adapter)

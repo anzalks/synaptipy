@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 
-
 # ---------------------------------------------------------------------------
 # fit_biexponential_decay — bi-exp failure fallback (lines 285-287)
 # ---------------------------------------------------------------------------
@@ -110,7 +109,7 @@ class TestRunEventDetectionThresholdWrapper:
         # Plant a clean negative mini at sample 5000
         t_mini = np.arange(100) / fs
         mini_shape = -10.0 * np.exp(-t_mini / 0.005) * (1 - np.exp(-t_mini / 0.001))
-        data[5000: 5000 + 100] += mini_shape
+        data[5000 : 5000 + 100] += mini_shape
         data += rng.normal(0, 0.1, n)
         time = np.linspace(0, 1.0, n, endpoint=False)
 
