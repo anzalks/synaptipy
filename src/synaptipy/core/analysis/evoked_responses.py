@@ -687,8 +687,12 @@ def calculate_n_pulse_ratio(  # noqa: C901
                         bi_lb = [0.0, 0.1, 0.0, 0.1, bl1 - abs(amp_corrected)]
                         bi_ub = [amp_bound, tau0 * 100, amp_bound, tau0 * 100, bl1 + abs(amp_corrected) * 2]
                     popt_bi, pcov_bi = curve_fit(
-                        _bi_exp, t_fit, y_fit, p0=bi_p0,
-                        bounds=(bi_lb, bi_ub), maxfev=4000,
+                        _bi_exp,
+                        t_fit,
+                        y_fit,
+                        p0=bi_p0,
+                        bounds=(bi_lb, bi_ub),
+                        maxfev=4000,
                     )
                     if np.any(~np.isfinite(pcov_bi)):
                         raise ValueError("degenerate")
@@ -705,16 +709,26 @@ def calculate_n_pulse_ratio(  # noqa: C901
                 try:
                     if polarity == "negative":
                         popt_m, _ = curve_fit(
-                            _mono_exp, t_fit, y_fit, p0=[-a0, tau0, bl1],
-                            bounds=([-amp_bound, 0.1, bl1 - abs(amp_corrected) * 2],
-                                    [0.0, tau0 * 50, bl1 + abs(amp_corrected)]),
+                            _mono_exp,
+                            t_fit,
+                            y_fit,
+                            p0=[-a0, tau0, bl1],
+                            bounds=(
+                                [-amp_bound, 0.1, bl1 - abs(amp_corrected) * 2],
+                                [0.0, tau0 * 50, bl1 + abs(amp_corrected)],
+                            ),
                             maxfev=3000,
                         )
                     else:
                         popt_m, _ = curve_fit(
-                            _mono_exp, t_fit, y_fit, p0=[a0, tau0, bl1],
-                            bounds=([0.0, 0.1, bl1 - abs(amp_corrected)],
-                                    [amp_bound, tau0 * 50, bl1 + abs(amp_corrected) * 2]),
+                            _mono_exp,
+                            t_fit,
+                            y_fit,
+                            p0=[a0, tau0, bl1],
+                            bounds=(
+                                [0.0, 0.1, bl1 - abs(amp_corrected)],
+                                [amp_bound, tau0 * 50, bl1 + abs(amp_corrected) * 2],
+                            ),
                             maxfev=3000,
                         )
                     tau_ms = float(popt_m[1])
@@ -1134,7 +1148,9 @@ def run_opto_sync_wrapper(  # noqa: C901
 
 
 def _build_stim_onsets(
-    time: np.ndarray, n_pulses: int, kwargs: dict,
+    time: np.ndarray,
+    n_pulses: int,
+    kwargs: dict,
 ) -> "np.ndarray | str":
     """Build stim onset array from TTL or manual parameters.
 
@@ -1147,12 +1163,13 @@ def _build_stim_onsets(
         ttl_data = kwargs.get("ttl_data", None)
         if ttl_data is not None and len(ttl_data) > 0:
             detected, _ = extract_ttl_epochs(
-                ttl_data, time, float(kwargs.get("ttl_threshold", 2.5)),
+                ttl_data,
+                time,
+                float(kwargs.get("ttl_threshold", 2.5)),
             )
             if detected is not None and len(detected) >= 2:
                 stim_onsets = detected[:n_pulses]
-                log.debug("PPR: TTL detected %d onsets, using first %d",
-                          len(detected), len(stim_onsets))
+                log.debug("PPR: TTL detected %d onsets, using first %d", len(detected), len(stim_onsets))
         if stim_onsets is None:
             log.warning("PPR: TTL detection failed; falling back to manual onsets.")
 

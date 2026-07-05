@@ -1019,9 +1019,7 @@ class TestBluntedSpikeDetection:
                 feat.absolute_peak_mv <= -3.0
             ), f"Expected blunted spike peak near -5 mV, got {feat.absolute_peak_mv:.1f} mV"
             # Overshoot should be 0 (spike did not cross 0 mV)
-            assert (
-                feat.overshoot_mv == 0.0
-            ), f"Blunted spike (-5 mV peak) overshoot must be 0, got {feat.overshoot_mv}"
+            assert feat.overshoot_mv == 0.0, f"Blunted spike (-5 mV peak) overshoot must be 0, got {feat.overshoot_mv}"
 
     def test_train_dynamics_default_threshold_allows_blunted_spikes(self):
         """The train dynamics wrapper's default threshold (-20 mV) must detect -5 mV spikes."""
