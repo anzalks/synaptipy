@@ -251,7 +251,7 @@ def make_rc_passive_trace(
     """
     # Clamp pipette Rs so it is always less than Rin
     pipette_rs_mohm = min(pipette_rs_mohm, rin_mohm * 0.3)
-    cm_pf = tau_ms / rin_mohm * 1e6  # tau = RC -> C = tau / R  [pF = ms / MOhm]
+    cm_pf = tau_ms / rin_mohm * 1e3  # C = tau/R: (ms→s)/(MOhm→Ohm) * (F→pF) = 1e-3/1e6 * 1e12 = 1e3
 
     n = int(duration_s * sampling_rate)
     t = np.arange(n) / sampling_rate
@@ -609,8 +609,9 @@ def inject_pink_noise(
     white = rng.standard_normal(n)
     fft_white = np.fft.rfft(white)
     freqs = np.fft.rfftfreq(n, d=1.0 / sampling_rate)
-    # Avoid division-by-zero at DC (f=0); leave DC component unscaled
-    scale = np.where(freqs > 0, 1.0 / np.sqrt(freqs), 1.0)
+    scale = np.ones_like(freqs)
+    pos = freqs > 0
+    scale[pos] = 1.0 / np.sqrt(freqs[pos])
     pink_fft = fft_white * scale
     pink = np.fft.irfft(pink_fft, n=n)
     # Normalise to target RMS

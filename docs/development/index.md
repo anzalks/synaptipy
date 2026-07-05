@@ -57,6 +57,7 @@ without modifying core code.
 :maxdepth: 2
 :caption: Development
 
+refactor_rules
 styling_guide
 decisions/index
 manuals/index

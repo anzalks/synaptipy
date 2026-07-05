@@ -1017,7 +1017,11 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
     def _setup_save_button(self, layout: QtWidgets.QLayout, alignment=QtCore.Qt.AlignmentFlag.AlignCenter):
         """Adds a standard 'Save Result' button and a 'Saved Results' list to the layout."""
         self.save_button = QtWidgets.QPushButton(f"Save {self.get_display_name()} Result")
-        self.save_button.setIcon(QtGui.QIcon.fromTheme("document-save"))  # Optional icon
+        from synaptipy.shared.theme_manager import get_themed_icon
+
+        self.save_button.setIcon(
+            get_themed_icon("document-save", QtWidgets.QStyle.StandardPixmap.SP_DialogSaveButton)
+        )
         self.save_button.setToolTip(
             f"Save the currently calculated {self.get_display_name()} result to the main results list."
         )
@@ -2322,7 +2326,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
     def _extract_per_file_trace(
         self, item: Dict[str, Any], parsed_trials: List[int], channel_idx: int
     ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
-        """Delegate to :func:`~Synaptipy.core.analysis.cross_file_utils.extract_per_file_trace`.
+        """Delegate to :func:`~synaptipy.core.analysis.cross_file_utils.extract_per_file_trace`.
 
         Thin wrapper so existing call-sites and tests on the tab object
         continue to work without modification.
@@ -2340,7 +2344,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
     def _get_cross_file_average(
         self, parsed_trials: List[int], channel_idx: int
     ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], int]:
-        """Delegate to :func:`~Synaptipy.core.analysis.cross_file_utils.get_cross_file_average`.
+        """Delegate to :func:`~synaptipy.core.analysis.cross_file_utils.get_cross_file_average`.
 
         Thin wrapper so existing call-sites and tests on the tab object
         continue to work without modification.
@@ -3064,7 +3068,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         Call this from any analysis tab's export flow after the primary NWB
         data has been written.  Non-fatal: a warning is logged if the
-        :class:`~Synaptipy.infrastructure.exporters.nwb_exporter.NWBExporter`
+        :class:`~synaptipy.infrastructure.exporters.nwb_exporter.NWBExporter`
         or ``hdmf`` is unavailable.
 
         Args:

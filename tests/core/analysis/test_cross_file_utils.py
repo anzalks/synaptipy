@@ -1,7 +1,7 @@
 # tests/core/analysis/test_cross_file_utils.py
 # -*- coding: utf-8 -*-
 """
-Unit tests for Synaptipy.core.analysis.cross_file_utils.
+Unit tests for synaptipy.core.analysis.cross_file_utils.
 
 These tests exercise the pure-math functions directly without any Qt or GUI
 infrastructure, so no ``qtbot`` fixture is required.  All Recording / channel

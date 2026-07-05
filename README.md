@@ -2,14 +2,14 @@
 
 <!-- BADGES_START -->
 [![CI](https://github.com/anzalks/synaptipy/actions/workflows/test.yml/badge.svg)](https://github.com/anzalks/synaptipy/actions/workflows/test.yml)
-[![codecov](https://codecov.io/gh/anzalks/synaptipy/branch/main/graph/badge.svg)](https://codecov.io/gh/anzalks/synaptipy)
+[![codecov](https://codecov.io/gh/anzalks/synaptipy/branch/main/graph/badge.svg)](https://app.codecov.io/gh/anzalks/synaptipy)
 [![PyPI](https://img.shields.io/pypi/v/synaptipy?color=blue&label=PyPI)](https://pypi.org/project/synaptipy/)
-[![PyPI Downloads](https://img.shields.io/pepy/dt/synaptipy?label=pypi%20downloads&color=blue)](https://pepy.tech/project/synaptipy)
+[![PyPI Downloads](https://img.shields.io/pepy/dt/synaptipy?label=pypi%20downloads&color=blue)](https://pepy.tech/projects/synaptipy)
 [![App Downloads](https://img.shields.io/github/downloads/anzalks/synaptipy/total?label=app%20downloads&color=orange)](https://github.com/anzalks/synaptipy/releases)
 [![Release](https://flat.badgen.net/github/tag/anzalks/synaptipy?color=orange&label=release)](https://github.com/anzalks/synaptipy/releases)
 [![Python](https://img.shields.io/badge/python-3.10--3.12-blue?logo=python&logoColor=white)](https://www.python.org/)
-[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
-[![Documentation Status](https://readthedocs.org/projects/synaptipy/badge/?version=latest)](https://synaptipy.readthedocs.io/en/latest/)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](https://github.com/anzalks/synaptipy/blob/main/LICENSE)
+[![Documentation Status](https://app.readthedocs.org/projects/synaptipy/badge/?version=latest)](https://synaptipy.readthedocs.io/en/latest/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](https://github.com/anzalks/synaptipy)
 <!-- BADGES_END -->
 
@@ -35,11 +35,11 @@ pip install synaptipy
 
 ### Standalone Application
 
-Pre-compiled binaries for Windows, macOS, and Linux are available on the [Releases page](https://github.com/anzalks/synaptipy/releases). Download the file matching your operating system from the v0.1.6.1 release assets:
+Pre-compiled binaries for Windows, macOS, and Linux are available on the [Releases page](https://github.com/anzalks/synaptipy/releases). Download the file matching your operating system from the latest release assets:
 
-- **Windows:** `Synaptipy_Setup_v0.1.6.1.exe`
-- **macOS:** `Synaptipy_v0.1.6.1.dmg` - open the disk image and drag to Applications
-- **Linux:** `Synaptipy-v0.1.6.1-x86_64.AppImage` - mark as executable (`chmod +x`) and run
+- **Windows:** `Synaptipy_Setup.exe` — run the installer
+- **macOS:** `synaptipy.dmg` — open the disk image and drag to Applications
+- **Linux:** `Synaptipy-Linux.AppImage` — mark as executable (`chmod +x`) and run
 
 ### Advanced: From Source
 
@@ -68,7 +68,7 @@ To launch the graphical user interface:
 synaptipy  # launch the application
 
 # or equivalently:
-python -m Synaptipy
+python -m synaptipy
 ```
 
 ![Synaptipy Interactive Workflow Demonstration](https://raw.githubusercontent.com/anzalks/synaptipy/main/docs/tutorial/workflow_demo.gif)
@@ -94,6 +94,19 @@ pipeline = [
 results = engine.run_batch([Path("recording.abf")], pipeline)
 print(results)
 ```
+
+The same batch engine is available from the command line for reproducible
+methods workflows:
+
+```bash
+synaptipy-batch run \
+  --pipeline pipeline.json \
+  --output results.csv \
+  recording.abf
+```
+
+The CLI writes `results.csv` plus a companion `results_provenance.json` file
+containing the software version, input files, and full pipeline configuration.
 
 ---
 
@@ -123,9 +136,8 @@ Synaptipy provides built-in analysis routines covering passive membrane properti
 
 ### Tab 4: Synaptic Events
 
-- **Event Detection (Threshold)** - prominence-based detection that accommodates baseline drift and overlapping events; interactive event markers can be individually accepted or rejected
-- **Event (Template Match)** - matched-filter cross-correlation using a bi-exponential kernel with user-defined rise and decay time constants; three kernel scales (1x, 2x, 3x the decay constant) are evaluated to accommodate dendritic-filtering variability
-- **Event (Baseline Peak)** - direct baseline-to-peak amplitude detection with kinetics estimation for evoked or spontaneous events
+- **Event (Amplitude)** - prominence-based detection that accommodates baseline drift and overlapping events; interactive event markers can be individually accepted or rejected
+- **Event (Template)** - matched-filter cross-correlation using a bi-exponential kernel with user-defined rise and decay time constants; three kernel scales (1x, 2x, 3x the decay constant) are evaluated to accommodate dendritic-filtering variability
 
 ### Tab 5: Evoked Responses
 
@@ -141,7 +153,7 @@ Trace rendering is implemented via PyQtGraph. GPU-accelerated rendering via Open
 
 ### Cross-file trial averaging
 
-The Explorer tab implements grand-average construction across multiple files and trials. In **Cycle Single Trial** mode, the user captures individual trials via **Add Current Trial to Avg Set**. Trials from different files may be accumulated; the selection persists across the session. Activation of **Plot Selected Avg** overlays the mean trace. When recordings of different durations are selected, shorter trials are padded with `NaN` up to the maximum array length. This allows the application to produce a grand average that preserves the full length of the longest recording, smoothly dropping the statistical $N$ at the tails rather than truncating data.
+The Explorer tab implements grand-average construction across multiple files and trials. In **Cycle Single Trial** mode, the user captures individual trials via **Add Current Trial to Avg Set**. Trials from different files may be accumulated; the selection persists across the session. Activation of **Plot Selected Avg** overlays the mean trace. When recordings of different durations are selected, shorter trials are padded with `NaN` up to the maximum array length. This allows the application to produce a grand average that preserves the full length of the longest recording, smoothly dropping the statistical *N* at the tails rather than truncating data.
 
 ---
 
@@ -242,13 +254,13 @@ PySide6 is pinned to 6.7.3 on all platforms. PySide6 6.8.0 contains a known cras
 - [Full documentation](https://synaptipy.readthedocs.io/en/latest/)
 - [API reference](https://synaptipy.readthedocs.io/en/latest/api_reference.html)
 - [Developer guide](https://synaptipy.readthedocs.io/en/latest/developer_guide.html)
-- [Extending Synaptipy (plugin guide)](docs/extending_synaptipy.md)
+- [Extending Synaptipy (plugin guide)](https://github.com/anzalks/synaptipy/blob/main/docs/extending_synaptipy.md)
 
 ---
 
 ## Contributing
 
-Contributions are welcome. The preferred contribution pathway for new analysis routines is the plugin interface, which requires no modification to the core package. For changes to the core, infrastructure, or application layers, refer to [CONTRIBUTING.md](CONTRIBUTING.md) and the [developer guide](https://synaptipy.readthedocs.io/en/latest/developer_guide.html) for project conventions, coding standards, and the contribution workflow.
+Contributions are welcome. The preferred contribution pathway for new analysis routines is the plugin interface, which requires no modification to the core package. For changes to the core, infrastructure, or application layers, refer to [CONTRIBUTING.md](https://github.com/anzalks/synaptipy/blob/main/CONTRIBUTING.md) and the [developer guide](https://synaptipy.readthedocs.io/en/latest/developer_guide.html) for project conventions, coding standards, and the contribution workflow.
 
 
 ---
@@ -317,4 +329,4 @@ in the documentation for a complete annotated bibliography.
 
 ## License
 
-Synaptipy is free and open-source software licensed under the GNU Affero General Public License v3 (AGPLv3). See the [LICENSE](LICENSE) file for full terms.
+Synaptipy is free and open-source software licensed under the GNU Affero General Public License v3 (AGPLv3). See the [LICENSE](https://github.com/anzalks/synaptipy/blob/main/LICENSE) file for full terms.

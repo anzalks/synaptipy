@@ -60,7 +60,9 @@ class PlotExportDialog(QtWidgets.QDialog):
         # Info label
         self.info_label = QtWidgets.QLabel("Vector formats (SVG, PDF) support editable text.")
         self.info_label.setWordWrap(True)
-        self.info_label.setStyleSheet("color: gray; font-size: 11px;")
+        from synaptipy.shared.theme_manager import style_as_subdued
+
+        style_as_subdued(self.info_label)
         layout.addWidget(self.info_label)
 
         # Buttons

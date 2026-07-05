@@ -168,10 +168,11 @@ def apply_winwcp_patch():  # noqa: C901
 
         # sampling interval can be slightly varying due to float precision
         # all_sampling_interval are not always unique
-        if all_sampling_interval:
-            self._sampling_rate = 1.0 / np.median(all_sampling_interval)
+        median_interval = np.median(all_sampling_interval) if all_sampling_interval else 0.0
+        if median_interval > 0.0:
+            self._sampling_rate = 1.0 / median_interval
         else:
-            self._sampling_rate = 1000.0  # Default fallback
+            self._sampling_rate = 1000.0
 
         signal_channels = []
         for c in range(header["NC"]):

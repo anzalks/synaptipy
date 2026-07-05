@@ -125,7 +125,7 @@ metadata.
    cp src/synaptipy/templates/plugin_template.py ~/.synaptipy/plugins/my_analysis.py
 
    # Windows (PowerShell)
-   Copy-Item src\Synaptipy\templates\plugin_template.py ~\.synaptipy\plugins\my_analysis.py
+   Copy-Item src\synaptipy\templates\plugin_template.py ~\.synaptipy\plugins\my_analysis.py
    ```
    The plugin directory is created automatically the first time Synaptipy runs.
    If it does not exist yet, create it manually:
@@ -147,7 +147,7 @@ metadata.
 3. Rename the function, change the `name=` and `label=`, adjust the `ui_params`
    and `plots` lists, and write your analysis logic.
 
-4. (Re)start Synaptipy.  Your analysis appears as a new tab in the Analyser.
+4. (Re)start synaptipy.  Your analysis appears as a new tab in the Analyser.
 
 No `pip install`, no editing `__init__.py`, no rebuilding - just save and restart.
 
@@ -731,18 +731,18 @@ multi-event (list of arrays) data.
 | `width` | int | Pen width (default 2). |
 | `opacity` | int | 0-100 (default 80). |
 
-**Example return dict** for a PPR decay fit:
+**Example return dict** for an N-pulse PPR decay fit:
 
 ```python
 return {
     "module_used": "evoked_responses",
     "metrics": {
-        "decay_tau_ms": tau_ms,
+        "decay_tau_ms_p1": tau_p1,
+        "decay_tau_ms_p2": tau_p2,
+        # List of arrays (one per pulse) for multi-event overlay:
+        "_ppr_fit_times": [t_arr_p1.tolist(), t_arr_p2.tolist()],
+        "_ppr_fit_values": [v_arr_p1.tolist(), v_arr_p2.tolist()],
     },
-    # Private keys at the TOP LEVEL (not inside "metrics") are fed to plot
-    # overlays and hidden from the results table.
-    "_ppr_fit_times": fit_time_array.tolist(),   # absolute time (s)
-    "_ppr_fit_values": fit_value_array.tolist(),  # fitted current/voltage
 }
 ```
 
@@ -755,14 +755,13 @@ The user can customise both overlay types via
 
 > **Prerequisite - Enable Custom Plugins:** Before your plugin will load you
 > must ensure the "Enable Custom Plugins" checkbox is checked in
-> **Edit > Preferences > Extensions** (or **Synaptipy > Preferences** on
-> macOS).  This setting is on by default.  After changing it, restart
-> Synaptipy for the change to take effect.
+> **Edit > Preferences > Extensions**.  This setting is on by default.
+> Changes take effect immediately via hot-reload; no restart is required.
 
 ### Real-world templates in `examples/plugins/`
 
 > **Looking for a working starting point?**  The `examples/plugins/` directory
-> ships three fully annotated, copy-pasteable plugin templates that cover the
+> ships five fully annotated, copy-pasteable plugin templates that cover the
 > most common use cases:
 >
 > | File | What it demonstrates |
@@ -770,6 +769,8 @@ The user can customise both overlay types via
 > | `synaptic_charge.py` | Baseline subtraction, trapezoidal integration, `fill_between` + star overlays |
 > | `opto_jitter.py` | Multi-channel access (TTL + voltage), per-trial loop, jitter statistics |
 > | `ap_repolarization.py` | Derivative-based detection, `vlines` + `hlines` overlays |
+> | `miniml_integration.py` | Deep-learning event detection via miniML (optional dep) |
+> | `spike_interface_integration.py` | Spike detection via SpikeInterface (optional dep) |
 >
 > Copy any file to `~/.synaptipy/plugins/`, rename the function and the
 > `name=` / `label=` fields in the decorator, and you have a working plugin
@@ -780,7 +781,7 @@ The user can customise both overlay types via
 Synaptipy ships ready-to-run example plugins in `examples/plugins/`.  These are
 loaded automatically at startup so you can try them immediately and use them as
 templates.  Enable them via **Edit > Preferences** (or **Synaptipy > Preferences**
-on macOS) by checking **Enable Custom Plugins**, then restart Synaptipy.
+on macOS) by checking **Enable Custom Plugins**, then restart synaptipy.
 
 ---
 
@@ -796,7 +797,7 @@ To use these plugins:
 
 1. Open **Edit > Preferences** (or **Synaptipy > Preferences** on macOS).
 2. Check **Enable Custom Plugins**.
-3. Restart Synaptipy.  Each plugin appears as a new sub-tab in the Analyser.
+3. Restart synaptipy.  Each plugin appears as a new sub-tab in the Analyser.
 
 To customise one, copy the file to `~/.synaptipy/plugins/` and edit your copy.  Synaptipy prefers the user copy over the bundled example, so your changes take effect immediately on the next restart.
 
@@ -931,7 +932,7 @@ Save this as `~/.synaptipy/plugins/synaptic_charge.py` (or copy it from
 """
 Custom Synaptipy Plugin: Synaptic Charge Transfer (Area Under Curve).
 
-Drop this file in ~/.synaptipy/plugins/ and restart Synaptipy.
+Drop this file in ~/.synaptipy/plugins/ and restart synaptipy.
 A new "Synaptic Charge Transfer" tab will appear in the Analyser.
 """
 import logging
@@ -1182,7 +1183,7 @@ signals.preferences_updated.connect(my_popup_widget.update_pens)
 ## 11. SpikeInterface Integration Plugin
 
 Synaptipy ships a ready-to-use plugin that integrates
-[SpikeInterface](https://spikeinterface.readthedocs.io/) spike detection
+[SpikeInterface](https://spikeinterface.readthedocs.io/en/stable/) spike detection
 directly into the standard Analyser workflow.  Because SpikeInterface is an
 optional dependency it is **not** listed in `requirements.txt`; install it once
 with `pip install spikeinterface`.

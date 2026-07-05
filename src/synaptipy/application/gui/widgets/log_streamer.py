@@ -1,7 +1,7 @@
 # src/synaptipy/application/gui/widgets/log_streamer.py
 # -*- coding: utf-8 -*-
 """
-Analysis Status Window for Synaptipy.
+Analysis Status Window for synaptipy.
 
 Provides two public components:
 
@@ -100,7 +100,7 @@ class AnalysisStatusWindow(QtWidgets.QWidget):
     Usage::
 
         handler = QtLoggingHandler(parent=analyser_tab)
-        logging.getLogger("Synaptipy").addHandler(handler)
+        logging.getLogger("synaptipy").addHandler(handler)
         window = AnalysisStatusWindow(parent=analyser_tab)
         window.connect_handler(handler)
         # user opens View -> Show Analysis Status:
@@ -181,7 +181,7 @@ class AnalysisStatusWindow(QtWidgets.QWidget):
         """Connect *handler*.log_emitted to this window's append slot.
 
         Call once from ``AnalyserTab.__init__`` after attaching the handler
-        to ``logging.getLogger("Synaptipy")``.
+        to ``logging.getLogger("synaptipy")``.
 
         Args:
             handler: The :class:`QtLoggingHandler` whose ``log_emitted``
@@ -193,7 +193,7 @@ class AnalysisStatusWindow(QtWidgets.QWidget):
         """Show if hidden, hide if visible.
 
         This is the only method that shows the window; called by the View
-        menu action in :class:`~Synaptipy.application.gui.main_window.MainWindow`.
+        menu action in :class:`~synaptipy.application.gui.main_window.MainWindow`.
         """
         if self.isVisible():
             self.hide()
@@ -204,7 +204,7 @@ class AnalysisStatusWindow(QtWidgets.QWidget):
         """Return ``True`` - the handler is always attached.
 
         Exists for testability; the handler lifetime is managed by
-        :class:`~Synaptipy.application.gui.analyser_tab.AnalyserTab`,
+        :class:`~synaptipy.application.gui.analyser_tab.AnalyserTab`,
         not by this window.
         """
         return True

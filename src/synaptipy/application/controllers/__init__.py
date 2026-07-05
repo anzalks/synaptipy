@@ -1,4 +1,4 @@
-"""Application controllers for Synaptipy."""
+"""Application controllers for synaptipy."""
 
 from .analysis_formatter import AnalysisResultFormatter, generate_methods_text
 from .analysis_plot_manager import AnalysisPlotManager, PlotContextTrace, PlotDataPackage

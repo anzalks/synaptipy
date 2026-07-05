@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 # Rule: Import the PURE LOGIC function, not the GUI wrapper
-from synaptipy.core.analysis.template_analysis import calculate_metric_logic
+from synaptipy.templates.analysis_template import calculate_metric_logic
 
 
 @pytest.fixture

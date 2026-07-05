@@ -123,7 +123,7 @@ After installation, run the application using one of these methods:
 
 2. **Using the Python module:**
  ```bash
- python -m Synaptipy
+ python -m synaptipy
  ```
 
 ### User Interface Overview
@@ -277,7 +277,7 @@ screen. The default widths are 320 px (left), 800 px (centre), and 360 px
 
 ## Using the Analyser Tab
 
-The Analyser tab provides 17 built-in analysis routines organised into five
+The Analyser tab provides 16 built-in analysis routines organised into five
 module tabs. Each sub-tab is auto-generated from registry metadata and provides
 parameter widgets, an interactive plot, a results table, and plot overlays.
 
@@ -288,7 +288,7 @@ The five Analyser pillars are:
 | **Intrinsic Properties** | `passive_properties` | RMP, Rin, Tau, Sag Ratio, I-V Curve, Capacitance |
 | **Spike Analysis** | `single_spike` | Spike detection, Phase-plane analysis |
 | **Excitability** | `firing_dynamics` | F-I curve, Burst analysis, Spike Train Dynamics |
-| **Synaptic Events** | `synaptic_events` | Event detection (threshold, template match, baseline-to-peak) |
+| **Synaptic Events** | `synaptic_events` | Event detection (amplitude, template) |
 | **Evoked Responses** | `evoked_responses` | Evoked Sync, Paired-Pulse Ratio, Stimulus Train (STP) |
 
 All analysis sub-tabs share the following interface behaviours:
@@ -383,15 +383,18 @@ measurements.
 
 #### Paired-Pulse Ratio
 
-1. Load a two-pulse paired-stimulus recording
+1. Load a paired-stimulus or multi-pulse train recording
 2. Switch to the *Paired-Pulse Ratio* sub-tab
-3. Configure the two stimulus times (**Pulse 1 Time**, **Pulse 2 Time**, in seconds)
-4. Set the **Amplitude Measurement Window (ms)** used to measure R1 and R2
-5. Enable **Subtract R1 Tail** to fit a mono- or bi-exponential decay to the
- R1 tail and subtract the residual baseline at the time of the second stimulus;
- this prevents contamination of R2 by the decaying R1 current
-6. Results include R1 amplitude, R2 amplitude, PPR (R2/R1), and, when tail
- subtraction is enabled, the corrected R2 and corrected PPR
+3. Set the **Number of Pulses** (default 2; supports N >= 2)
+4. Configure **Stim 1 Onset** and **Stim 2 Onset** (for N > 2 the
+   inter-stimulus interval is derived from stim2 − stim1 and applied
+   uniformly), or enable **Detect Stim from TTL** to read onsets from a
+   TTL channel
+5. The analysis uses iterative cumulative decay subtraction: each pulse's
+   mono-/bi-exponential decay is fitted and subtracted from subsequent
+   pulses before measuring their amplitudes
+6. Results include per-pulse raw and corrected amplitudes, ratios
+   normalised to R1, cumulative residuals, and decay time constants
 7. Click "Save Result" to store for later export
 
 #### Stimulus Train (STP)
@@ -460,14 +463,12 @@ valid ranges, and conditional visibility based on clamp mode.
   (CV), local variation (LV), and CV2. Opens a popup ISI plot.
 
 **Synaptic Events tab:**
-- **Event Detection (Template Match)** - Matched-filter cross-correlation using a
+- **Event (Template)** - Matched-filter cross-correlation using a
   bi-exponential kernel for miniature event detection. A fixed bank of three
   kernels at 1x, 2x, and 3x the user-specified decay constant is convolved with
   the trace; events are detected on the pointwise maximum of the three z-scored
   outputs, providing automatic tolerance for dendritic cable filtering.
   Configurable parameters: rise tau, decay tau, threshold in SD, and direction.
-- **Event Detection (Baseline Peak)** - Direct baseline-to-peak amplitude
-  detection with kinetics estimation for evoked or spontaneous events.
 
 ### Visual Validation Overlays
 
@@ -478,12 +479,12 @@ underlying data.
 
 | Overlay type | Where it appears | Default colour |
 |---|---|---|
-| **Trace overlay** (cyan) | Baseline region highlighted before the stimulus | Cyan (#00cfff) |
-| **Event fit overlay** (amber) | Bi-exponential or mono-exponential decay fits on the P1 tail in PPR | Amber (#ff9900) |
+| **Trace overlay** (dark green) | Baseline region highlighted before the first stimulus | Dark green (#228B22) |
+| **Event fit overlay** (amber) | Mono-/bi-exponential decay fits on each pulse's tail in PPR | Amber (#ff9900) |
 
 **Customising overlay appearance:**
 
-1. Open **Edit > Plot Preferences** (or the settings toolbar button).
+1. Open **View > Plot Customization...** (or the settings toolbar button).
 2. Switch to the **Trace Overlay** tab to adjust the highlight colour, line
    width, and opacity with a slider.
 3. Switch to the **Event Fit Overlay** tab to adjust the fitted-curve colour,
@@ -533,7 +534,7 @@ See [NWB Export Mapping](nwb_mapping.md) for full container mapping details.
 3. Select which results to export
 4. Specify the CSV output file location.
 5. Click "Export Selected" to create the output.
- - **Note**: If your exported results contain *multiple different types of analysis* (e.g. some RMP results and some Spike Detection results), Synaptipy will automatically generate a **ZIP Archive** containing separate, perfectly cleanly formatted CSV files for each unique analysis type, fully supporting custom plugin columns!
+ - **Note**: If your exported results contain *multiple different types of analysis* (e.g. some RMP results and some Spike Detection results), Synaptipy generates a **ZIP Archive** containing separate CSV files for each unique analysis type, including custom plugin columns.
 
 #### GraphPad Prism Export
 
@@ -685,7 +686,7 @@ trace the user visually validated.
 
 ### Preferences
 
-Open **Edit > Preferences** (or **Synaptipy > Preferences** on macOS) to access the application settings:
+Open **Edit > Preferences** to access the application settings:
 
 | Setting | Description |
 |---------|-------------|
@@ -747,7 +748,7 @@ With **Enable Custom Plugins** active they load automatically:
 | `opto_jitter.py` | Opto Latency Jitter | Trial-to-trial variability in spike latency after an optogenetic TTL pulse |
 | `ap_repolarization.py` | AP Repolarization Rate | Maximum rate of membrane-potential decline (dV/dt minimum) during an action potential |
 | `miniml_integration.py` | miniML Events | Deep-learning miniature event detection via [miniML](https://github.com/delvendahl/miniML); requires additional setup (see [extending_synaptipy.md](extending_synaptipy.md#12-deep-learning--third-party-integrations-eg-miniml)) |
-| `spike_interface_integration.py` | SpikeInterface Spikes | Spike detection via [SpikeInterface](https://spikeinterface.readthedocs.io/); requires `pip install spikeinterface` (see [extending_synaptipy.md](extending_synaptipy.md#11-spikeinterface-integration-plugin)) |
+| `spike_interface_integration.py` | SpikeInterface Spikes | Spike detection via [SpikeInterface](https://spikeinterface.readthedocs.io/en/stable/); requires `pip install spikeinterface` (see [extending_synaptipy.md](extending_synaptipy.md#11-spikeinterface-integration-plugin)) |
 
 Copy any of these files to `~/.synaptipy/plugins/` and edit your copy to create
 a personalised variant without modifying the Synaptipy installation.

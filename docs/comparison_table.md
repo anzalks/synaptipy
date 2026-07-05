@@ -43,8 +43,8 @@ software to demonstrate its contribution and positioning within the ecosystem.
 | F-I curve + slope | Yes (R^2, p) | No | Yes | No |
 | Burst detection | Yes (static+dynamic) | No | No | No |
 | Spike train dynamics (CV, CV2, LV) | Yes | No | No | No |
-| Synaptic event detection | 3 methods | Yes (template) | Yes (threshold) | No |
-| Paired-pulse ratio | Yes (bi-exp fit) | No | Yes | No |
+| Synaptic event detection | 2 methods | Yes (template) | Yes (threshold) | No |
+| Paired-pulse ratio | Yes (N-pulse, iterative decay subtraction) | No | Yes | No |
 | Stimulus train (STP) | Yes | No | No | No |
 | Cross-file averaging | Yes | No | No | No |
 | Batch processing | Yes (pipeline) | No | No | Scripted |
@@ -63,19 +63,19 @@ software to demonstrate its contribution and positioning within the ecosystem.
 | CI/CD (3 OS x 3 Python) | Yes | Yes | No | N/A |
 | Test coverage (>90%) | Yes | Partial | No | Partial |
 
-## Unique Contributions of Synaptipy
+## Design Priorities
 
-1. **Unified 30+ format support** via Neo with NWB 2.x export — no other open-source tool provides this complete I/O chain.
+1. **Unified format support** -- 30+ formats via Neo, with NWB 2.x read and write.
 
-2. **Publication-ready reproducibility infrastructure** — pinned environments, Docker container, methods text generator, parameter provenance tracking.
+2. **Reproducibility infrastructure** -- pinned environments, Docker container, methods text generator, parameter provenance tracking.
 
-3. **Dual-interface architecture** — interactive GUI for exploration AND headless batch engine for high-throughput processing, sharing the same analysis core.
+3. **Dual-interface architecture** -- interactive GUI and headless batch engine share the same analysis core.
 
-4. **Formal algorithmic documentation** — every analysis has LaTeX-specified mathematics with citations, validated against synthetic ground truth.
+4. **Algorithmic documentation** -- every analysis has LaTeX-specified mathematics with citations, validated against synthetic ground truth.
 
-5. **Extensible plugin system** — custom analyses can be added without modifying core code, using a decorator-based registry.
+5. **Plugin system** -- custom analyses added without modifying core code, using a decorator-based registry.
 
-6. **Statistical rigor** — confidence intervals on fitted parameters, goodness-of-fit metrics (R^2, p-values), and quality flags on results.
+6. **Fit quality reporting** -- confidence intervals on fitted parameters, goodness-of-fit metrics (R^2, p-values), and quality flags on results.
 
 ## Sources
 

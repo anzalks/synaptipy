@@ -797,7 +797,8 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
             if channel:
                 units = channel.units or "V"
-                if "A" in units or "amp" in units.lower():
+                units_lower = units.lower()
+                if units_lower in ("pa", "na", "ua", "ma", "a") or "amp" in units_lower:
                     is_voltage_clamp = True
 
         context["clamp_mode"] = "voltage_clamp" if is_voltage_clamp else "current_clamp"

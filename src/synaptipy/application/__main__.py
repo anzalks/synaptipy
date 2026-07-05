@@ -24,6 +24,7 @@ import os
 import sys
 import traceback
 import warnings
+from pathlib import Path
 
 from synaptipy.shared.logging_config import ensure_stdio_streams_support_fileno, setup_logging
 
@@ -71,8 +72,10 @@ def parse_arguments():
         version=f"%(prog)s {_version}",
     )
     parser.add_argument("--dev", action="store_true", help="Enable development mode with verbose logging")
+    parser.add_argument("--verbose", "-v", action="store_true", help="Increase output verbosity")
     parser.add_argument("--log-dir", type=str, help="Custom directory for log files")
     parser.add_argument("--log-file", type=str, help="Custom log filename")
+    parser.add_argument("--file", type=str, default=None, help="Open a specific file on startup")
     return parser.parse_args()
 
 
@@ -180,8 +183,10 @@ class CrashReportDialog(QtWidgets.QDialog):
         self._text_area = QtWidgets.QPlainTextEdit()
         self._text_area.setReadOnly(True)
         self._text_area.setPlainText(self._markdown_report)
-        font = QtGui.QFont("Courier New", 9)
+        font = QtGui.QFont()
         font.setStyleHint(QtGui.QFont.StyleHint.Monospace)
+        font.setFamily("monospace")
+        font.setPointSize(9)
         self._text_area.setFont(font)
         layout.addWidget(self._text_area)
 
@@ -254,7 +259,7 @@ def run_gui():  # noqa: C901
     if env_dev_mode and env_dev_mode.lower() in ("1", "true", "yes"):
         dev_mode = True
     else:
-        dev_mode = args.dev
+        dev_mode = args.dev or args.verbose
 
     # Setup logging with the appropriate mode
     setup_logging(dev_mode=dev_mode, log_dir=args.log_dir, log_filename=args.log_file)
@@ -327,6 +332,34 @@ def run_gui():  # noqa: C901
         except Exception:
             pass
         sys.exit(1)
+
+    # If --file was given, open it once the main window is ready.
+    if args.file:
+        initial_file = Path(args.file).resolve()
+        if not initial_file.exists():
+            log.error(f"File not found: {initial_file}")
+            print(f"Error: File not found: {initial_file}")
+            sys.exit(1)
+
+        def _open_initial_file():
+            mw = startup_manager.get_main_window()
+            if mw is None:
+                return
+            fio = getattr(mw, "file_io_controller", None)
+            if fio is None:
+                return
+            siblings = fio._scan_siblings(initial_file)
+            idx = siblings.index(initial_file) if initial_file in siblings else 0
+            mw._load_in_explorer(initial_file, siblings, idx, False)
+
+        def _try_open_initial_file():
+            mw = startup_manager.get_main_window()
+            if mw is not None and mw.isVisible():
+                _open_initial_file()
+            else:
+                QtCore.QTimer.singleShot(200, _try_open_initial_file)
+
+        QtCore.QTimer.singleShot(500, _try_open_initial_file)
 
     # Start Qt Event Loop
     log.debug("Starting Qt event loop...")

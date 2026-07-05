@@ -1,7 +1,7 @@
 # src/synaptipy/application/gui/preferences_dialog.py
 # -*- coding: utf-8 -*-
 """
-Preferences Dialog for Synaptipy.
+Preferences Dialog for synaptipy.
 
 Provides a unified preferences interface for scroll direction, theme,
 plugin, and performance settings.
@@ -24,6 +24,7 @@ from synaptipy.shared.theme_manager import (
     apply_theme,
     get_theme_mode,
     set_theme_mode,
+    style_as_subdued,
 )
 
 log = logging.getLogger(__name__)
@@ -106,24 +107,27 @@ class PreferencesDialog(QtWidgets.QDialog):
 
         scroll_description = QtWidgets.QLabel("Controls how mouse wheel and trackpad scrolling affects the view.")
         scroll_description.setWordWrap(True)
-        scroll_description.setStyleSheet("color: gray; font-size: 11px;")
+        style_as_subdued(scroll_description)
         scroll_layout.addWidget(scroll_description)
 
         # Radio buttons for scroll direction
         self.scroll_natural_radio = QtWidgets.QRadioButton("Natural")
         self.scroll_natural_radio.setToolTip("Content moves in the same direction as your fingers (macOS-style)")
         natural_desc = QtWidgets.QLabel("Content moves in the same direction as your fingers")
-        natural_desc.setStyleSheet("color: gray; font-size: 10px; margin-left: 20px;")
+        style_as_subdued(natural_desc)
+        natural_desc.setContentsMargins(20, 0, 0, 0)
 
         self.scroll_inverted_radio = QtWidgets.QRadioButton("Inverted")
         self.scroll_inverted_radio.setToolTip("Traditional mouse wheel behavior (scroll up = content goes down)")
         inverted_desc = QtWidgets.QLabel("Traditional scrolling (scroll up = content goes down)")
-        inverted_desc.setStyleSheet("color: gray; font-size: 10px; margin-left: 20px;")
+        style_as_subdued(inverted_desc)
+        inverted_desc.setContentsMargins(20, 0, 0, 0)
 
         self.scroll_system_radio = QtWidgets.QRadioButton("System")
         self.scroll_system_radio.setToolTip("Follow your operating system's scroll direction setting")
         system_desc = QtWidgets.QLabel("Follow operating system setting")
-        system_desc.setStyleSheet("color: gray; font-size: 10px; margin-left: 20px;")
+        style_as_subdued(system_desc)
+        system_desc.setContentsMargins(20, 0, 0, 0)
 
         scroll_layout.addWidget(self.scroll_natural_radio)
         scroll_layout.addWidget(natural_desc)
@@ -140,7 +144,7 @@ class PreferencesDialog(QtWidgets.QDialog):
 
         appearance_description = QtWidgets.QLabel("Application color theme.")
         appearance_description.setWordWrap(True)
-        appearance_description.setStyleSheet("color: gray; font-size: 11px;")
+        style_as_subdued(appearance_description)
         appearance_layout.addWidget(appearance_description)
 
         # Radio buttons for theme
@@ -174,7 +178,7 @@ class PreferencesDialog(QtWidgets.QDialog):
             "Custom plugins are loaded from <b>~/.synaptipy/plugins/</b> and " "<b>examples/plugins/</b> at startup."
         )
         plugins_description.setWordWrap(True)
-        plugins_description.setStyleSheet("color: gray; font-size: 11px;")
+        style_as_subdued(plugins_description)
         plugins_layout.addWidget(plugins_description)
 
         self.enable_plugins_checkbox = QtWidgets.QCheckBox("Enable Custom Plugins")
@@ -206,7 +210,7 @@ class PreferencesDialog(QtWidgets.QDialog):
             "Set to 1 to disable parallelism (safer for debugging)."
         )
         cpu_desc.setWordWrap(True)
-        cpu_desc.setStyleSheet("color: gray; font-size: 11px;")
+        style_as_subdued(cpu_desc)
         cpu_layout.addRow(cpu_desc)
 
         self.cpu_cores_spinbox = QtWidgets.QSpinBox()
@@ -226,7 +230,7 @@ class PreferencesDialog(QtWidgets.QDialog):
             "The engine calls gc.collect() after each file regardless of this setting."
         )
         ram_desc.setWordWrap(True)
-        ram_desc.setStyleSheet("color: gray; font-size: 11px;")
+        style_as_subdued(ram_desc)
         ram_layout.addRow(ram_desc)
 
         self.ram_spinbox = QtWidgets.QDoubleSpinBox()
@@ -248,7 +252,7 @@ class PreferencesDialog(QtWidgets.QDialog):
             "crashes, graphical glitches, or are running on Linux/headless environments, disable this."
         )
         gpu_desc.setWordWrap(True)
-        gpu_desc.setStyleSheet("color: gray; font-size: 11px;")
+        style_as_subdued(gpu_desc)
         gpu_layout.addWidget(gpu_desc)
 
         self.enable_opengl_checkbox = QtWidgets.QCheckBox("Enable Hardware Acceleration (OpenGL) - Experimental")

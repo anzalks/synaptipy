@@ -50,7 +50,7 @@ def extract_per_file_trace(
         channel_idx:   0-based channel position (sorted by channel-id) shared
                        across files.
         neo_adapter:   Adapter with a ``read_recording(path)`` method that
-                       returns a :class:`~Synaptipy.core.data_model.Recording`
+                       returns a :class:`~synaptipy.core.data_model.Recording`
                        or ``None``.
 
     Returns:
@@ -143,7 +143,7 @@ def get_cross_file_average(
         shared across all files.
     neo_adapter : object
         Adapter with a ``read_recording(path)`` method that returns a
-        :class:`~Synaptipy.core.data_model.Recording` or ``None``.
+        :class:`~synaptipy.core.data_model.Recording` or ``None``.
 
     Returns
     -------
@@ -214,7 +214,7 @@ def build_averaged_recording(
     For every channel position found in the first loadable file the function
     calls :func:`get_cross_file_average` to compute the grand average across
     all *items*.  The resulting per-channel average is stored as the sole trial
-    of a new :class:`~Synaptipy.core.data_model.Recording` whose
+    of a new :class:`~synaptipy.core.data_model.Recording` whose
     ``source_file`` is set to ``Path("__mfa__/<label>")``.
 
     Parameters

@@ -117,7 +117,9 @@ class PlotSaveDialog(QtWidgets.QDialog):
         # File extension (read-only)
         file_layout.addWidget(QtWidgets.QLabel("Extension:"), 2, 0)
         self.extension_label = QtWidgets.QLabel(".png")
-        self.extension_label.setStyleSheet("color: gray;")
+        from synaptipy.shared.theme_manager import style_as_subdued
+
+        style_as_subdued(self.extension_label)
         file_layout.addWidget(self.extension_label, 2, 1)
 
         layout.addWidget(file_group)
@@ -127,9 +129,16 @@ class PlotSaveDialog(QtWidgets.QDialog):
         preview_layout = QtWidgets.QVBoxLayout(preview_group)
 
         self.preview_label = QtWidgets.QLabel()
-        self.preview_label.setStyleSheet(
-            "color: blue; font-family: monospace; padding: 5px; border: 1px solid  #ccc; background-color:  #f9f9f9;"
-        )
+        from synaptipy.shared.theme_manager import is_dark_mode
+
+        if is_dark_mode():
+            self.preview_label.setStyleSheet(
+                "font-family: monospace; padding: 5px; border: 1px solid #555; background-color: #2a2a2a;"
+            )
+        else:
+            self.preview_label.setStyleSheet(
+                "font-family: monospace; padding: 5px; border: 1px solid #ccc; background-color: #f9f9f9;"
+            )
         self.preview_label.setWordWrap(True)
         self._update_preview()
 

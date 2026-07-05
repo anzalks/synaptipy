@@ -188,7 +188,7 @@ neurons in rat hippocampal slices. *Journal of Neuroscience*, 14(8),
 **Zucker, R. S., & Regehr, W. G. (2002).** Short-term synaptic plasticity.
 *Annual Review of Physiology*, 64, 355-405.
 [doi:10.1146/annurev.physiol.64.092501.114547](https://doi.org/10.1146/annurev.physiol.64.092501.114547)
-> PPR R2 baseline correction methodology (§15.5); referencing R2 amplitude to
+> PPR baseline correction methodology (§15.5); referencing amplitude to
 > the pre-stimulus resting baseline (`evoked_responses.py`).
 
 **Regehr, W. G. (2012).** Short-term presynaptic plasticity.
@@ -196,6 +196,19 @@ neurons in rat hippocampal slices. *Journal of Neuroscience*, 14(8),
 [doi:10.1101/cshperspect.a005702](https://doi.org/10.1101/cshperspect.a005702)
 > Conceptual framework for PPR interpretation — facilitation (PPR > 1) and
 > depression (PPR < 1) classification (`evoked_responses.py`).
+
+**Thanawala, M. S., & Bhatt, D. (2013).** Bhatt lab internal protocol for
+iterative cumulative decay subtraction in multi-pulse PPR analysis.
+> Iterative decay subtraction methodology (§15.5): for each pulse, the
+> cumulative residual from all prior fitted decays is subtracted before
+> measuring amplitude and fitting the current pulse's isolated decay.
+
+**Wesseling, J. F., & Lo, D. C. (2002).** Limit on the role of activity in
+controlling the release-ready supply of synaptic vesicles.
+*Journal of Neuroscience*, 22(22), 9708-9720.
+[doi:10.1523/JNEUROSCI.22-22-09708.2002](https://doi.org/10.1523/JNEUROSCI.22-22-09708.2002)
+> Cumulative amplitude analysis with iterative decay correction for
+> stimulus trains (`evoked_responses.py`).
 
 ---
 
@@ -309,7 +322,7 @@ SpikeInterface, a unified framework for spike sorting. *eLife*, 9:e61834.
 ## How to Cite Synaptipy
 
 If you use Synaptipy in published research, please cite the software directly
-using the metadata in [`CITATION.cff`](https://github.com/anzalks/synaptipy/blob/main/CITATION.cff):
+using the metadata in the repository `CITATION.cff` file:
 
 ```
 Shahul, A. K. (2026). SynaptiPy: An Open-Source Electrophysiology

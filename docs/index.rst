@@ -16,7 +16,7 @@ is implemented via the `Neo <https://neo.readthedocs.io/en/latest/>`_ library, w
 over 30 acquisition formats including extracellular and multi-channel data.
 
 The software is implemented in Python using the Qt6 framework (PySide6). Signal visualization
-employs PyQtGraph's CPU-vectorized native raster engine. The application includes 17 built-in analysis
+employs PyQtGraph's CPU-vectorized native raster engine. The application includes 16 built-in analysis
 modules spanning intrinsic membrane properties, action potential characterization, synaptic
 event detection, and evoked responses (Evoked Sync, Paired-Pulse Ratio, Stimulus Train STP).
 A batch processing engine implements composable analysis pipelines. An extensible plugin
@@ -28,10 +28,16 @@ Intan, Igor Pro, NWB, Open Ephys, and additional formats. NWB 2.x export is prov
 
 The source code is hosted on `GitHub <https://github.com/anzalks/synaptipy>`_.
 
+.. image:: tutorial/workflow_demo.gif
+   :alt: Synaptipy Interactive Workflow Demonstration
+   :align: center
+
+|
+
 .. note::
    **Graphics Engine Architecture:** SynaptiPy's interactive workspace relies entirely on
    PyQtGraph's highly optimized, CPU-vectorized native raster engine for rendering
-   high-density 2D electrophysiology traces. Matplotlib is utilized strictly for offline,
+   high-density 2D electrophysiology traces. Matplotlib is used only for offline,
    high-resolution static figure exporting and validation reporting.
 
 .. grid:: 2
@@ -102,7 +108,7 @@ The source code is hosted on `GitHub <https://github.com/anzalks/synaptipy>`_.
       Browse the source code, open issues, or submit pull requests on GitHub.
 
    .. grid-item-card:: Changelog
-      :link: https://github.com/anzalks/synaptipy/blob/main/CHANGELOG.md
+      :link: https://github.com/anzalks/synaptipy/releases
       :link-type: url
 
       Release history and notable changes between versions.

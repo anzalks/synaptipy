@@ -673,18 +673,18 @@ def calculate_train_dynamics(spike_times: np.ndarray, analysis_start_s: float = 
     cv2_denominator = isi_next + isi_i
     cv2_safe_mask = cv2_denominator > EPSILON_ISI_SUM
     cv2_array = np.where(cv2_safe_mask, 2.0 * np.abs(isi_next - isi_i) / cv2_denominator, np.nan)
-    cv2_val = float(np.nanmean(cv2_array))
+    cv2_val = float(np.nanmean(cv2_array)) if cv2_safe_mask.any() else np.nan
 
     lv_denominator_sq = (isi_i + isi_next) ** 2
     lv_safe_mask = lv_denominator_sq > EPSILON_ISI_SUM_SQ
     lv_array = np.where(lv_safe_mask, 3.0 * ((isi_i - isi_next) ** 2) / lv_denominator_sq, np.nan)
-    lv_val = float(np.nanmean(lv_array))
+    lv_val = float(np.nanmean(lv_array)) if lv_safe_mask.any() else np.nan
 
     # Adaptation index: mean of (ISI[i+1] - ISI[i]) / (ISI[i+1] + ISI[i])
     adapt_denominator = isi_next + isi_i
     adapt_safe_mask = adapt_denominator > EPSILON_ISI_SUM
     adapt_array = np.where(adapt_safe_mask, (isi_next - isi_i) / adapt_denominator, np.nan)
-    adaptation_index = float(np.nanmean(adapt_array))
+    adaptation_index = float(np.nanmean(adapt_array)) if adapt_safe_mask.any() else np.nan
 
     return TrainDynamicsResult(
         value=cv,

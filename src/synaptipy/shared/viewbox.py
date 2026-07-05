@@ -1,7 +1,7 @@
 # src/synaptipy/shared/viewbox.py
 # -*- coding: utf-8 -*-
 """
-Custom ViewBox for Synaptipy.
+Custom ViewBox for synaptipy.
 
 Reassigns mouse button actions so that:
 - Left-drag  : pan the view

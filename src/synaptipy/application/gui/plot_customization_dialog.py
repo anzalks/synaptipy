@@ -239,7 +239,9 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
 
         # Note: Grid color is always black for consistency
         info_label = QtWidgets.QLabel("Note: Grid color is always black for optimal visibility")
-        info_label.setStyleSheet("color: gray; font-style: italic;")
+        from synaptipy.shared.theme_manager import style_as_subdued
+
+        style_as_subdued(info_label, italic=True)
         layout.addWidget(info_label)
 
         # Width selection
@@ -387,7 +389,7 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         layout.addWidget(opacity_group)
 
         info = QtWidgets.QLabel("Applied to synaptic charge (AUC) shaded regions.")
-        info.setStyleSheet("color: gray; font-style: italic;")
+        style_as_subdued(info, italic=True)
         layout.addWidget(info)
         layout.addStretch()
         self.tab_widget.addTab(tab, "AUC Fill")

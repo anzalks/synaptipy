@@ -402,7 +402,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self.open_file_btn.clicked.connect(self.open_file_requested.emit)
 
         # Sidebar
-        # We preserve state when selecting from sidebar too, to allow seamless browsing of siblings
+        # Preserve state when selecting from sidebar to allow smooth browsing of siblings
         self.sidebar.file_selected.connect(
             lambda f, files, i: self.load_recording_data(f, files, i, preserve_state=True)
         )
@@ -1626,9 +1626,9 @@ class ExplorerTab(QtWidgets.QWidget):
         """Average selected trial(s) across project-tree files and add to the Analysis Set.
 
         Reads the trial selection from the config panel (free-text range input).
-        Calls :func:`~Synaptipy.core.analysis.cross_file_utils.build_averaged_recording`
+        Calls :func:`~synaptipy.core.analysis.cross_file_utils.build_averaged_recording`
         to compute the grand average across all files selected in the Project Tree,
-        then stores the resulting synthetic :class:`~Synaptipy.core.data_model.Recording`
+        then stores the resulting synthetic :class:`~synaptipy.core.data_model.Recording`
         as a ``MultifileAverage`` item in the Analysis Set.
         """
         from synaptipy.core.analysis.cross_file_utils import (

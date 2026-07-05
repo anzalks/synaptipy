@@ -215,7 +215,7 @@ All analysis features must be split into two distinct parts:
 
 **6. Documentation & Changelog Standards**
 *   **Changelog Maintenance**: Any bug fixes, performance improvements, or new features MUST be added to the `[Unreleased]` section of `CHANGELOG.md` immediately when the work completes. Do not defer changelog entries to release time.
-*   **Consistent Terminology**: Use the exact project name `Synaptipy` (capital S, lowercase the rest) throughout. Do not use `SynaptiPy`, `synaptipy`, or `SYNAPTIPY` in prose (only in code/CLI contexts).
+*   **Consistent Terminology**: Use `Synaptipy` (capital S) as the brand name in prose and UI strings. The Python package/module name is `synaptipy` (all lowercase) in code, imports, and filesystem paths. Do not use `SynaptiPy` or `SYNAPTIPY`.
 *   **Cross-reference accuracy**: When one documentation file references another, verify the link target exists. Dead links are not acceptable.
 
 ## VI. UI ARCHITECTURE IMMUTABLE DIRECTIVES

@@ -7,6 +7,7 @@ that were identified and fixed during the publication readiness audit.
 """
 
 import numpy as np
+import pytest
 
 from synaptipy.core.analysis.passive_properties import (
     calculate_rin,
@@ -148,9 +149,9 @@ class TestDvdtUnitConsistency:
         feat = features[0]
 
         # max_dvdt should be in V/s (positive value, consistent with phase_plane.py)
-        assert feat.max_dvdt > 0, f"max_dvdt should be positive, got {feat['max_dvdt']}"
+        assert feat.max_dvdt > 0, f"max_dvdt should be positive, got {feat.max_dvdt}"
         # The rise is ~100 mV / 1ms = 100,000 mV/s = 100 V/s
-        assert feat.max_dvdt > 10, f"max_dvdt too small: {feat['max_dvdt']} V/s"
+        assert feat.max_dvdt > 10, f"max_dvdt too small: {feat.max_dvdt} V/s"
 
     def test_dvdt_threshold_too_high_no_onset(self):
         """
@@ -209,7 +210,7 @@ class TestSagRatioPercentile:
         # Sag ratio should be between 0 and 1
         # With the 5th percentile approach, the peak should be near -30
         sag = result["sag_ratio"]
-        assert 0 < sag <= 1.6, f"Unexpected sag ratio: {sag}"
+        assert 0 < sag < 1, f"Sag ratio {sag:.4f} outside valid range (0, 1) for hyperpolarizing step with sag"
         assert "rebound_depolarization" in result
 
 
@@ -343,7 +344,7 @@ class TestFAHPMAHPAccuracy:
         # fahp_depth = ap_threshold - min_voltage_in_fahp_window
         # ap_threshold is near -65; min in 1-5 ms window is near -73
         # So depth should be approximately 8 mV (threshold - fahp_min)
-        assert feat.fahp_depth > 0, f"fahp_depth must be positive, got {feat['fahp_depth']}"
+        assert feat.fahp_depth > 0, f"fahp_depth must be positive, got {feat.fahp_depth}"
 
     def test_mahp_measured_in_correct_window(self):
         """mAHP depth should reflect the minimum in the 10-50 ms window."""
@@ -353,7 +354,7 @@ class TestFAHPMAHPAccuracy:
         features = calculate_spike_features(v, t, spikes)
         feat = features[0]
 
-        assert feat.mahp_depth > 0, f"mahp_depth must be positive, got {feat['mahp_depth']}"
+        assert feat.mahp_depth > 0, f"mahp_depth must be positive, got {feat.mahp_depth}"
 
     def test_fahp_deeper_than_mahp_when_appropriate(self):
         """When fAHP minimum is deeper (more negative) than mAHP minimum, fahp_depth > mahp_depth."""
@@ -364,7 +365,7 @@ class TestFAHPMAHPAccuracy:
         feat = features[0]
 
         assert feat.fahp_depth > feat.mahp_depth, (
-            f"Expected fahp_depth ({feat['fahp_depth']:.2f}) > mahp_depth ({feat['mahp_depth']:.2f}) "
+            f"Expected fahp_depth ({feat.fahp_depth:.2f}) > mahp_depth ({feat.mahp_depth:.2f}) "
             "when fAHP trough is deeper than mAHP trough"
         )
 
@@ -515,8 +516,7 @@ class TestPPRResidualSubtraction:
         )
 
         if result["ppr_error"] is not None:
-            # Tolerate fit failures in edge-case synthetic traces
-            return
+            pytest.skip(f"Exponential fit did not converge: {result['ppr_error']}")
 
         ppr = result["paired_pulse_ratio"]
         assert ppr is not None, "PPR should not be None for valid equal-amplitude events."
@@ -604,7 +604,7 @@ class TestGroundTruthSingleSpike:
         assert feat.max_dvdt > 0, "max_dvdt must be positive."
         assert math.isclose(
             feat.max_dvdt, true_dvdt_vs, rel_tol=0.10
-        ), f"max_dvdt {feat['max_dvdt']:.2f} V/s deviates >10% from true {true_dvdt_vs} V/s"
+        ), f"max_dvdt {feat.max_dvdt:.2f} V/s deviates >10% from true {true_dvdt_vs} V/s"
 
     def test_peak_voltage_exact(self):
         """Spike peak voltage must match the known waveform peak."""
@@ -623,21 +623,33 @@ class TestGroundTruthSingleSpike:
 
 
 class TestGroundTruthFiringDynamics:
-    """Pillar 3 — Firing Dynamics: Adaptation Index recovered from a geometric spike train."""
+    """Pillar 3 — Firing Dynamics: Shinomoto adaptation index recovered from a geometric spike train."""
 
     def test_adaptation_index_exact(self):
-        """Adaptation index computed from a geometric ISI train must match to 0.1%."""
+        """Shinomoto pairwise adaptation index from a geometric ISI train must match the analytic value.
+
+        For a geometric ISI progression with ratio r, every adjacent pair has the
+        same pairwise index: (r - 1) / (r + 1).  With ISI_last/ISI_first = 2.5
+        and 4 ISIs, r = 2.5^(1/3) ≈ 1.3572, giving AI = (r-1)/(r+1) ≈ 0.15154.
+        """
         import math
 
         from synaptipy.core.analysis.firing_dynamics import calculate_train_dynamics
         from tests.shared.test_data_generation import make_spike_train_trace
 
-        true_ai = 2.5
+        isi_ratio = 2.5
+        n_spikes = 5
         _v, _t, known = make_spike_train_trace(
-            n_spikes=5,
+            n_spikes=n_spikes,
             isi_first_ms=80.0,
-            adaptation_index=true_ai,
+            adaptation_index=isi_ratio,
         )
+
+        # Analytic expected value: for geometric ISIs with ratio r,
+        # Shinomoto AI = (r - 1) / (r + 1), constant across all pairs.
+        n_isis = n_spikes - 1
+        r = isi_ratio ** (1.0 / (n_isis - 1))
+        expected_shinomoto_ai = (r - 1) / (r + 1)
 
         spike_times = np.array(known["spike_times_s"])
         result = calculate_train_dynamics(spike_times)
@@ -646,9 +658,12 @@ class TestGroundTruthFiringDynamics:
         assert result.adaptation_index is not None, "adaptation_index must not be None."
         assert math.isclose(
             result.adaptation_index,
-            0.15153889084414848,
+            expected_shinomoto_ai,
             rel_tol=0.001,
-        ), f"adaptation_index {result.adaptation_index:.4f} deviates >0.1% from true 0.1515{true_ai}"
+        ), (
+            f"adaptation_index {result.adaptation_index:.6f} deviates >0.1% "
+            f"from analytic {expected_shinomoto_ai:.6f}"
+        )
 
     def test_mean_isi_exact(self):
         """Mean ISI computed from spike times with known ISIs must be correct to 0.1%."""
@@ -759,8 +774,7 @@ class TestGroundTruthEvokedPPR:
         )
 
         if result["ppr_error"] is not None:
-            # Accept graceful fit failure on this synthetic trace
-            return
+            pytest.skip(f"Exponential fit did not converge: {result['ppr_error']}")
 
         analytic_residual = known["residual_at_stim2_mv"]
         measured_residual = result["residual_at_stim2"]

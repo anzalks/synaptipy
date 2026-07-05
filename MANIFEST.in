@@ -11,8 +11,8 @@ recursive-include examples *
 recursive-include docs *.md *.rst *.py *.png *.svg *.jpg *.css
 
 # Include all package resource files that are not Python source
-recursive-include src/Synaptipy/resources *
-recursive-include src/Synaptipy/templates *
+recursive-include src/synaptipy/resources *
+recursive-include src/synaptipy/templates *
 
 # Exclude compiled artefacts and IDE folders
 global-exclude __pycache__

@@ -1,5 +1,5 @@
 """
-Centralized logging configuration for Synaptipy.
+Centralized logging configuration for synaptipy.
 
 This module provides functions to set up logging with different verbosity levels,
 including a development mode with more detailed logging. All logs are written to
@@ -79,7 +79,7 @@ DEV_FILE_LEVEL = logging.DEBUG  # Dev mode - log DEBUG+ to file
 
 def setup_logging(dev_mode=False, log_dir=None, log_filename=None):
     """
-    Configure the logging system for Synaptipy.
+    Configure the logging system for synaptipy.
 
     This function sets up the root logger with both console and file handlers.
     In development mode, more detailed log messages are shown, including file and
@@ -96,7 +96,7 @@ def setup_logging(dev_mode=False, log_dir=None, log_filename=None):
         logging.Logger: The configured root logger
     """
     # Create the root logger and set its level
-    root_logger = logging.getLogger("Synaptipy")
+    root_logger = logging.getLogger("synaptipy")
 
     # Remove existing handlers if any
     for handler in list(root_logger.handlers):
@@ -160,7 +160,7 @@ def setup_logging(dev_mode=False, log_dir=None, log_filename=None):
 
 def get_logger(name):
     """
-    Get a logger with the specified name, properly namespaced under Synaptipy.
+    Get a logger with the specified name, properly namespaced under synaptipy.
 
     This ensures all loggers use the same namespace hierarchy for consistent
     configuration and filtering.

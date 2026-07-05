@@ -39,8 +39,7 @@ def main():
     if args.run_analysis:
         analysis_scripts = [
             scripts_dir / "generate_benchmarks.py",
-            scripts_dir / "benchmark_rendering.py",
-            scripts_dir / "benchmark_e2e.py",
+            scripts_dir / "benchmark_rendering_e2e.py",
             scripts_dir / "generate_paper_tables.py",
         ]
         print("\n" + "#" * 60)

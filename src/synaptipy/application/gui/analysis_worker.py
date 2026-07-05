@@ -8,7 +8,7 @@ Provides three worker types:
 * :class:`AnalysisWorker` — lightweight :class:`~PySide6.QtCore.QRunnable` for
   arbitrary callables (existing API, unchanged).
 * :class:`BatchWorker` — :class:`~PySide6.QtCore.QThread` specialised for
-  :class:`~Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine` batch runs.
+  :class:`~synaptipy.core.analysis.batch_engine.BatchAnalysisEngine` batch runs.
   Emits rich progress signals so the GUI remains 100% responsive.
 * :class:`NwbExportWorker` — :class:`~PySide6.QtCore.QThread` for NWB file
   export.  Keeps the UI thread free during potentially slow HDF5 writes.
@@ -90,7 +90,7 @@ class AnalysisWorker(QtCore.QRunnable):
 
 
 class BatchWorker(QtCore.QThread):
-    """QThread wrapper for :class:`~Synaptipy.core.analysis.batch_engine.BatchAnalysisEngine`.
+    """QThread wrapper for :class:`~synaptipy.core.analysis.batch_engine.BatchAnalysisEngine`.
 
     All signals are emitted on the **GUI thread** (Qt's cross-thread signal
     delivery guarantee), so callers can safely update progress bars, log
@@ -168,7 +168,7 @@ class BatchWorker(QtCore.QThread):
 
 
 class NwbExportWorker(QtCore.QThread):
-    """QThread wrapper for :class:`~Synaptipy.infrastructure.exporters.NWBExporter`.
+    """QThread wrapper for :class:`~synaptipy.infrastructure.exporters.NWBExporter`.
 
     Running the NWB export on the UI thread blocks for several seconds on large
     recordings (pynwb serialises to HDF5 synchronously).  This worker moves the
@@ -194,7 +194,7 @@ class NwbExportWorker(QtCore.QThread):
 
         Args:
             exporter: A configured :class:`NWBExporter` instance.
-            recording: The :class:`~Synaptipy.core.data_model.Recording` to export.
+            recording: The :class:`~synaptipy.core.data_model.Recording` to export.
             output_filepath: Destination path for the ``.nwb`` file.
             nwb_metadata: Metadata dict accepted by :meth:`NWBExporter.export`.
             parent: Optional Qt parent object.

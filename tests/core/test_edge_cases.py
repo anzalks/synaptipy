@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Targeted biological edge-case tests for Synaptipy.
+"""Targeted biological edge-case tests for synaptipy.
 
 Three specific regression tests that verify biological logic cannot be silently
 corrupted by common experimental artefacts:

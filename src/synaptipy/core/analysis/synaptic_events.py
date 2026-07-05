@@ -729,7 +729,7 @@ detect_minis_threshold = detect_events_threshold
 
 @AnalysisRegistry.register(
     "event_detection_threshold",
-    label="Event Detection (Threshold)",
+    label="Event (Amplitude)",
     plots=[
         {"name": "Trace", "type": "trace", "show_spikes": True},
         {"type": "markers", "x": "_event_times", "y": "_event_peaks", "color": "r", "symbol": "o"},
@@ -1068,7 +1068,7 @@ def detect_events_template(  # noqa: C901
 
 @AnalysisRegistry.register(
     "event_detection_deconvolution",
-    label="Event (Template Match)",
+    label="Event (Template)",
     plots=[
         {"name": "Trace", "type": "trace", "show_spikes": True},
         {"type": "markers", "x": "_event_times", "y": "_event_peaks", "color": "r", "symbol": "o"},
@@ -1244,267 +1244,14 @@ def run_event_detection_template_wrapper(
 
 
 # ---------------------------------------------------------------------------
-# 3. Baseline + Peak + Kinetics Detection
-# ---------------------------------------------------------------------------
-
-
-def _find_stable_baseline_segment(
-    data: np.ndarray,
-    sample_rate: float,
-    window_duration_s: float = 0.5,
-    step_duration_s: float = 0.1,
-) -> Tuple[Optional[float], Optional[float], Optional[Tuple[int, int]]]:
-    """Find the most stable (lowest-variance) baseline segment."""
-    n_points = len(data)
-    window_samples = max(2, int(window_duration_s * sample_rate))
-    step_samples = max(1, int(step_duration_s * sample_rate))
-
-    if window_samples >= n_points:
-        return float(np.mean(data)), float(np.std(data)), (0, n_points)
-
-    min_variance = np.inf
-    best: Optional[Tuple[int, int]] = None
-    best_mean: Optional[float] = None
-    best_sd: Optional[float] = None
-
-    for i in range(0, n_points - window_samples + 1, step_samples):
-        segment = data[i : i + window_samples]
-        variance = float(np.var(segment))
-        if variance < min_variance:
-            min_variance = variance
-            best = (i, i + window_samples)
-            best_mean = float(np.mean(segment))
-            best_sd = float(np.sqrt(variance))
-
-    return best_mean, best_sd, best
-
-
-def detect_events_baseline_peak_kinetics(  # noqa: C901
-    data: np.ndarray,
-    sample_rate: float,
-    direction: str = "negative",
-    baseline_window_s: float = 0.5,
-    baseline_step_s: float = 0.1,
-    threshold_sd_factor: float = 3.0,
-    filter_freq_hz: Optional[float] = None,
-    min_event_separation_ms: float = 5.0,
-    auto_baseline: bool = True,
-    rolling_baseline_window_ms: float = 0.0,
-    peak_prominence_factor: Optional[float] = None,
-) -> EventDetectionResult:
-    """
-    Detect events via stable-baseline estimation then prominence-based peak finding.
-
-    Parameters
-    ----------
-    data : np.ndarray
-        Raw data trace.
-    sample_rate : float
-        Sampling rate in Hz.
-    direction : str, optional
-        "negative" or "positive", by default "negative".
-    baseline_window_s : float, optional
-        Window for stable baseline search in seconds, by default 0.5.
-    baseline_step_s : float, optional
-        Step size for stable baseline search in seconds, by default 0.1.
-    threshold_sd_factor : float, optional
-        Detection threshold as a multiple of baseline standard deviation, by default 3.0.
-    filter_freq_hz : float, optional
-        Low-pass filter frequency in Hz, by default None.
-    min_event_separation_ms : float, optional
-        Minimum separation between events in ms, by default 5.0.
-    auto_baseline : bool, optional
-        Whether to perform automatic baseline correction, by default True.
-    rolling_baseline_window_ms : float, optional
-        Window for rolling median baseline correction in ms, by default 0.0.
-    peak_prominence_factor : float, optional
-        Custom prominence for peak detection. If None, defaults to `threshold_val * 0.5`.
-
-    Returns
-    -------
-    EventDetectionResult
-        Detection results including indices and stats.
-    """
-    if direction not in ["negative", "positive"]:
-        return EventDetectionResult(value=0, unit="counts", is_valid=False, error_message="Invalid direction")
-
-    baseline_mean, baseline_sd, _ = _find_stable_baseline_segment(data, sample_rate, baseline_window_s, baseline_step_s)
-    if baseline_mean is None:
-        return EventDetectionResult(value=0, unit="counts", is_valid=True, event_count=0)
-
-    is_negative = direction == "negative"
-
-    if rolling_baseline_window_ms > 0:
-        from scipy.ndimage import median_filter
-
-        window_samples = int((rolling_baseline_window_ms / 1000.0) * sample_rate)
-        if window_samples % 2 == 0:
-            window_samples += 1
-        if window_samples >= 3:
-            rolling_bl = median_filter(data, size=window_samples)
-            work_data = data - rolling_bl
-        else:
-            work_data = data
-    else:
-        work_data = data
-
-    signal_to_process = -work_data if is_negative else work_data
-
-    noise_sd = median_abs_deviation(signal_to_process, scale="normal")
-    if noise_sd == 0:
-        noise_sd = baseline_sd if baseline_sd and baseline_sd > 0 else 1e-12
-
-    threshold_val = threshold_sd_factor * noise_sd
-
-    if filter_freq_hz and filter_freq_hz > 0:
-        try:
-            sos = signal.butter(4, filter_freq_hz, "low", fs=sample_rate, output="sos")
-            signal_c = np.ascontiguousarray(signal_to_process, dtype=np.float64)
-            sos_c = np.ascontiguousarray(sos, dtype=np.float64)
-            fwd = signal.sosfilt(sos_c, signal_c)
-            filtered = signal.sosfilt(sos_c, fwd[::-1])[::-1]
-        except (ValueError, TypeError, IndexError):
-            filtered = signal_to_process
-    else:
-        filtered = signal_to_process
-
-    min_dist = max(1, int(min_event_separation_ms / 1000.0 * sample_rate))
-    min_width = max(2, int(0.0002 * sample_rate))
-
-    prominence_val = peak_prominence_factor if peak_prominence_factor is not None else threshold_val * 0.5
-
-    peaks, _ = signal.find_peaks(
-        filtered,
-        height=threshold_val,
-        prominence=prominence_val,
-        distance=min_dist,
-        width=min_width,
-    )
-
-    display_threshold_val = -threshold_val if is_negative else threshold_val
-
-    return EventDetectionResult(
-        value=len(peaks),
-        unit="counts",
-        is_valid=True,
-        event_count=len(peaks),
-        event_indices=peaks,
-        detection_method="baseline_peak",
-        summary_stats={"baseline_mean": baseline_mean, "baseline_sd": float(noise_sd)},
-        threshold_value=display_threshold_val,
-    )
-
-
-@AnalysisRegistry.register(
-    "event_detection_baseline_peak",
-    label="Event (Baseline Peak)",
-    plots=[
-        {"name": "Trace", "type": "trace", "show_spikes": True},
-        {"type": "markers", "x": "_event_times", "y": "_event_peaks", "color": "r", "symbol": "o"},
-        {"type": "artifact_overlay"},
-    ],
-    ui_params=[
-        {
-            "name": "direction",
-            "label": "Direction:",
-            "type": "choice",
-            "choices": ["negative", "positive"],
-            "default": "negative",
-        },
-        {"name": "auto_baseline", "label": "Auto-Detect Baseline", "type": "bool", "default": True},
-        {"name": "threshold_sd_factor", "label": "Threshold (SD Factor):", "type": "float", "default": 3.0},
-        {
-            "name": "peak_prominence_factor",
-            "label": "Peak Prominence:",
-            "type": "float",
-            "default": 0.0,
-            "min": 0.0,
-            "max": 1e9,
-            "decimals": 2,
-            "tooltip": "Custom prominence factor. 0.0 means default (Threshold * 0.5).",
-        },
-        {
-            "name": "min_event_separation_ms",
-            "label": "Min Separation (ms):",
-            "type": "float",
-            "default": 5.0,
-            "min": 0.1,
-            "max": 1000.0,
-            "decimals": 1,
-        },
-        {
-            "name": "rolling_baseline_window_ms",
-            "label": "Rolling Baseline (ms):",
-            "type": "float",
-            "default": 100.0,
-            "min": 0.0,
-            "max": 5000.0,
-            "decimals": 1,
-        },
-        {
-            "name": "baseline_window_s",
-            "label": "Baseline Win (s):",
-            "type": "float",
-            "default": 0.5,
-            "min": 0.01,
-            "max": 100.0,
-            "decimals": 2,
-        },
-        {
-            "name": "baseline_step_s",
-            "label": "Baseline Step (s):",
-            "type": "float",
-            "default": 0.1,
-            "min": 0.01,
-            "max": 100.0,
-            "decimals": 2,
-        },
-    ],
-)
-def run_event_detection_baseline_peak_wrapper(
-    data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs
-) -> Dict[str, Any]:
-    """Wrapper for baseline-peak event detection."""
-    direction = kwargs.get("direction", "negative")
-    peak_prominence = kwargs.get("peak_prominence_factor", 0.0)
-    prominence_param = peak_prominence if peak_prominence > 0 else None
-
-    result = detect_events_baseline_peak_kinetics(
-        data,
-        sampling_rate,
-        direction=direction,
-        threshold_sd_factor=kwargs.get("threshold_sd_factor", 3.0),
-        min_event_separation_ms=kwargs.get("min_event_separation_ms", 5.0),
-        auto_baseline=kwargs.get("auto_baseline", True),
-        baseline_window_s=kwargs.get("baseline_window_s", 0.5),
-        baseline_step_s=kwargs.get("baseline_step_s", 0.1),
-        rolling_baseline_window_ms=kwargs.get("rolling_baseline_window_ms", 100.0),
-        peak_prominence_factor=prominence_param,
-    )
-    if not result.is_valid:
-        return {"module_used": "synaptic_events", "metrics": {"event_error": result.error_message}}
-    _idx = np.asarray(result.event_indices if result.event_indices is not None else [], dtype=int)
-    return {
-        "module_used": "synaptic_events",
-        "metrics": {
-            "event_count": result.event_count,
-            "_event_times": time[_idx].tolist() if len(_idx) > 0 else [],
-            "_event_peaks": data[_idx].tolist() if len(_idx) > 0 else [],
-            "_result_obj": result,
-        },
-    }
-
-
-# ---------------------------------------------------------------------------
 # Module-level tab aggregator
 # ---------------------------------------------------------------------------
 @AnalysisRegistry.register(
     "synaptic_events",
     label="Synaptic Events",
     method_selector={
-        "Threshold Based": "event_detection_threshold",
-        "Template Match": "event_detection_deconvolution",
-        "Baseline + Peak + Kinetics": "event_detection_baseline_peak",
+        "Amplitude": "event_detection_threshold",
+        "Template": "event_detection_deconvolution",
     },
     ui_params=[],
     plots=[],

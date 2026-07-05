@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Exporter for saving Recording data to the NWB:N 2.0 format.
-Utilizes metadata extracted by NeoAdapter and stored in data_model objects.
+Uses metadata extracted by NeoAdapter and stored in data_model objects.
 """
 
 __author__ = "Anzal K Shahul"

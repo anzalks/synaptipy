@@ -99,7 +99,8 @@ docs = [
 ]
 
 [project.scripts]
-synaptipy = "synaptipy.application.__main__:run_gui"
+synaptipy = "synaptipy.__main__:main"
+synaptipy-batch = "synaptipy.application.cli.main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -136,11 +137,13 @@ filterwarnings = [
 [tool.black]
 line-length = 120
 target-version = ["py310"]
+extend-exclude = "graphify-out"
 
 [tool.isort]
 profile = "black"
 line_length = 120
 known_first_party = ["synaptipy"]
+extend_skip = ["graphify-out"]
 
 [tool.coverage.run]
 source = ["src/synaptipy"]

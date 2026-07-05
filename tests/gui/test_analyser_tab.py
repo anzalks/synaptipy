@@ -59,11 +59,11 @@ def test_analyser_tab_loads_analysis_tabs(qtbot, mock_neo_adapter, monkeypatch):
     platforms including Windows.
 
     Root cause of the Windows bug: _load_analysis_tabs() imported only
-    ``Synaptipy.core.analysis.registry`` (the registry class), which does NOT
+    ``synaptipy.core.analysis.registry`` (the registry class), which does NOT
     execute the package __init__.py and therefore never calls
     ``from . import basic_features`` etc.  The registry stayed empty and
     no metadata-driven tabs were created.  The fix imports the full
-    ``Synaptipy.core.analysis`` package before calling list_registered().
+    ``synaptipy.core.analysis`` package before calling list_registered().
     """
     # Suppress heavy pyqtgraph plot-area creation to stay safe in offscreen mode
     monkeypatch.setattr("synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area", MagicMock())

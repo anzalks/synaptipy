@@ -1,26 +1,16 @@
 # src/synaptipy/shared/__init__.py
-"""
-Shared utilities and styling for the Synaptipy application.
+"""Shared utilities for Synaptipy.
 
-This module contains:
-- Styling constants and theme management
-- Plot configuration utilities
-- Common UI helper functions
-- Logging configuration
-- Error handling utilities
-- Unified plot factory for Windows compatibility
-
-Author: Anzal K Shahul
-Email: anzal.ks@gmail.com
+The package initializer intentionally imports only non-GUI modules. Styling and
+plot factory helpers are loaded lazily via ``__getattr__`` so headless commands
+such as ``python -m synaptipy --version`` and ``synaptipy-batch --help`` do not
+import PySide6.
 """
 
-import logging
-from typing import Any, Dict, Optional
+from importlib import import_module
+from typing import Any
 
-# Core shared modules
-from . import constants, error_handling, logging_config, plot_factory, styling
-
-# Import key classes and functions for easy access
+from . import constants, error_handling, logging_config
 from .constants import (
     AVERAGE_COLOR,
     DEFAULT_PLOT_PEN_WIDTH,
@@ -37,35 +27,49 @@ from .error_handling import (
     UnsupportedFormatError,
 )
 from .logging_config import setup_logging
-from .plot_factory import SynaptipyPlotFactory, configure_plot_safely, create_analysis_plot, create_explorer_plot
-from .styling import PLOT_COLORS as STYLING_PLOT_COLORS
-from .styling import (
-    apply_stylesheet,
-    configure_plot_widget,
-    configure_pyqtgraph_globally,
-    get_average_pen,
-    get_baseline_pen,
-    get_grid_pen,
-    get_response_pen,
-    get_system_theme_mode,
-    get_trial_pen,
-    style_button,
-    style_error_message,
-    style_info_label,
-    style_label,
-    style_result_display,
-)
 
-# Make all important items available at package level
+_LAZY_EXPORTS = {
+    "apply_stylesheet": ("styling", "apply_stylesheet"),
+    "configure_pyqtgraph_globally": ("styling", "configure_pyqtgraph_globally"),
+    "configure_plot_widget": ("styling", "configure_plot_widget"),
+    "get_trial_pen": ("styling", "get_trial_pen"),
+    "get_average_pen": ("styling", "get_average_pen"),
+    "get_baseline_pen": ("styling", "get_baseline_pen"),
+    "get_response_pen": ("styling", "get_response_pen"),
+    "get_grid_pen": ("styling", "get_grid_pen"),
+    "style_button": ("styling", "style_button"),
+    "style_label": ("styling", "style_label"),
+    "style_result_display": ("styling", "style_result_display"),
+    "style_info_label": ("styling", "style_info_label"),
+    "style_error_message": ("styling", "style_error_message"),
+    "get_system_theme_mode": ("styling", "get_system_theme_mode"),
+    "STYLING_PLOT_COLORS": ("styling", "PLOT_COLORS"),
+    "SynaptipyPlotFactory": ("plot_factory", "SynaptipyPlotFactory"),
+    "create_analysis_plot": ("plot_factory", "create_analysis_plot"),
+    "create_explorer_plot": ("plot_factory", "create_explorer_plot"),
+    "configure_plot_safely": ("plot_factory", "configure_plot_safely"),
+    "styling": ("styling", None),
+    "plot_factory": ("plot_factory", None),
+}
+
+
+def __getattr__(name: str) -> Any:
+    if name not in _LAZY_EXPORTS:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module_name, attr_name = _LAZY_EXPORTS[name]
+    module = import_module(f"{__name__}.{module_name}")
+    value = module if attr_name is None else getattr(module, attr_name)
+    globals()[name] = value
+    return value
+
+
 __all__ = [
-    # Constants
     "DEFAULT_PLOT_PEN_WIDTH",
     "PLOT_COLORS",
     "TRIAL_COLOR",
     "AVERAGE_COLOR",
     "TRIAL_ALPHA",
     "Z_ORDER",
-    # Styling
     "apply_stylesheet",
     "configure_pyqtgraph_globally",
     "configure_plot_widget",
@@ -81,20 +85,16 @@ __all__ = [
     "style_error_message",
     "get_system_theme_mode",
     "STYLING_PLOT_COLORS",
-    # Plot Factory
     "SynaptipyPlotFactory",
     "create_analysis_plot",
     "create_explorer_plot",
     "configure_plot_safely",
-    # Error Handling
     "SynaptipyError",
     "FileReadError",
     "UnsupportedFormatError",
     "ExportError",
     "SynaptipyFileNotFoundError",
-    # Logging
     "setup_logging",
-    # Modules
     "constants",
     "error_handling",
     "logging_config",

@@ -53,15 +53,21 @@ project = "Synaptipy"
 copyright = f"2024-{_dt.datetime.now().year}, Anzal K. Shahul"
 author = "Anzal K. Shahul"
 
-# Retrieve version from the package itself
+# Retrieve version from the package itself; fall back to pyproject.toml
+# so docs build correctly even when synaptipy is not installed.
 try:
     from synaptipy import __version__ as _version  # noqa: E402
 
     release = _version
     version = _version
 except Exception:
-    version = "0.1.6.1"
-    release = "0.1.6.1"
+    import re as _re
+
+    _pyproject = os.path.join(os.path.abspath(os.path.dirname(__file__)), "..", "pyproject.toml")
+    with open(_pyproject, encoding="utf-8") as _f:
+        _m = _re.search(r'^version\s*=\s*"([^"]+)"', _f.read(), _re.MULTILINE)
+    version = _m.group(1) if _m else "0.0.0"
+    release = version
 
 # ---------------------------------------------------------------------------
 # General configuration

@@ -1,7 +1,7 @@
 # src/synaptipy/shared/scroll_settings.py
 # -*- coding: utf-8 -*-
 """
-Scroll Settings Module for Synaptipy.
+Scroll Settings Module for synaptipy.
 
 Manages scroll direction preferences with persistence via QSettings.
 Provides unified scroll behavior across the application.

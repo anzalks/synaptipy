@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "dataset_name": "SynaptiPy eNeuro Scientific Methods validation cohort",
+  "source": {
+    "name": "Allen Institute Cell Types Database",
+    "homepage": "https://celltypes.brain-map.org/",
+    "access_method": "allensdk.core.cell_types_cache.CellTypesCache",
+    "download_format": "NWB",
+    "cache_directory": "paper/data/allen_cache"
+  },
+  "selection": {
+    "target_cell_count": 6,
+    "brain_region": "VISp",
+    "protocol_filter": "Long Square sweeps; active sweeps require positive current steps and passive sweeps require hyperpolarizing steps",
+    "purpose": "Benchmark SynaptiPy active and passive intracellular feature extraction against eFEL and IPFX.",
+    "notes": [
+      "Cells are intentionally fixed for paper reproducibility.",
+      "Generated NWB files are cached locally and are not committed to git.",
+      "Regenerate with paper/scripts/generate_paper_tables.py --force when the SynaptiPy algorithms intentionally change."
+    ]
+  },
+  "cells": [
+    {
+      "cell_id": 480087928,
+      "structure": "VISp",
+      "source_file": "paper/data/allen_cache/cell_480087928.nwb"
+    },
+    {
+      "cell_id": 323865917,
+      "structure": "VISp",
+      "source_file": "paper/data/allen_cache/cell_323865917.nwb"
+    },
+    {
+      "cell_id": 476135066,
+      "structure": "VISp",
+      "source_file": "paper/data/allen_cache/cell_476135066.nwb"
+    },
+    {
+      "cell_id": 481127932,
+      "structure": "VISp",
+      "source_file": "paper/data/allen_cache/cell_481127932.nwb"
+    },
+    {
+      "cell_id": 502614426,
+      "structure": "VISp",
+      "source_file": "paper/data/allen_cache/cell_502614426.nwb"
+    },
+    {
+      "cell_id": 504615116,
+      "structure": "VISp",
+      "source_file": "paper/data/allen_cache/cell_504615116.nwb"
+    }
+  ]
+}

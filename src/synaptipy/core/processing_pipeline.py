@@ -24,6 +24,7 @@ class SignalProcessingPipeline:
 
     def __init__(self):
         self._steps: List[Dict[str, Any]] = []
+        self.last_warnings: List[str] = []
 
     def add_step(self, step_config: Dict[str, Any], index: Optional[int] = None):
         """
@@ -77,9 +78,11 @@ class SignalProcessingPipeline:
         if data is None or len(data) == 0:
             return data
 
+        self.last_warnings = []
         result = data.copy()
 
         for step in self._steps:
+            pre_step = result.copy()
             try:
                 op_type = step.get("type")
 
@@ -139,16 +142,28 @@ class SignalProcessingPipeline:
                     order = int(step.get("order", 5))
 
                     if method == "lowpass":
-                        result = signal_processor.lowpass_filter(result, float(step.get("cutoff")), fs, order=order)
+                        cutoff = step.get("cutoff")
+                        if cutoff is None:
+                            raise ValueError("lowpass filter requires 'cutoff'")
+                        result = signal_processor.lowpass_filter(result, float(cutoff), fs, order=order)
                     elif method == "highpass":
-                        result = signal_processor.highpass_filter(result, float(step.get("cutoff")), fs, order=order)
+                        cutoff = step.get("cutoff")
+                        if cutoff is None:
+                            raise ValueError("highpass filter requires 'cutoff'")
+                        result = signal_processor.highpass_filter(result, float(cutoff), fs, order=order)
                     elif method == "bandpass":
+                        low_cut, high_cut = step.get("low_cut"), step.get("high_cut")
+                        if low_cut is None or high_cut is None:
+                            raise ValueError("bandpass filter requires 'low_cut' and 'high_cut'")
                         result = signal_processor.bandpass_filter(
-                            result, float(step.get("low_cut")), float(step.get("high_cut")), fs, order=order
+                            result, float(low_cut), float(high_cut), fs, order=order
                         )
                     elif method == "notch":
+                        freq, q_factor = step.get("freq"), step.get("q_factor")
+                        if freq is None or q_factor is None:
+                            raise ValueError("notch filter requires 'freq' and 'q_factor'")
                         result = signal_processor.notch_filter(
-                            result, float(step.get("freq")), float(step.get("q_factor")), fs
+                            result, float(freq), float(q_factor), fs
                         )
 
                 elif op_type == "artifact":
@@ -158,15 +173,20 @@ class SignalProcessingPipeline:
                         method = step.get("method", "hold")
                         result = signal_processor.blank_artifact(result, time_vector, onset, duration, method=method)
                     else:
-                        log.warning("Artifact blanking requested but no time " "vector provided. Skipping.")
+                        log.warning("Artifact blanking requested but no time vector provided. Skipping.")
 
-                # Check for bad data after each step
-                if result is not None:
-                    if np.any(np.isnan(result)) or np.any(np.isinf(result)):
-                        log.error(f"Step {op_type}/{step.get('method')} produced invalid data (NaN/Inf)")
+                # Revert if the step produced NaN/Inf
+                if result is not None and (np.any(np.isnan(result)) or np.any(np.isinf(result))):
+                    msg = f"Preprocessing step '{op_type}/{step.get('method')}' produced NaN/Inf — reverted"
+                    log.warning(msg)
+                    self.last_warnings.append(msg)
+                    result = pre_step
 
             except Exception as e:
-                log.error(f"Error processing step {step}: {e}")
+                msg = f"Preprocessing step '{step.get('type')}/{step.get('method')}' failed ({e}) — skipped"
+                log.warning(msg)
+                self.last_warnings.append(msg)
+                result = pre_step
 
         return result
 

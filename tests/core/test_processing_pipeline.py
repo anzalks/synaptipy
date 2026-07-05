@@ -263,6 +263,76 @@ class TestPipelineFilters:
 
 
 # ---------------------------------------------------------------------------
+# Pipeline revert-on-failure and last_warnings tests
+# ---------------------------------------------------------------------------
+
+
+class TestPipelineRevertOnFailure:
+    """Verify that broken or NaN-producing steps are reverted and warnings tracked."""
+
+    def test_exception_step_reverted_and_warned(self):
+        """A step that throws is reverted to the pre-step data."""
+        pipeline = SignalProcessingPipeline()
+        pipeline.add_step({"type": "baseline", "method": "mean"})
+        pipeline.add_step({"type": "filter", "method": "lowpass", "cutoff": "INVALID"})
+        pipeline.add_step({"type": "baseline", "method": "median"})
+
+        data = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        result = pipeline.process(data, 10000.0)
+
+        assert len(pipeline.last_warnings) == 1
+        assert "failed" in pipeline.last_warnings[0]
+        assert not np.any(np.isnan(result))
+
+    def test_nan_producing_step_reverted(self):
+        """A step that produces NaN/Inf is reverted to pre-step data."""
+        pipeline = SignalProcessingPipeline()
+        # Bandpass with low_cut > high_cut produces NaN on some scipy versions
+        pipeline.add_step({"type": "filter", "method": "bandpass", "low_cut": 5000, "high_cut": 1, "order": 2})
+
+        data = np.sin(np.linspace(0, 10 * np.pi, 1000))
+        result = pipeline.process(data, 10000.0)
+
+        assert not np.any(np.isnan(result))
+        assert not np.any(np.isinf(result))
+
+    def test_last_warnings_reset_each_call(self):
+        """last_warnings is cleared at the start of each process() call."""
+        pipeline = SignalProcessingPipeline()
+        pipeline.add_step({"type": "filter", "method": "lowpass", "cutoff": "BAD"})
+
+        data = np.array([1.0, 2.0, 3.0])
+        pipeline.process(data, 10000.0)
+        assert len(pipeline.last_warnings) == 1
+
+        pipeline.process(data, 10000.0)
+        assert len(pipeline.last_warnings) == 1  # fresh, not accumulated
+
+    def test_valid_pipeline_no_warnings(self):
+        """A pipeline with no errors produces an empty warnings list."""
+        pipeline = SignalProcessingPipeline()
+        pipeline.add_step({"type": "baseline", "method": "mean"})
+
+        data = np.array([10.0, 20.0, 30.0])
+        result = pipeline.process(data, 10000.0)
+
+        assert pipeline.last_warnings == []
+        np.testing.assert_allclose(result, [-10.0, 0.0, 10.0])
+
+    def test_multiple_failures_all_warned(self):
+        """Multiple broken steps each produce a warning."""
+        pipeline = SignalProcessingPipeline()
+        pipeline.add_step({"type": "filter", "method": "lowpass", "cutoff": "BAD1"})
+        pipeline.add_step({"type": "filter", "method": "highpass", "cutoff": "BAD2"})
+
+        data = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+        result = pipeline.process(data, 10000.0)
+
+        assert len(pipeline.last_warnings) == 2
+        np.testing.assert_array_equal(result, data)
+
+
+# ---------------------------------------------------------------------------
 # apply_trace_corrections tests
 # ---------------------------------------------------------------------------
 

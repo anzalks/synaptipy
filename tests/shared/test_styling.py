@@ -138,7 +138,8 @@ class TestWidgetStyling(unittest.TestCase):
         result = configure_plot_widget(mock_widget)
 
         # Verify proper styling was applied
-        mock_widget.setBackground.assert_called_once_with("w")
+        bg_arg = mock_widget.setBackground.call_args[0][0]
+        self.assertIn(bg_arg, ("w", "white", "#232323"))
         # Grid alpha now comes from plot customization (70% opacity = ~0.698 alpha)
         # Just verify showGrid was called with the correct parameters (exact alpha may vary)
         self.assertTrue(mock_widget.showGrid.called)

@@ -124,7 +124,11 @@ class ExporterTab(QtWidgets.QWidget):
         output_layout.addWidget(self.nwb_browse_button)
         nwb_group_layout.addLayout(output_layout)
         self.nwb_export_button = QtWidgets.QPushButton("Export to NWB...")
-        self.nwb_export_button.setIcon(QtGui.QIcon.fromTheme("document-save"))
+        from synaptipy.shared.theme_manager import get_themed_icon
+
+        self.nwb_export_button.setIcon(
+            get_themed_icon("document-save", QtWidgets.QStyle.StandardPixmap.SP_DialogSaveButton)
+        )
         self.nwb_export_button.setToolTip("Start the NWB export process")
         self.nwb_export_button.setEnabled(False)
         nwb_group_layout.addWidget(self.nwb_export_button, alignment=QtCore.Qt.AlignmentFlag.AlignCenter)
@@ -200,7 +204,11 @@ class ExporterTab(QtWidgets.QWidget):
         export_layout.addStretch(1)
 
         self.analysis_results_export_button = QtWidgets.QPushButton("Export Selected Results")
-        self.analysis_results_export_button.setIcon(QtGui.QIcon.fromTheme("document-save"))
+        from synaptipy.shared.theme_manager import get_themed_icon
+
+        self.analysis_results_export_button.setIcon(
+            get_themed_icon("document-save", QtWidgets.QStyle.StandardPixmap.SP_DialogSaveButton)
+        )
         self.analysis_results_export_button.setToolTip("Export the selected analysis results to a file")
         self.analysis_results_export_button.setEnabled(False)  # Disabled initially
         export_layout.addWidget(self.analysis_results_export_button)

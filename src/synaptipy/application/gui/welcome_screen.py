@@ -70,7 +70,7 @@ class WelcomeScreen(QtWidgets.QWidget):
         logo_label = QtWidgets.QLabel()
         # Resolve resource path: use sys._MEIPASS when running as PyInstaller bundle.
         if hasattr(sys, "_MEIPASS"):
-            logo_path = Path(sys._MEIPASS) / "Synaptipy" / "resources" / "icons" / "logo.png"
+            logo_path = Path(sys._MEIPASS) / "synaptipy" / "resources" / "icons" / "logo.png"
         else:
             logo_path = Path(__file__).parent.parent.parent / "resources" / "icons" / "logo.png"
         if logo_path.exists():

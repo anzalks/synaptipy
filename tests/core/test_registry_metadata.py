@@ -101,7 +101,7 @@ def test_spike_detection_metadata():
 # core/analysis/__init__.py were never executed and the registry remained
 # empty.  On macOS the batch engine happened to be imported earlier via a
 # different path, masking the bug.
-# The fix imports ``Synaptipy.core.analysis`` (the full package) immediately
+# The fix imports ``synaptipy.core.analysis`` (the full package) immediately
 # before calling list_registered().
 # ---------------------------------------------------------------------------
 
@@ -114,25 +114,26 @@ EXPECTED_BUILTIN_ANALYSES = {
     "sag_ratio_analysis",
     "event_detection_threshold",
     "event_detection_deconvolution",
-    "event_detection_baseline_peak",
     "phase_plane_analysis",
     "burst_analysis",
     "excitability_analysis",
     "capacitance_analysis",
     "optogenetic_sync",
+    "paired_pulse_ratio",
+    "stimulus_train_stp",
     "train_dynamics",
 }
 
 
 def test_full_package_import_populates_registry():
     """Regression test: importing only registry.py leaves the registry empty;
-    the full Synaptipy.core.analysis package must be imported to trigger all
+    the full synaptipy.core.analysis package must be imported to trigger all
     @AnalysisRegistry.register decorators.
 
     The autouse clear_registry fixture has already cleared the registry before
     this test runs.  We reload every built-in analysis submodule explicitly to
     re-execute their decorators (the modules are already in sys.modules so a
-    plain import is a no-op), then verify all 15 expected analyses are present.
+    plain import is a no-op), then verify all expected analyses are present.
     This matches the mechanism in startup_manager._begin_loading() and in
     analyser_tab._load_analysis_tabs() added to fix the Windows bug.
     """

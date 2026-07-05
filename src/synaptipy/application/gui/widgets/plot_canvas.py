@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 
 class SynaptipyPlotCanvas(QtCore.QObject):
     """
-    Base class for plot canvases in Synaptipy.
+    Base class for plot canvases in synaptipy.
     Wraps a GraphicsLayoutWidget and manages plot items.
     """
 
@@ -154,7 +154,13 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         try:
             from synaptipy.shared.plot_customization import apply_plot_theme
 
-            apply_plot_theme(plot_item, background_color="white", axis_color="black")
+            try:
+                from synaptipy.shared.theme_manager import themed_plot_colors
+
+                bg, fg = themed_plot_colors()
+            except ImportError:
+                bg, fg = "white", "black"
+            apply_plot_theme(plot_item, background_color=bg, axis_color=fg)
         except ImportError:
             log.debug("plot_customization module not available for theming")
 

@@ -62,7 +62,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="Synaptipy",
+    name="synaptipy",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -82,13 +82,13 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name="Synaptipy",
+    name="synaptipy",
 )
 
 if sys.platform == "darwin":
     app = BUNDLE(
         coll,
-        name="Synaptipy.app",
+        name="synaptipy.app",
         icon=icon_path if os.path.exists(icon_path) else None,
         bundle_identifier="com.anzalks.synaptipy",
         info_plist={
@@ -96,5 +96,6 @@ if sys.platform == "darwin":
             "NSHighResolutionCapable": "True",
             "LSBackgroundOnly": "False",
             "CFBundleShortVersionString": _APP_VERSION,
+            "CFBundleIconFile": "logo.icns",
         },
     )

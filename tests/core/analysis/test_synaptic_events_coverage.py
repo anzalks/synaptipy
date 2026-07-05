@@ -18,7 +18,6 @@ from synaptipy.core.analysis.synaptic_events import (
     _measure_ppr_peak,
     calculate_paired_pulse_ratio,
     compute_local_pre_event_baseline,
-    detect_events_baseline_peak_kinetics,
     detect_events_template,
     detect_events_threshold,
     fit_biexponential_decay,
@@ -403,66 +402,6 @@ class TestDetectEventsTemplate:
 
 
 # ---------------------------------------------------------------------------
-# detect_events_baseline_peak_kinetics - edge cases (lines 1229, 1233, 1247-1249)
-# ---------------------------------------------------------------------------
-
-
-class TestDetectEventsBaselinePeakKinetics:
-    def test_invalid_direction_returns_error(self):
-        """Invalid direction should return an error result (line 1229)."""
-        data = np.zeros(500)
-        result = detect_events_baseline_peak_kinetics(data, 10_000.0, direction="sideways")
-        assert not result.is_valid
-
-    def test_rolling_baseline_applied(self):
-        """rolling_baseline_window_ms > 0 engages the rolling-baseline path (lines 1247-1249)."""
-        fs = 10_000.0
-        n = 5000
-        t = np.arange(n) / fs
-        data = np.zeros(n)
-        # Slow drift + one event
-        data += np.linspace(0, 2.0, n)
-        onset = 2000
-        tau_d = 0.005
-        for i in range(n):
-            dti = t[i] - t[onset]
-            if 0 <= dti < 5 * tau_d:
-                data[i] -= 20.0 * np.exp(-dti / tau_d)
-        result = detect_events_baseline_peak_kinetics(data, fs, direction="negative", rolling_baseline_window_ms=100.0)
-        assert result.is_valid
-
-    def test_filter_freq_applied(self):
-        """filter_freq_hz > 0 engages the low-pass filter branch (lines 1260-1267)."""
-        fs = 10_000.0
-        n = 5000
-        t = np.arange(n) / fs
-        data = np.zeros(n)
-        onset = 2000
-        tau_d = 0.005
-        for i in range(n):
-            dti = t[i] - t[onset]
-            if 0 <= dti < 5 * tau_d:
-                data[i] -= 20.0 * np.exp(-dti / tau_d)
-        result = detect_events_baseline_peak_kinetics(data, fs, direction="negative", filter_freq_hz=2000.0)
-        assert result.is_valid
-
-    def test_positive_direction(self):
-        """Positive direction detection."""
-        fs = 10_000.0
-        n = 5000
-        data = np.zeros(n)
-        t = np.arange(n) / fs
-        onset = 2000
-        tau_d = 0.005
-        for i in range(n):
-            dti = t[i] - t[onset]
-            if 0 <= dti < 5 * tau_d:
-                data[i] += 20.0 * np.exp(-dti / tau_d)
-        result = detect_events_baseline_peak_kinetics(data, fs, direction="positive")
-        assert result.is_valid
-
-
-# ---------------------------------------------------------------------------
 # fit_biexponential_decay — tau_fast/tau_slow assignment (lines 285-287)
 # ---------------------------------------------------------------------------
 
@@ -619,58 +558,6 @@ class TestTemplateWrapperInvalidResult:
             t = np.arange(n) / FS
             result = run_event_detection_template_wrapper(data=np.zeros(n), time=t, sampling_rate=FS)
         assert result["metrics"]["event_error"] == "template failed"
-
-
-# ---------------------------------------------------------------------------
-# run_event_detection_baseline_peak_wrapper — invalid result path (line 1425)
-# ---------------------------------------------------------------------------
-
-
-class TestBaselinePeakWrapperInvalidResult:
-    def test_invalid_detection_returns_error_dict(self):
-        """Line 1425: wrapper returns error dict when detect_events_baseline_peak_kinetics fails."""
-        from unittest.mock import MagicMock, patch
-
-        from synaptipy.core.analysis.synaptic_events import (
-            EventDetectionResult,
-            run_event_detection_baseline_peak_wrapper,
-        )
-
-        fake = MagicMock(spec=EventDetectionResult)
-        fake.is_valid = False
-        fake.error_message = "baseline-peak failed"
-        with patch(
-            "synaptipy.core.analysis.synaptic_events.detect_events_baseline_peak_kinetics",
-            return_value=fake,
-        ):
-            n = int(0.5 * FS)
-            result = run_event_detection_baseline_peak_wrapper(
-                data=np.zeros(n), time=np.arange(n) / FS, sampling_rate=FS
-            )
-        assert result["metrics"]["event_error"] == "baseline-peak failed"
-
-
-# ---------------------------------------------------------------------------
-# detect_events_baseline_peak_kinetics — no stable baseline (line 1290)
-# ---------------------------------------------------------------------------
-
-
-class TestBaselinePeakNoStableBaseline:
-    def test_no_stable_baseline_returns_empty(self):
-        """Line 1290: _find_stable_baseline_segment returns None → event_count=0."""
-        from unittest.mock import patch
-
-        from synaptipy.core.analysis.synaptic_events import detect_events_baseline_peak_kinetics
-
-        n = int(0.2 * FS)
-        data = np.zeros(n)
-        with patch(
-            "synaptipy.core.analysis.synaptic_events._find_stable_baseline_segment",
-            return_value=(None, None, None),
-        ):
-            result = detect_events_baseline_peak_kinetics(data, FS)
-        assert result.is_valid is True
-        assert result.event_count == 0
 
 
 # ---------------------------------------------------------------------------
@@ -864,43 +751,3 @@ class TestDetectEventsTemplateExceptionHandler:
                 polarity="negative",
             )
         assert not result.is_valid
-
-
-# ---------------------------------------------------------------------------
-# detect_events_baseline_peak_kinetics — noise_sd=0 fallback (line 1304)
-# ---------------------------------------------------------------------------
-
-
-class TestDetectEventsBaselinePeakNoiseSdZero:
-    def test_constant_signal_noise_sd_zero_fallback(self):
-        """Line 1304: constant signal → noise_sd=0 → falls back to 1e-12."""
-        fs = 10_000.0
-        n = 2000
-        data = np.full(n, 3.0)
-        result = detect_events_baseline_peak_kinetics(
-            data=data,
-            sample_rate=fs,
-            direction="negative",
-        )
-        assert result.is_valid
-
-
-# ---------------------------------------------------------------------------
-# detect_events_baseline_peak_kinetics — filter exception (lines 1323-1324)
-# ---------------------------------------------------------------------------
-
-
-class TestDetectEventsBaselinePeakFilterException:
-    def test_filter_freq_above_nyquist_falls_back(self):
-        """Lines 1323-1324: filter_freq_hz > Nyquist raises ValueError caught by except."""
-        fs = 1_000.0
-        n = 2000
-        data = np.zeros(n)
-        # filter_freq_hz=600 > Nyquist(500) → butter raises ValueError
-        result = detect_events_baseline_peak_kinetics(
-            data=data,
-            sample_rate=fs,
-            direction="negative",
-            filter_freq_hz=600.0,
-        )
-        assert result.is_valid

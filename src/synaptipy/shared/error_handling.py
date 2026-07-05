@@ -1,7 +1,7 @@
 """
-Custom Exception classes for Synaptipy.
+Custom Exception classes for synaptipy.
 
-This module defines a hierarchy of exception classes specific to Synaptipy.
+This module defines a hierarchy of exception classes specific to synaptipy.
 All custom exceptions inherit from the base SynaptipyError class, which
 itself inherits from Python's Exception class.
 

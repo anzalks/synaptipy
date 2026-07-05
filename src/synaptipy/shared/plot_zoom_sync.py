@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Centralized plot zoom and scrollbar synchronization for Synaptipy.
+Centralized plot zoom and scrollbar synchronization for synaptipy.
 
 This module provides a consistent way to synchronize zoom controls, scrollbars,
 and manual limit inputs across all plot widgets in the application.

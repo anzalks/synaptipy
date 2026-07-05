@@ -145,7 +145,14 @@ class ExplorerSidebar(QtWidgets.QGroupBox):
                             child_item = QtWidgets.QTreeWidgetItem(item)
                             child_item.setText(0, proto)
                             # Custom icon for protocols
-                            child_item.setIcon(0, QtGui.QIcon.fromTheme("format-text-bold"))
+                            from synaptipy.shared.theme_manager import get_themed_icon
+
+                            child_item.setIcon(
+                                0,
+                                get_themed_icon(
+                                    "format-text-bold", QtWidgets.QStyle.StandardPixmap.SP_FileIcon
+                                ),
+                            )
                             child_item.setData(0, QtCore.Qt.ItemDataRole.UserRole, (str(full_path), proto))
                     else:
                         item.setData(0, QtCore.Qt.ItemDataRole.UserRole, (str(full_path), None))

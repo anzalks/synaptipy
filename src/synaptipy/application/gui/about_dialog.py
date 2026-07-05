@@ -1,7 +1,7 @@
 # src/synaptipy/application/gui/about_dialog.py
 # -*- coding: utf-8 -*-
 """
-About dialog for Synaptipy.
+About dialog for synaptipy.
 
 Accessible via Help -> About in the main window menu bar.
 Displays version information and a discrete academic citation with a
@@ -31,7 +31,7 @@ _BIBTEX_CITATION = """\
 
 class AboutDialog(QtWidgets.QDialog):
     """
-    Modal dialog displaying version information and academic citation for Synaptipy.
+    Modal dialog displaying version information and academic citation for synaptipy.
 
     Opened exclusively via Help -> About in the main menu bar.
     """

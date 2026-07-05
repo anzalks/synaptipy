@@ -42,8 +42,13 @@ def configure_pyqtgraph_globally(enable_opengl: bool = False):
         else:
             log.debug("PyQtGraph configured: Software Rendering (OpenGL DISABLED)")
 
-        # Simple black foreground
-        pg.setConfigOption("foreground", "k")
+        try:
+            from synaptipy.shared.theme_manager import is_dark_mode
+
+            fg = "w" if is_dark_mode() else "k"
+        except ImportError:
+            fg = "k"
+        pg.setConfigOption("foreground", fg)
 
     except Exception as e:
         log.warning(f"PyQtGraph configuration failed: {e}")
@@ -130,7 +135,13 @@ def configure_plot_widget(plot_widget):
             except ImportError:
                 plot_widget.showGrid(x=True, y=True, alpha=0.3)
 
-            plot_widget.setBackground("w")  # White background for plots
+            try:
+                from synaptipy.shared.theme_manager import themed_plot_colors
+
+                bg, _ = themed_plot_colors()
+            except ImportError:
+                bg = "w"
+            plot_widget.setBackground(bg)
             plot_widget._synaptipy_configured = True
 
     except Exception as e:
@@ -233,7 +244,12 @@ def get_grid_pen():
             return None  # Grid is disabled
     except ImportError:
         # Fallback to default grid pen
-        color = "#000000"  # Always black for grid lines
+        try:
+            from synaptipy.shared.theme_manager import is_dark_mode
+
+            color = "#666666" if is_dark_mode() else "#000000"
+        except ImportError:
+            color = "#000000"
         return pg.mkPen(color=color, width=0.5, alpha=0.3, style=QtCore.Qt.SolidLine)
 
 

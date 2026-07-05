@@ -515,6 +515,266 @@ def calculate_paired_pulse_ratio(  # noqa: C901
 
 
 # ---------------------------------------------------------------------------
+# N-Pulse Paired-Pulse Ratio
+# ---------------------------------------------------------------------------
+
+
+def calculate_n_pulse_ratio(  # noqa: C901
+    data: np.ndarray,
+    time: np.ndarray,
+    stim_onsets: np.ndarray,
+    response_window_ms: float = 20.0,
+    baseline_window_ms: float = 5.0,
+    fit_decay_from_ms: float = 5.0,
+    fit_decay_window_ms: float = 30.0,
+    polarity: str = "negative",
+    artifact_blanking_ms: float = 1.0,
+) -> Dict[str, Any]:
+    """N-pulse PPR with iterative cumulative decay subtraction.
+
+    For each pulse *i* the cumulative residual from all prior pulses'
+    fitted decays is subtracted before measuring amplitude and fitting
+    the current pulse's isolated decay (Thanawala & Bhatt 2013;
+    Wesseling & Lo 2002).
+
+    Algorithm:
+
+    1. Measure bl1 (resting baseline before stim 1).
+    2. For pulse *i*:
+
+       a. Find the peak in the raw trace.
+       b. Evaluate the cumulative residual from all prior decay fits at the peak time.
+       c. amplitude_corrected = (bl1 - peak) - cumulative_residual (per polarity).
+       d. Subtract the cumulative residual from the raw trace in the decay-fit window.
+       e. Fit mono-/bi-exponential to the isolated decay.
+       f. Store the fit for use in subsequent pulses' corrections.
+
+    3. ratio_i = amplitude_corrected_i / amplitude_corrected_1.
+
+    The overlay curves shown on the raw trace are the isolated fits with
+    the prior cumulative residual added back, so they visually align with
+    the actual data.
+    """
+    n = len(stim_onsets)
+    out: Dict[str, Any] = {
+        "n_pulses": n,
+        "amplitudes_raw": [],
+        "amplitudes_corrected": [],
+        "ratios": [],
+        "decay_taus_ms": [],
+        "residuals": [],
+        "_all_fit_times": [],
+        "_all_fit_values": [],
+        "ppr_error": None,
+    }
+
+    if data.size < 2 or time.shape != data.shape:
+        out["ppr_error"] = "Invalid data or time array"
+        return out
+    if n < 2:
+        out["ppr_error"] = "Need at least 2 stimulus onsets"
+        return out
+
+    def _nearest_idx(t: float) -> int:
+        return int(np.searchsorted(time, t))
+
+    def _local_baseline(stim_onset_s: float) -> float:
+        bl_start_s = max(stim_onset_s - baseline_window_ms / 1000.0, float(time[0]))
+        i0 = _nearest_idx(bl_start_s)
+        i1 = max(i0 + 1, _nearest_idx(stim_onset_s))
+        seg = data[i0:i1]
+        if seg.size > 0:
+            return float(np.mean(seg))
+        return float(data[_nearest_idx(stim_onset_s)])
+
+    def _response_peak(onset_s: float) -> Tuple[float, float]:
+        blank_s = artifact_blanking_ms / 1000.0
+        win_s = response_window_ms / 1000.0
+        i0 = _nearest_idx(onset_s + blank_s)
+        i1 = min(_nearest_idx(onset_s + win_s) + 1, len(data))
+        if i1 <= i0:
+            return 0.0, onset_s
+        seg = data[i0:i1]
+        idx = int(np.argmin(seg)) if polarity == "negative" else int(np.argmax(seg))
+        return float(seg[idx]), float(time[i0 + idx])
+
+    bl1 = _local_baseline(stim_onsets[0])
+
+    def _mono_exp(t, a, tau, c):
+        return a * np.exp(-t / tau) + c
+
+    def _bi_exp(t, a_f, tau_f, a_s, tau_s, c):
+        return a_f * np.exp(-t / tau_f) + a_s * np.exp(-t / tau_s) + c
+
+    # Each entry: (fit_func, popt, t_ref_s) where t_ref_s is the absolute
+    # time corresponding to t_rel=0 in the fit.  Evaluating at absolute
+    # time t_abs: fit_func((t_abs - t_ref_s) * 1000, *popt).
+    _decay_fits: list = []
+
+    def _cumulative_residual_scalar(t_abs: float) -> float:
+        total = 0.0
+        for ff, pp, tr in _decay_fits:
+            t_rel = (t_abs - tr) * 1000.0
+            if t_rel >= 0:
+                total += ff(t_rel, *pp) - bl1
+        return total
+
+    def _cumulative_residual_array(t_abs_arr: np.ndarray) -> np.ndarray:
+        res = np.zeros(len(t_abs_arr))
+        for ff, pp, tr in _decay_fits:
+            t_rel = (t_abs_arr - tr) * 1000.0
+            mask = t_rel >= 0
+            if np.any(mask):
+                res[mask] += ff(t_rel[mask], *pp) - bl1
+        return res
+
+    for i in range(n):
+        peak_raw, peak_time = _response_peak(stim_onsets[i])
+
+        cum_res = _cumulative_residual_scalar(peak_time) if _decay_fits else 0.0
+
+        bl_local = _local_baseline(stim_onsets[i])
+        if polarity == "negative":
+            amp_raw = bl_local - peak_raw
+            amp_corrected = (bl1 - peak_raw) + cum_res
+        else:
+            amp_raw = peak_raw - bl_local
+            amp_corrected = (peak_raw - bl1) - cum_res
+
+        out["amplitudes_raw"].append(float(amp_raw))
+        out["amplitudes_corrected"].append(float(amp_corrected))
+        out["residuals"].append(float(cum_res))
+
+        # --- Fit this pulse's isolated decay ---
+        if i < n - 1:
+            fit_end_s = stim_onsets[i + 1]
+        else:
+            fit_end_s = stim_onsets[i] + (fit_decay_from_ms + fit_decay_window_ms) / 1000.0
+        fit_end_s = min(fit_end_s, float(time[-1]))
+
+        fit_start_s = stim_onsets[i] + fit_decay_from_ms / 1000.0
+        i_fit0 = _nearest_idx(fit_start_s)
+        i_fit1 = _nearest_idx(fit_end_s)
+
+        tau_ms = None
+        if i_fit1 - i_fit0 >= 4:
+            t_fit_abs = time[i_fit0:i_fit1]
+            t_fit = (t_fit_abs - t_fit_abs[0]) * 1000.0
+
+            # Subtract cumulative prior residual to isolate this pulse.
+            y_raw = data[i_fit0:i_fit1].copy()
+            if _decay_fits:
+                y_fit = y_raw - _cumulative_residual_array(t_fit_abs)
+            else:
+                y_fit = y_raw
+
+            a0 = float(y_fit[0] - bl1) if polarity == "positive" else float(bl1 - y_fit[0])
+            a0 = max(a0, 1e-6)
+            tau0 = max(1.0, float(t_fit[-1]) / 3.0)
+            amp_bound = max(a0 * 3.0, abs(amp_corrected) * 2.0, 1e-6)
+
+            _fit_func = None
+            _popt = None
+
+            if len(t_fit) >= 8:
+                try:
+                    if polarity == "negative":
+                        bi_p0 = [-a0 * 0.7, tau0 * 0.3, -a0 * 0.3, tau0, bl1]
+                        bi_lb = [-amp_bound, 0.1, -amp_bound, 0.1, bl1 - abs(amp_corrected) * 2]
+                        bi_ub = [0.0, tau0 * 100, 0.0, tau0 * 100, bl1 + abs(amp_corrected)]
+                    else:
+                        bi_p0 = [a0 * 0.7, tau0 * 0.3, a0 * 0.3, tau0, bl1]
+                        bi_lb = [0.0, 0.1, 0.0, 0.1, bl1 - abs(amp_corrected)]
+                        bi_ub = [amp_bound, tau0 * 100, amp_bound, tau0 * 100, bl1 + abs(amp_corrected) * 2]
+                    popt_bi, pcov_bi = curve_fit(
+                        _bi_exp,
+                        t_fit,
+                        y_fit,
+                        p0=bi_p0,
+                        bounds=(bi_lb, bi_ub),
+                        maxfev=4000,
+                    )
+                    if np.any(~np.isfinite(pcov_bi)):
+                        raise ValueError("degenerate")
+                    a_f, tau_f, a_s, tau_s, _ = popt_bi
+                    total = abs(a_f) + abs(a_s)
+                    if total > 1e-12:
+                        tau_ms = (abs(a_f) * tau_f + abs(a_s) * tau_s) / total
+                    _fit_func = _bi_exp
+                    _popt = popt_bi
+                except (RuntimeError, ValueError):
+                    pass
+
+            if _popt is None:
+                try:
+                    if polarity == "negative":
+                        popt_m, _ = curve_fit(
+                            _mono_exp,
+                            t_fit,
+                            y_fit,
+                            p0=[-a0, tau0, bl1],
+                            bounds=(
+                                [-amp_bound, 0.1, bl1 - abs(amp_corrected) * 2],
+                                [0.0, tau0 * 50, bl1 + abs(amp_corrected)],
+                            ),
+                            maxfev=3000,
+                        )
+                    else:
+                        popt_m, _ = curve_fit(
+                            _mono_exp,
+                            t_fit,
+                            y_fit,
+                            p0=[a0, tau0, bl1],
+                            bounds=(
+                                [0.0, 0.1, bl1 - abs(amp_corrected)],
+                                [amp_bound, tau0 * 50, bl1 + abs(amp_corrected) * 2],
+                            ),
+                            maxfev=3000,
+                        )
+                    tau_ms = float(popt_m[1])
+                    _fit_func = _mono_exp
+                    _popt = popt_m
+                except (RuntimeError, ValueError):
+                    pass
+
+            if _fit_func is not None and _popt is not None:
+                _decay_fits.append((_fit_func, _popt, float(t_fit_abs[0])))
+
+                # Overlay on the raw trace: isolated fit + prior residual.
+                fit_isolated = np.array([_fit_func(tv, *_popt) for tv in t_fit])
+                if len(_decay_fits) > 1:
+                    prior_res = np.zeros(len(t_fit_abs))
+                    for ff, pp, tr in _decay_fits[:-1]:
+                        t_rel = (t_fit_abs - tr) * 1000.0
+                        mask = t_rel >= 0
+                        if np.any(mask):
+                            prior_res[mask] += ff(t_rel[mask], *pp) - bl1
+                    overlay = fit_isolated + prior_res
+                else:
+                    overlay = fit_isolated
+
+                out["_all_fit_times"].append(t_fit_abs.tolist())
+                out["_all_fit_values"].append(overlay.tolist())
+            else:
+                out["_all_fit_times"].append([])
+                out["_all_fit_values"].append([])
+        else:
+            out["_all_fit_times"].append([])
+            out["_all_fit_values"].append([])
+
+        out["decay_taus_ms"].append(tau_ms)
+
+    r1 = out["amplitudes_corrected"][0]
+    if r1 > 0:
+        out["ratios"] = [float(a) / r1 for a in out["amplitudes_corrected"]]
+    else:
+        out["ratios"] = [float("nan")] * n
+        out["ppr_error"] = "R1 amplitude <= 0; cannot compute ratios"
+
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Registry Wrapper
 # ---------------------------------------------------------------------------
 
@@ -887,6 +1147,46 @@ def run_opto_sync_wrapper(  # noqa: C901
 # ---------------------------------------------------------------------------
 
 
+def _build_stim_onsets(
+    time: np.ndarray,
+    n_pulses: int,
+    kwargs: dict,
+) -> "np.ndarray | str":
+    """Build stim onset array from TTL or manual parameters.
+
+    Returns the onset array on success, or an error string on failure.
+    """
+    use_ttl = bool(kwargs.get("use_ttl", False))
+    stim_onsets = None
+
+    if use_ttl:
+        ttl_data = kwargs.get("ttl_data", None)
+        if ttl_data is not None and len(ttl_data) > 0:
+            detected, _ = extract_ttl_epochs(
+                ttl_data,
+                time,
+                float(kwargs.get("ttl_threshold", 2.5)),
+            )
+            if detected is not None and len(detected) >= 2:
+                stim_onsets = detected[:n_pulses]
+                log.debug("PPR: TTL detected %d onsets, using first %d", len(detected), len(stim_onsets))
+        if stim_onsets is None:
+            log.warning("PPR: TTL detection failed; falling back to manual onsets.")
+
+    if stim_onsets is None:
+        s1 = float(kwargs.get("stim1_onset_s", 0.1))
+        s2 = float(kwargs.get("stim2_onset_s", 0.2))
+        isi = s2 - s1
+        if isi <= 0:
+            return "Stim2 must be after Stim1"
+        stim_onsets = np.array([s1 + i * isi for i in range(n_pulses)])
+
+    stim_onsets = stim_onsets[stim_onsets < float(time[-1])]
+    if len(stim_onsets) < 2:
+        return "Need at least 2 onsets within recording"
+    return stim_onsets
+
+
 @AnalysisRegistry.register(
     "paired_pulse_ratio",
     label="Paired-Pulse Ratio",
@@ -903,7 +1203,7 @@ def run_opto_sync_wrapper(  # noqa: C901
             "type": "trace_overlay",
             "start_time": "_baseline_start_s",
             "end_time": "_baseline_end_s",
-            "color": "#00cfff",
+            "color": "#228B22",
             "width": 3,
             "opacity": 50,
         },
@@ -915,7 +1215,7 @@ def run_opto_sync_wrapper(  # noqa: C901
             "width": 2,
             "opacity": 85,
         },
-        {"type": "markers", "x": "_peak_times", "y": "_peak_amps", "symbol": "d", "color": "#ff6600"},
+        {"type": "markers", "x": "_peak_times", "y": "_peak_amps", "symbol": "d", "color": "#cc0000"},
     ],
     ui_params=[
         {
@@ -923,7 +1223,7 @@ def run_opto_sync_wrapper(  # noqa: C901
             "label": "Detect Stim from TTL:",
             "type": "bool",
             "default": False,
-            "tooltip": "When enabled, Stim 1 and Stim 2 onsets are detected automatically "
+            "tooltip": "When enabled, stimulus onsets are detected automatically "
             "from the TTL channel.  Select the TTL channel in the secondary-channel "
             "dropdown above.",
         },
@@ -937,6 +1237,15 @@ def run_opto_sync_wrapper(  # noqa: C901
             "decimals": 3,
             "tooltip": "Binarisation threshold for TTL edge detection.",
             "visible_when": {"param": "use_ttl", "value": True},
+        },
+        {
+            "name": "n_pulses",
+            "label": "Number of Pulses:",
+            "type": "int",
+            "default": 2,
+            "min": 2,
+            "max": 100,
+            "tooltip": "Number of stimulus pulses.  All ratios are normalised to R1.",
         },
         {
             "name": "stim1_onset_s",
@@ -956,6 +1265,8 @@ def run_opto_sync_wrapper(  # noqa: C901
             "min": 0.0,
             "max": 1e9,
             "decimals": 4,
+            "tooltip": "Time of the second stimulus.  For N > 2 pulses the inter-stimulus "
+            "interval is derived from (Stim2 - Stim1) and applied uniformly.",
             "visible_when": {"param": "use_ttl", "value": False},
         },
         {
@@ -991,7 +1302,7 @@ def run_opto_sync_wrapper(  # noqa: C901
             "min": 0.0,
             "max": 100.0,
             "decimals": 1,
-            "tooltip": "Offset from Stim1 onset to begin fitting the decay (skip initial transient).",
+            "tooltip": "Offset from each stimulus onset to begin fitting the decay (skip initial transient).",
         },
         {
             "name": "fit_decay_window_ms",
@@ -1014,32 +1325,17 @@ def run_opto_sync_wrapper(  # noqa: C901
         },
     ],
 )
-def run_ppr_wrapper(
+def run_ppr_wrapper(  # noqa: C901
     data: np.ndarray,
     time: np.ndarray,
     sampling_rate: float,
     **kwargs,
 ) -> Dict[str, Any]:
-    """Wrapper for Paired-Pulse Ratio analysis with optional TTL-based onset detection."""
-    use_ttl = bool(kwargs.get("use_ttl", False))
-    ttl_threshold = float(kwargs.get("ttl_threshold", 2.5))
-    stim1_onset_s = float(kwargs.get("stim1_onset_s", 0.1))
-    stim2_onset_s = float(kwargs.get("stim2_onset_s", 0.2))
-
-    # Auto-detect stimulus times from TTL channel when requested.
-    if use_ttl:
-        ttl_data = kwargs.get("ttl_data", None)
-        if ttl_data is not None and len(ttl_data) > 0:
-            onsets, _ = extract_ttl_epochs(ttl_data, time, ttl_threshold)
-            if onsets is not None and len(onsets) >= 2:
-                stim1_onset_s = float(onsets[0])
-                stim2_onset_s = float(onsets[1])
-                log.debug("PPR: TTL-detected stim1=%.4f s, stim2=%.4f s", stim1_onset_s, stim2_onset_s)
-            elif onsets is not None and len(onsets) == 1:
-                stim1_onset_s = float(onsets[0])
-                log.warning("PPR: TTL detected only one onset; stim2 retains manual value %.4f s", stim2_onset_s)
-        else:
-            log.warning("PPR: use_ttl=True but no TTL data provided; using manual onsets.")
+    """Wrapper for N-pulse Paired-Pulse Ratio analysis."""
+    n_pulses = int(kwargs.get("n_pulses", 2))
+    stim_onsets = _build_stim_onsets(time, n_pulses, kwargs)
+    if isinstance(stim_onsets, str):
+        return {"module_used": "evoked_responses", "metrics": {"ppr_error": stim_onsets}}
 
     polarity = kwargs.get("polarity", "negative")
     response_window_ms = float(kwargs.get("response_window_ms", 20.0))
@@ -1048,11 +1344,10 @@ def run_ppr_wrapper(
     fit_decay_window_ms = float(kwargs.get("fit_decay_window_ms", 30.0))
     artifact_blanking_ms = float(kwargs.get("artifact_blanking_ms", 1.0))
 
-    result = calculate_paired_pulse_ratio(
+    result = calculate_n_pulse_ratio(
         data=data,
         time=time,
-        stim1_onset_s=stim1_onset_s,
-        stim2_onset_s=stim2_onset_s,
+        stim_onsets=stim_onsets,
         response_window_ms=response_window_ms,
         baseline_window_ms=baseline_window_ms,
         fit_decay_from_ms=fit_decay_from_ms,
@@ -1061,33 +1356,44 @@ def run_ppr_wrapper(
         artifact_blanking_ms=artifact_blanking_ms,
     )
 
-    # Compute peak positions for scatter overlays.
     blank_s = artifact_blanking_ms / 1000.0
     win_s = response_window_ms / 1000.0
-    r1_peak_t, r1_peak_v = _peak_pos_s(data, time, stim1_onset_s, polarity, blank_s, win_s)
-    r2_peak_t, r2_peak_v = _peak_pos_s(data, time, stim2_onset_s, polarity, blank_s, win_s)
+    peak_times = []
+    peak_amps = []
+    for onset in stim_onsets:
+        pt, pv = _peak_pos_s(data, time, onset, polarity, blank_s, win_s)
+        peak_times.append(pt)
+        peak_amps.append(pv)
 
-    return {
-        "module_used": "evoked_responses",
-        "metrics": {
-            "r1_amplitude": result["r1_amplitude"],
-            "r2_amplitude_raw": result["r2_amplitude_raw"],
-            "r2_amplitude_corrected": result["r2_amplitude_corrected"],
-            "residual_at_stim2": result["residual_at_stim2"],
-            "paired_pulse_ratio": result["paired_pulse_ratio"],
-            "decay_tau_ms": result["decay_tau_ms"],
-            "ppr_error": result["ppr_error"],
-            "stim1_onset_used_s": stim1_onset_s,
-            "stim2_onset_used_s": stim2_onset_s,
-            "_stim_onsets": [stim1_onset_s, stim2_onset_s],
-            "_baseline_start_s": stim1_onset_s - baseline_window_ms / 1000.0,
-            "_baseline_end_s": stim1_onset_s,
-            "_ppr_fit_times": result.get("_ppr_fit_times"),
-            "_ppr_fit_values": result.get("_ppr_fit_values"),
-            "_peak_times": [r1_peak_t, r2_peak_t],
-            "_peak_amps": [r1_peak_v, r2_peak_v],
-        },
+    n_actual = len(stim_onsets)
+    metrics: Dict[str, Any] = {
+        "n_pulses": n_actual,
+        "ppr_error": result["ppr_error"],
+        "_stim_onsets": stim_onsets.tolist(),
+        "_baseline_start_s": float(stim_onsets[0]) - baseline_window_ms / 1000.0,
+        "_baseline_end_s": float(stim_onsets[0]),
+        "_peak_times": peak_times,
+        "_peak_amps": peak_amps,
     }
+
+    for i in range(n_actual):
+        suffix = f"_p{i + 1}"
+        metrics[f"amplitude_raw{suffix}"] = result["amplitudes_raw"][i]
+        metrics[f"amplitude_corrected{suffix}"] = result["amplitudes_corrected"][i]
+        metrics[f"ratio{suffix}"] = result["ratios"][i]
+        metrics[f"residual{suffix}"] = result["residuals"][i]
+        metrics[f"decay_tau_ms{suffix}"] = result["decay_taus_ms"][i]
+
+    all_fit_t = []
+    all_fit_v = []
+    for ft, fv in zip(result["_all_fit_times"], result["_all_fit_values"]):
+        if ft:
+            all_fit_t.append(ft)
+            all_fit_v.append(fv)
+    metrics["_ppr_fit_times"] = all_fit_t if all_fit_t else None
+    metrics["_ppr_fit_values"] = all_fit_v if all_fit_v else None
+
+    return {"module_used": "evoked_responses", "metrics": metrics}
 
 
 # ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 # src/synaptipy/application/plugin_manager.py
 # -*- coding: utf-8 -*-
 """
-Plugin Manager for Synaptipy.
+Plugin Manager for synaptipy.
 
 Scans two plugin directories and dynamically loads external Python scripts.
 Any script using the @AnalysisRegistry.register decorator will automatically
@@ -50,7 +50,7 @@ def _get_bundled_plugin_dir() -> Optional[Path]:
     """
     # Strategy 0: PyInstaller one-folder bundle
     if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
-        candidate = Path(sys._MEIPASS) / "Synaptipy" / "examples" / "plugins"
+        candidate = Path(sys._MEIPASS) / "synaptipy" / "examples" / "plugins"
         if candidate.is_dir():
             return candidate
 
@@ -65,7 +65,7 @@ def _get_bundled_plugin_dir() -> Optional[Path]:
     # (works when pyproject.toml includes examples/plugins/*.py under
     # [tool.setuptools.package-data] "Synaptipy")
     try:
-        ref = importlib.resources.files("Synaptipy") / "examples" / "plugins"
+        ref = importlib.resources.files("synaptipy") / "examples" / "plugins"
         resolved = Path(str(ref))
         if resolved.is_dir():
             return resolved
@@ -73,7 +73,7 @@ def _get_bundled_plugin_dir() -> Optional[Path]:
         pass
 
     # Strategy 3: examples installed alongside the package in site-packages
-    pkg_spec = importlib.util.find_spec("Synaptipy")
+    pkg_spec = importlib.util.find_spec("synaptipy")
     if pkg_spec and pkg_spec.origin:
         candidate = Path(pkg_spec.origin).parent.parent / "examples" / "plugins"
         if candidate.is_dir():
