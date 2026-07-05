@@ -318,14 +318,8 @@ def style_as_subdued(widget, italic: bool = False, font_size: Optional[int] = No
 def warning_banner_stylesheet() -> str:
     """Return a QFrame stylesheet for warning/info banners that respects the current theme."""
     if is_dark_mode():
-        return (
-            "QFrame { background: #3d3520; border: 1px solid #665b30;"
-            " border-radius: 4px; color: #e0c870; }"
-        )
-    return (
-        "QFrame { background: #fff3cd; border: 1px solid #ffc107;"
-        " border-radius: 4px; color: #856404; }"
-    )
+        return "QFrame { background: #3d3520; border: 1px solid #665b30;" " border-radius: 4px; color: #e0c870; }"
+    return "QFrame { background: #fff3cd; border: 1px solid #ffc107;" " border-radius: 4px; color: #856404; }"
 
 
 def warning_label_stylesheet() -> str:

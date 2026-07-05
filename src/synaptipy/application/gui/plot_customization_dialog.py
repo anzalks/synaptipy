@@ -16,6 +16,7 @@ from typing import Any, Optional
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from synaptipy.shared.plot_customization import get_plot_customization_manager
+from synaptipy.shared.theme_manager import style_as_subdued
 
 log = logging.getLogger(__name__)
 
@@ -239,8 +240,6 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
 
         # Note: Grid color is always black for consistency
         info_label = QtWidgets.QLabel("Note: Grid color is always black for optimal visibility")
-        from synaptipy.shared.theme_manager import style_as_subdued
-
         style_as_subdued(info_label, italic=True)
         layout.addWidget(info_label)
 
