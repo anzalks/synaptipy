@@ -62,6 +62,7 @@ try:
     version = _version
 except Exception:
     import re as _re
+
     _pyproject = os.path.join(os.path.abspath(os.path.dirname(__file__)), "..", "pyproject.toml")
     with open(_pyproject, encoding="utf-8") as _f:
         _m = _re.search(r'^version\s*=\s*"([^"]+)"', _f.read(), _re.MULTILINE)

@@ -997,8 +997,8 @@ def make_table1_md(cmp_df: pd.DataFrame, stat_table_rows: list, stat_letter_idx:
         idx = stat_letter_idx[0]
         stat_letter_idx[0] += 1
         if idx < 26:
-            return chr(ord('a') + idx)
-        return chr(ord('a') + (idx - 26)) + chr(ord('a') + (idx - 26))
+            return chr(ord("a") + idx)
+        return chr(ord("a") + (idx - 26)) + chr(ord("a") + (idx - 26))
 
     def _fmt_r_with_letter(vs, data_desc):
         if np.isnan(vs.get("r", np.nan)):
@@ -1008,12 +1008,15 @@ def make_table1_md(cmp_df: pd.DataFrame, stat_table_rows: list, stat_letter_idx:
         n = vs.get("n", 0)
         s = f"{vs['r']:.4f} (*p* = {fmt_p(p)})<sup>{letter}</sup>"
         from scipy.stats import shapiro
-        stat_table_rows.append({
-            "letter": letter,
-            "data_structure": data_desc,
-            "test": f"Pearson correlation (two-sided, *n* = {n})",
-            "power": "N/A",
-        })
+
+        stat_table_rows.append(
+            {
+                "letter": letter,
+                "data_structure": data_desc,
+                "test": f"Pearson correlation (two-sided, *n* = {n})",
+                "power": "N/A",
+            }
+        )
         return s
 
     def _fmt_bias(vs, unit):
@@ -1045,6 +1048,7 @@ def make_table1_md(cmp_df: pd.DataFrame, stat_table_rows: list, stat_letter_idx:
         s_valid = s[~np.isnan(s)]
         if len(s_valid) >= 8:
             from scipy.stats import shapiro
+
             _, shapiro_p = shapiro(s_valid)
             data_desc = "Normal distribution" if shapiro_p > 0.05 else "Non-normal distribution"
         else:
@@ -1080,10 +1084,7 @@ def make_table2_md(cmp_df: pd.DataFrame, stat_table_rows: list, stat_letter_idx:
         ("Membrane Time Constant (ms)", "syn_tau_ms", "efel_tau_ms", "ipfx_tau_ms", "ms"),
         ("Sag Percentage (%)", "syn_sag_pct", "efel_sag_pct", "ipfx_sag_pct", "%"),
     ]
-    md = (
-        "**Table 2-2: Subthreshold passive properties benchmark "
-        "on hyperpolarizing steps (Allen Dataset).**\n\n"
-    )
+    md = "**Table 2-2: Subthreshold passive properties benchmark " "on hyperpolarizing steps (Allen Dataset).**\n\n"
     md += (
         "| Metric | Valid *N* | "
         "SynaptiPy vs eFEL Pearson *r* | Mean bias vs eFEL | LoA vs eFEL | "
@@ -1098,8 +1099,8 @@ def make_table2_md(cmp_df: pd.DataFrame, stat_table_rows: list, stat_letter_idx:
         idx = stat_letter_idx[0]
         stat_letter_idx[0] += 1
         if idx < 26:
-            return chr(ord('a') + idx)
-        return chr(ord('a') + (idx - 26)) + chr(ord('a') + (idx - 26))
+            return chr(ord("a") + idx)
+        return chr(ord("a") + (idx - 26)) + chr(ord("a") + (idx - 26))
 
     def _fmt_r_with_letter(vs, data_desc):
         if np.isnan(vs.get("r", np.nan)):
@@ -1108,12 +1109,14 @@ def make_table2_md(cmp_df: pd.DataFrame, stat_table_rows: list, stat_letter_idx:
         p = vs.get("p", np.nan)
         n = vs.get("n", 0)
         s = f"{vs['r']:.4f} (*p* = {fmt_p(p)})<sup>{letter}</sup>"
-        stat_table_rows.append({
-            "letter": letter,
-            "data_structure": data_desc,
-            "test": f"Pearson correlation (two-sided, *n* = {n})",
-            "power": "N/A",
-        })
+        stat_table_rows.append(
+            {
+                "letter": letter,
+                "data_structure": data_desc,
+                "test": f"Pearson correlation (two-sided, *n* = {n})",
+                "power": "N/A",
+            }
+        )
         return s
 
     def _fmt_bias(vs, unit):
@@ -1148,6 +1151,7 @@ def make_table2_md(cmp_df: pd.DataFrame, stat_table_rows: list, stat_letter_idx:
         s_valid = s[~np.isnan(s)]
         if len(s_valid) >= 8:
             from scipy.stats import shapiro
+
             _, shapiro_p = shapiro(s_valid)
             data_desc = "Normal distribution" if shapiro_p > 0.05 else "Non-normal distribution"
         else:
