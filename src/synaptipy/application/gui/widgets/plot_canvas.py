@@ -150,17 +150,12 @@ class SynaptipyPlotCanvas(QtCore.QObject):
             plot_item.getViewBox().sigXRangeChanged.connect(lambda _, r, pid=plot_id: self.x_range_changed.emit(pid, r))
             plot_item.getViewBox().sigYRangeChanged.connect(lambda _, r, pid=plot_id: self.y_range_changed.emit(pid, r))
 
-        # Apply consistent theme to axis colors, labels, etc.
+        # Apply consistent styling to axis colors and labels.
+        # Background is always white; only explicit user customisation should change it.
         try:
             from synaptipy.shared.plot_customization import apply_plot_theme
 
-            try:
-                from synaptipy.shared.theme_manager import themed_plot_colors
-
-                bg, fg = themed_plot_colors()
-            except ImportError:
-                bg, fg = "white", "black"
-            apply_plot_theme(plot_item, background_color=bg, axis_color=fg)
+            apply_plot_theme(plot_item, background_color="white", axis_color="black")
         except ImportError:
             log.debug("plot_customization module not available for theming")
 

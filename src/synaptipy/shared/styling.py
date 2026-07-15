@@ -42,13 +42,8 @@ def configure_pyqtgraph_globally(enable_opengl: bool = False):
         else:
             log.debug("PyQtGraph configured: Software Rendering (OpenGL DISABLED)")
 
-        try:
-            from synaptipy.shared.theme_manager import is_dark_mode
-
-            fg = "w" if is_dark_mode() else "k"
-        except ImportError:
-            fg = "k"
-        pg.setConfigOption("foreground", fg)
+        pg.setConfigOption("foreground", "k")
+        pg.setConfigOption("background", "w")
 
     except Exception as e:
         log.warning(f"PyQtGraph configuration failed: {e}")
@@ -135,13 +130,7 @@ def configure_plot_widget(plot_widget):
             except ImportError:
                 plot_widget.showGrid(x=True, y=True, alpha=0.3)
 
-            try:
-                from synaptipy.shared.theme_manager import themed_plot_colors
-
-                bg, _ = themed_plot_colors()
-            except ImportError:
-                bg = "w"
-            plot_widget.setBackground(bg)
+            plot_widget.setBackground("w")
             plot_widget._synaptipy_configured = True
 
     except Exception as e:
