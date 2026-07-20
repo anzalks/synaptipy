@@ -22,23 +22,81 @@ What this script NEVER touches
 - Any >=, <, == dependency constraint in any file.
 - environment.yml or requirements.txt package pins.
 
-After running this script commit all changes with::
-
-    git add -A && git commit -m "chore: bump version to <NEW_VERSION>"
-
-The script will then create a local git tag automatically.
-Pushing the commit and tag to the remote is always a manual step.
+The script requires a clean Git working tree, commits its own changes, and
+creates a local annotated ``v<NEW_VERSION>`` tag.  It never pushes a branch or
+tag and never dispatches a remote workflow.  Run the critical verification
+checks before manually pushing the commit and tag.
 """
 
 from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 import sys
 from datetime import date
 from pathlib import Path
 
+from packaging.version import InvalidVersion, Version
+
 ROOT = Path(__file__).resolve().parent.parent
+
+
+def _run_git(*args: str, check: bool = True) -> subprocess.CompletedProcess:
+    """Run Git from the repository root."""
+    return subprocess.run(["git", *args], cwd=str(ROOT), text=True, check=check, capture_output=True)
+
+
+def _require_clean_worktree(new_version: str) -> None:
+    """Require a clean repository and a new local release tag before writing."""
+    try:
+        _run_git("rev-parse", "--is-inside-work-tree")
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError("bump_version.py must run inside a Git working tree") from exc
+
+    status = _run_git("status", "--porcelain").stdout.strip()
+    if status:
+        raise RuntimeError(
+            "Working tree is not clean. Commit, stash, or discard existing changes before bumping a version."
+        )
+
+    tag = f"v{new_version}"
+    if _run_git("rev-parse", "-q", "--verify", f"refs/tags/{tag}", check=False).returncode == 0:
+        raise RuntimeError(f"Local tag {tag} already exists. Choose a new version or remove that tag deliberately.")
+
+
+def _validate_versions(old_version: str, new_version: str) -> None:
+    """Require a valid, forward PEP 440 version bump."""
+    try:
+        old = Version(old_version)
+        new = Version(new_version)
+    except InvalidVersion as exc:
+        raise ValueError(f"Versions must follow PEP 440: {exc}") from exc
+    if new <= old:
+        raise ValueError(f"New version {new_version} must be greater than current version {old_version}.")
+
+
+def _require_bump_targets(old_version: str) -> None:
+    """Fail before writing if a canonical version marker has drifted."""
+    required_markers = {
+        ROOT / "pyproject.toml": f'version = "{old_version}"',
+        ROOT / "src" / "synaptipy" / "__init__.py": f'__version__ = "{old_version}"',
+        ROOT / "CITATION.cff": f'version: "{old_version}"',
+        ROOT / "installer" / "windows_setup.iss": f'#define MyAppVersion "{old_version}"',
+        ROOT / "installer" / "linux" / "synaptipy.desktop": f"X-AppVersion={old_version}",
+        ROOT / "CHANGELOG.md": "## [Unreleased]",
+    }
+    problems = []
+    for path, marker in required_markers.items():
+        if not path.exists():
+            problems.append(f"missing {path.relative_to(ROOT)}")
+        elif marker not in path.read_text(encoding="utf-8"):
+            problems.append(f"missing marker {marker!r} in {path.relative_to(ROOT)}")
+    citation = ROOT / "CITATION.cff"
+    if citation.exists() and not re.search(r'date-released: "\d{4}-\d{2}-\d{2}"', citation.read_text(encoding="utf-8")):
+        problems.append("missing a valid date-released marker in CITATION.cff")
+    if problems:
+        raise RuntimeError("Version bump preflight failed:\n- " + "\n- ".join(problems))
 
 
 def _replace(path: Path, old: str, new: str, *, dry_run: bool = False) -> None:
@@ -210,99 +268,13 @@ def _detect_current_version() -> str:
     return m.group(1)
 
 
-def _trigger_dry_runs() -> None:
-    """Trigger dry-run dispatches for all three CI/CD workflows and print run URLs."""
-    import subprocess
-    import time
-
-    workflows = [
-        ("test.yml", [], "CI tests (9-slot matrix)"),
-        ("release.yml", ["--field", "dry_run=true"], "Release (docs + build + PyPI)"),
-        ("installer.yml", ["--field", "dry_run=true"], "Installer (Linux/Windows/macOS)"),
-    ]
-
-    run_ids = []
-    for wf, extra_fields, label in workflows:
-        print(f"  Triggering dry run: {label} ...", end=" ", flush=True)
-        result = subprocess.run(
-            ["gh", "workflow", "run", wf] + extra_fields,
-            capture_output=True,
-            text=True,
-            cwd=str(ROOT),
-        )
-        if result.returncode != 0:
-            print(f"FAILED\n    {result.stderr.strip()}")
-            continue
-        # GitHub needs a moment before the run appears in the API
-        time.sleep(3)
-        runs = subprocess.run(
-            ["gh", "run", "list", "--workflow", wf, "--limit", "1", "--json", "databaseId,url"],
-            capture_output=True,
-            text=True,
-            cwd=str(ROOT),
-        )
-        import json as _json
-
-        try:
-            data = _json.loads(runs.stdout)
-            run_id = data[0]["databaseId"]
-            url = data[0]["url"]
-            run_ids.append((label, run_id, url))
-            print(f"OK → {url}")
-        except (KeyError, IndexError, _json.JSONDecodeError):
-            print("OK (could not fetch URL — check gh run list)")
-
-    if run_ids:
-        print("\nMonitor all runs:")
-        for label, run_id, url in run_ids:
-            print(f"  gh run watch {run_id}   # {label}")
-
-
 def _git_commit_and_tag(new_version: str) -> None:
-    """Offer to commit changed files then create a local tag."""
-    import subprocess
-
-    dirty = subprocess.run(
-        ["git", "status", "--porcelain"],
-        capture_output=True,
-        text=True,
-        cwd=str(ROOT),
-    ).stdout.strip()
-
-    committed = False
-    if dirty:
-        answer = input("Commit version-bump changes now? [y/N] ").strip().lower()
-        if answer == "y":
-            try:
-                subprocess.run(["git", "add", "-A"], check=True, cwd=str(ROOT))
-                subprocess.run(
-                    ["git", "commit", "-m", f"chore: bump version to {new_version}"],
-                    check=True,
-                    cwd=str(ROOT),
-                )
-                print(f"  Committed: chore: bump version to {new_version}")
-                committed = True
-            except subprocess.CalledProcessError as exc:
-                print(f"  WARNING: git commit failed: {exc}")
-        else:
-            print("  Skipped commit. Commit before pushing to avoid tagging a dirty tree.")
-    else:
-        print("  Working tree clean — nothing to commit.")
-        committed = True
-
-    if not committed:
-        print(f"  Skipped tagging (uncommitted changes present). Commit first, then: git tag v{new_version}")
-        return
-
-    answer = input(f"Create local tag v{new_version} now? [y/N] ").strip().lower()
-    if answer == "y":
-        try:
-            subprocess.run(["git", "tag", f"v{new_version}"], check=True, cwd=str(ROOT))
-            print(f"  Tagged v{new_version} locally. Push with: git push origin v{new_version}")
-        except subprocess.CalledProcessError as exc:
-            print(f"  WARNING: git tag failed: {exc}")
-    else:
-        print(f"  Skipped tagging. Run manually: git tag v{new_version}")
+    """Commit the clean version bump and create its local annotated tag."""
+    _run_git("add", "-A")
+    _run_git("commit", "-m", f"chore: bump version to {new_version}")
+    _run_git("tag", "-a", f"v{new_version}", "-m", f"Synaptipy v{new_version}")
+    print(f"  Committed: chore: bump version to {new_version}")
+    print(f"  Created local tag: v{new_version}")
 
 
 def main() -> None:
@@ -321,14 +293,6 @@ def main() -> None:
         action="store_true",
         help="Preview every change without writing any files or running git commands.",
     )
-    parser.add_argument(
-        "--verify",
-        action="store_true",
-        help=(
-            "After bumping, push the branch and trigger dry-run dispatches for "
-            "all three workflows (CI tests, release, installer). Requires gh CLI."
-        ),
-    )
     args = parser.parse_args()
 
     old = args.old_version or _detect_current_version()
@@ -338,6 +302,11 @@ def main() -> None:
         print(f"Version is already {new}. Nothing to do.")
         sys.exit(0)
 
+    _validate_versions(old, new)
+    if not args.dry_run:
+        _require_clean_worktree(new)
+    _require_bump_targets(old)
+
     bump(old, new, dry_run=args.dry_run)
 
     if args.dry_run:
@@ -346,31 +315,11 @@ def main() -> None:
         return
 
     print(f"\nDone. All files updated from {old} to {new}.")
-    print("Next steps:")
-    print(f"  git add -A && git commit -m 'chore: bump version to {new}'")
-    print(f"  git tag v{new}   ← the script offers to do this for you below")
-    print("  git push origin <branch> --tags   ← always manual")
-    print()
     _git_commit_and_tag(new)
-
-    if args.verify:
-        print("\nPush branch so the dispatched runs can see the new version string.")
-        import subprocess
-
-        branch = subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            capture_output=True,
-            text=True,
-            cwd=str(ROOT),
-        ).stdout.strip()
-        answer = input(f"Push '{branch}' to origin now? [y/N] ").strip().lower()
-        if answer == "y":
-            subprocess.run(["git", "push", "origin", branch], check=True, cwd=str(ROOT))
-            print(f"  Pushed {branch}.")
-        else:
-            print("  Skipped push — dry-run workflows will run against the previously pushed commit.")
-        print()
-        _trigger_dry_runs()
+    print("\nVerify the committed release locally before pushing it manually:")
+    print("  conda run -n synaptipy python scripts/verify_ci.py")
+    print("  git push origin <branch>")
+    print(f"  git push origin v{new}")
 
 
 if __name__ == "__main__":
