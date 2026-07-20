@@ -8,17 +8,29 @@ import argparse
 import os
 import platform
 import re
+import shutil
 import subprocess
 import sys
-from typing import List, Tuple
+from typing import List, Mapping, Optional, Tuple
 
 
-def run_command(command: List[str], description: str) -> Tuple[bool, str]:
+def run_command(
+    command: List[str],
+    description: str,
+    *,
+    env: Optional[Mapping[str, str]] = None,
+    timeout: Optional[int] = None,
+) -> Tuple[bool, str]:
     """Run a shell command and return (success, output)."""
     print(f"Running: {description}...")
     try:
         result = subprocess.run(
-            command, capture_output=True, text=True, check=False  # We want to handle the return code manually
+            command,
+            capture_output=True,
+            text=True,
+            check=False,  # We want to handle the return code manually
+            env=env,
+            timeout=timeout,
         )
         if result.returncode == 0:
             print(f"[PASS] {description} Passed")
@@ -33,19 +45,26 @@ def run_command(command: List[str], description: str) -> Tuple[bool, str]:
         return False, "Command not found"
 
 
-def check_dependencies():
-    """Check if required tools are installed, install if missing."""
-    tools = ["flake8", "black", "isort", "pytest"]
+def check_dependencies() -> bool:
+    """Require the developer environment to contain CI's local test tools.
+
+    This verifier must never mutate the active interpreter by installing
+    packages.  Dependency installation belongs to environment setup; silently
+    adding packages makes a local pass non-reproducible.
+    """
+    tools = ["flake8", "black", "isort", "pytest", "pytest-qt", "pytest-mock", "pytest-cov"]
+    missing = []
     for tool in tools:
         print(f"Checking for {tool}...")
         try:
             subprocess.run([sys.executable, "-m", "pip", "show", tool], capture_output=True, check=True)
         except subprocess.CalledProcessError:
-            print(f"[WARN] {tool} not found. Installing...")
-            subprocess.run(
-                [sys.executable, "-m", "pip", "install", tool, "pytest-qt", "pytest-mock"],
-                check=True,
-            )
+            missing.append(tool)
+    if missing:
+        print("[FAIL] Missing CI tools: " + ", ".join(missing))
+        print("Activate the synaptipy environment and install the development dependencies before retrying.")
+        return False
+    return True
 
 
 def check_black() -> bool:
@@ -94,24 +113,31 @@ def check_flake8() -> bool:
 
 
 def check_tests() -> bool:
-    """Run pytest with offscreen platform."""
-    import os
+    """Run the same primary coverage gate as GitHub's main CI job."""
 
     env = os.environ.copy()
     env["QT_QPA_PLATFORM"] = "offscreen"
 
-    print("Running: Pytest (Headless)...")
-    try:
-        # Check if pytest exists first to avoid crash
-        subprocess.run([sys.executable, "-m", "pytest", "--version"], capture_output=True, check=True)
+    command = [
+        sys.executable,
+        "-m",
+        "pytest",
+        "-p",
+        "faulthandler",
+        "--cov=src/synaptipy",
+        "--cov-report=term-missing",
+        "--cov-report=xml",
+        "--cov-fail-under=90",
+    ]
+    if platform.system() == "Linux":
+        if not shutil.which("xvfb-run"):
+            print("[FAIL] xvfb-run is required on Linux to mirror GitHub CI.")
+            return False
+        command.insert(0, "xvfb-run")
 
-        result = subprocess.run(
-            [sys.executable, "-m", "pytest"],
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=120,  # Overall timeout of 2 minutes for all tests
-        )
+    print("Running: Pytest with CI coverage gate...")
+    try:
+        result = subprocess.run(command, env=env, capture_output=True, text=True, timeout=45 * 60)
         if result.returncode == 0:
             print("[PASS] Pytest Passed")
             return True
@@ -123,7 +149,7 @@ def check_tests() -> bool:
             print("\n".join(lines[-30:]))
             return False
     except subprocess.TimeoutExpired:
-        print("[FAIL] Pytest timed out after 120 seconds. A test may be blocking/hanging.")
+        print("[FAIL] Pytest timed out after 45 minutes, matching GitHub CI's job limit.")
         return False
     except Exception as e:
         print(f"[FAIL] Pytest Execution Failed: {e}")
@@ -261,12 +287,8 @@ def main():
 
     print(f"[INFO] Starting Local CI Verification on {platform.system()}...")
 
-    # Ensure dependencies are present
-    try:
-        check_dependencies()
-    except Exception as e:
-        print(f"[WARN] Dependency Check Failed: {e}")
-        print("Proceeding with checks anyway...")
+    if not check_dependencies():
+        sys.exit(1)
 
     checks = [
         check_black(),

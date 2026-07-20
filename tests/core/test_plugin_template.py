@@ -288,15 +288,44 @@ class TestPluginManagerLoading:
             PluginManager.load_plugins()  # should not raise
 
     def test_bad_plugin_does_not_crash(self, tmp_path):
-        """A plugin with a syntax error is skipped gracefully."""
+        """A bad plugin is reported without preventing the rest from loading."""
         from synaptipy.application.plugin_manager import PluginManager
 
         bad_dir = tmp_path / "bad_plugins"
         bad_dir.mkdir()
         (bad_dir / "broken.py").write_text("def oops(\n")  # syntax error
 
-        with patch("synaptipy.application.plugin_manager.PLUGIN_DIR", bad_dir):
-            PluginManager.load_plugins()  # should not raise
+        with (
+            patch("synaptipy.application.plugin_manager.PLUGIN_DIR", bad_dir),
+            patch("synaptipy.application.plugin_manager._get_bundled_plugin_dir", return_value=None),
+            patch("synaptipy.application.plugin_manager.QSettings") as mock_settings_cls,
+        ):
+            mock_settings_cls.return_value.value.return_value = True
+            failures = PluginManager.load_plugins()
+
+        assert len(failures) == 1
+        assert failures[0].path == bad_dir / "broken.py"
+        assert failures[0].reason.startswith("SyntaxError:")
+
+    def test_reload_declined_keeps_current_plugin_registrations(self, tmp_path):
+        """Cancelling changed-code consent must leave current plugins untouched."""
+        from synaptipy.application.plugin_manager import PluginManager
+
+        plugin_dir = tmp_path / "plugins"
+        plugin_dir.mkdir()
+        (plugin_dir / "changed_plugin.py").write_text("# user code is never run when consent is declined\n")
+
+        with (
+            patch("synaptipy.application.plugin_manager.PLUGIN_DIR", plugin_dir),
+            patch("synaptipy.application.plugin_manager._get_bundled_plugin_dir", return_value=None),
+            patch("synaptipy.application.plugin_manager.QSettings") as mock_settings_cls,
+            patch.object(PluginManager, "_warn_user_plugins", return_value=False),
+            patch.object(AnalysisRegistry, "unregister_plugins") as unregister_plugins,
+        ):
+            mock_settings_cls.return_value.value.return_value = True
+            assert PluginManager.reload_plugins() == []
+
+        unregister_plugins.assert_not_called()
 
     def test_plugin_dir_creation(self, tmp_path):
         """PluginManager.create_plugin_directory() creates missing dirs."""

@@ -213,6 +213,18 @@ def test_stale_file_completion_is_ignored(main_window, mock_recording):
     assert main_window.session_manager.current_recording is None
 
 
+def test_plugin_load_failures_show_one_nonfatal_summary(main_window):
+    """Broken optional plugins produce one informational warning, not a crash."""
+    from synaptipy.application.plugin_manager import PluginLoadFailure
+
+    failures = [PluginLoadFailure(Path("broken_plugin.py"), "SyntaxError: invalid syntax")]
+    with patch("PySide6.QtWidgets.QMessageBox.warning") as warning:
+        main_window._show_plugin_load_failures(failures)
+
+    warning.assert_called_once()
+    assert "broken_plugin.py" in warning.call_args.args[2]
+
+
 def test_loading_progress_updates(main_window, qtbot):
     """Test that loading progress updates are handled correctly."""
     # Test progress update
