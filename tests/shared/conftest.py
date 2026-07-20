@@ -9,49 +9,27 @@ from unittest.mock import MagicMock
 
 import pytest
 
-# Try to import PySide6, but provide mocks if it's not available
-# This allows tests to run in environments without a display
-try:
-    from PySide6 import QtCore, QtGui, QtWidgets
 
-    PYSIDE_AVAILABLE = True
-except ImportError:
-    PYSIDE_AVAILABLE = False
-    # Create mock modules if PySide6 is not available
-    QtWidgets = MagicMock()
-    QtGui = MagicMock()
-    QtCore = MagicMock()
+def _qt_widgets():
+    """Import Qt only for fixtures that actually create a widget.
 
-    # Setup basic mocks for common classes
-    QtWidgets.QApplication = MagicMock()
-    QtWidgets.QPushButton = MagicMock()
-    QtWidgets.QLabel = MagicMock()
+    Importing PySide at collection time makes pure data/cache tests depend on
+    the platform's Qt binary, which is unnecessary and prevents those tests
+    from running in a headless or architecture-mismatched environment.
+    """
+    try:
+        from PySide6 import QtWidgets
 
-    # Setup color mocks
-    QtGui.QColor = MagicMock()
-    QtGui.QColor.fromString = MagicMock(return_value=QtGui.QColor())
-
-    # Setup palette mocks
-    QtGui.QPalette = MagicMock()
-
-try:
-    import pyqtgraph as pg
-
-    PYQTGRAPH_AVAILABLE = True
-except ImportError:
-    PYQTGRAPH_AVAILABLE = False
-    # Create mock module for pyqtgraph
-    pg = MagicMock()
-    pg.mkPen = MagicMock(return_value=MagicMock())
-    pg.PlotWidget = MagicMock()
-    pg.LinearRegionItem = MagicMock()
-    pg.InfiniteLine = MagicMock()
+        return QtWidgets
+    except ImportError:
+        return None
 
 
 @pytest.fixture
 def qapp():
     """Create a Qt application instance for the tests."""
-    if not PYSIDE_AVAILABLE:
+    QtWidgets = _qt_widgets()
+    if QtWidgets is None:
         return MagicMock()
 
     # Check if application already exists
@@ -83,8 +61,10 @@ def mock_plot_widget():
     """
     Create a mock PlotWidget for testing pyqtgraph-related functions.
     """
-    if not PYQTGRAPH_AVAILABLE:
-        return pg.PlotWidget()
+    try:
+        import pyqtgraph as pg
+    except ImportError:
+        return MagicMock()
 
     # Create a real PlotWidget if available
     plot_widget = pg.PlotWidget()

@@ -63,6 +63,9 @@ class FileIOController:
         dialog.setDirectory(last_dir)
         dialog.setFileMode(QtWidgets.QFileDialog.FileMode.ExistingFile)
         dialog.setOption(QtWidgets.QFileDialog.Option.DontUseNativeDialog, True)
+        dialog.selectNameFilter("All Files (*)")
+        parent_w = self.parent.width() if self.parent else 900
+        dialog.resize(min(parent_w - 40, 860), 540)
 
         # Add Custom Checkbox
         lazy_load_checkbox = QtWidgets.QCheckBox("Lazy Load (recommended for large files)")

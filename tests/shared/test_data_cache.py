@@ -66,6 +66,17 @@ class TestDataCache:
         assert retrieved is sample_recording
         assert retrieved.source_file == sample_recording.source_file
 
+    def test_changed_file_invalidates_cached_recording(self, data_cache, sample_recording, tmp_path):
+        """Reusing a filename after acquisition/export must not serve stale data."""
+        file_path = tmp_path / "recording.abf"
+        file_path.write_bytes(b"old")
+        data_cache.put(file_path, sample_recording)
+
+        file_path.write_bytes(b"new-recording-content")
+
+        assert not data_cache.contains(file_path)
+        assert data_cache.get(file_path) is None
+
     def test_cache_eviction_fifo(self, sample_recording):
         """Test FIFO eviction when cache is full."""
         cache = DataCache(max_size=2)

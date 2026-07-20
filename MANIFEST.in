@@ -14,6 +14,16 @@ recursive-include docs *.md *.rst *.py *.png *.svg *.jpg *.css
 recursive-include src/synaptipy/resources *
 recursive-include src/synaptipy/templates *
 
+# The packaged offline manual needs rendered pages and browser assets, but not
+# Sphinx's incremental caches, source-view copies, or internal engineering
+# reports.  Pruning here also prevents these files being pulled into wheels by
+# the source manifest.
+prune src/synaptipy/resources/docs/html/.doctrees
+prune src/synaptipy/resources/docs/html/_sources
+prune src/synaptipy/resources/docs/html/_modules
+prune src/synaptipy/resources/docs/html/development_logs
+prune src/synaptipy/resources/docs/html/decisions
+
 # Exclude compiled artefacts and IDE folders
 global-exclude __pycache__
 global-exclude *.py[cod]

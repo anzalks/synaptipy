@@ -58,12 +58,12 @@ function and its metadata (parameter definitions, plot overlays, label, etc.).
 At startup, Synaptipy:
 
 1. Loads all **built-in** analyses from `src/synaptipy/core/analysis/`.
-2. Scans **two** plugin directories in order:
-   - `examples/plugins/` inside the Synaptipy installation - shipped example
-     plugins that work out-of-the-box without any extra setup.
-   - `~/.synaptipy/plugins/` - your personal or third-party additions.
-   If a file with the same stem name exists in both directories, the user copy
-   takes precedence and a warning is written to the log.
+2. Scans `~/.synaptipy/plugins/` for your personal, downloaded, or third-party
+   additions. Example plugins are available on demand through **Help > Download
+   Example Plugins…**; source checkouts and desktop bundles may also expose an
+   optional example directory for development/demo use. If a file with the same
+   stem name exists in both places, the user copy takes precedence and a warning
+   is written to the log.
 3. Builds the Analyser GUI.  For every registered analysis that does *not*
    already have a hand-coded tab class, a **metadata-driven tab is created
    automatically** - complete with parameter widgets, a Run button, a results
@@ -776,12 +776,13 @@ The user can customise both overlay types via
 > `name=` / `label=` fields in the decorator, and you have a working plugin
 > in minutes -- no blank-page problem.
 
-### Option A: Built-in Examples Directory
+### Option A: Downloadable Examples Directory
 
-Synaptipy ships ready-to-run example plugins in `examples/plugins/`.  These are
-loaded automatically at startup so you can try them immediately and use them as
-templates.  Enable them via **Edit > Preferences** (or **Synaptipy > Preferences**
-on macOS) by checking **Enable Custom Plugins**, then restart synaptipy.
+Download ready-to-run example plugins using **Help → Download Example
+Plugins…**. They are saved in `~/.synaptipy/plugins/`, where you can try them
+immediately and use them as templates. Enable them via **Edit > Preferences**
+(or **Synaptipy > Preferences** on macOS) by checking **Enable Custom Plugins**;
+no restart is needed.
 
 ---
 
@@ -795,11 +796,13 @@ on macOS) by checking **Enable Custom Plugins**, then restart synaptipy.
 
 To use these plugins:
 
-1. Open **Edit > Preferences** (or **Synaptipy > Preferences** on macOS).
-2. Check **Enable Custom Plugins**.
-3. Restart synaptipy.  Each plugin appears as a new sub-tab in the Analyser.
+1. Choose **Help → Download Example Plugins…**.
+2. Open **Edit > Preferences** (or **Synaptipy > Preferences** on macOS).
+3. Check **Enable Custom Plugins**. Each plugin appears as a new sub-tab in
+   the Analyser.
 
-To customise one, copy the file to `~/.synaptipy/plugins/` and edit your copy.  Synaptipy prefers the user copy over the bundled example, so your changes take effect immediately on the next restart.
+To customise one, edit its file in `~/.synaptipy/plugins/`. Synaptipy asks for
+consent before reloading changed plugin code.
 
 ### Option B: User Plugin Directory (recommended for personal additions)
 

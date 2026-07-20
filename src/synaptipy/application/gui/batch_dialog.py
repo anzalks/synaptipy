@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 from PySide6 import QtCore, QtWidgets
 
+from synaptipy.application.session_manager import SessionManager
 from synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
 from synaptipy.core.analysis.registry import AnalysisRegistry
 from synaptipy.shared.styling import style_button, style_label
@@ -542,7 +543,11 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         self.default_channels = default_channels  # List of channel names to pre-fill
         self.result_df: Optional[pd.DataFrame] = None
         self.worker: Optional[BatchWorker] = None
-        self.engine = BatchAnalysisEngine()
+        performance = SessionManager().performance_settings
+        self.engine = BatchAnalysisEngine(
+            max_workers=performance.get("max_cpu_cores", 1),
+            max_ram_allocation_gb=performance.get("max_ram_allocation_gb"),
+        )
 
         self.setWindowTitle("Batch Analysis")
         self.setMinimumSize(700, 600)

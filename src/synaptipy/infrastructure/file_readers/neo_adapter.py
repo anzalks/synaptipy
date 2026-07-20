@@ -191,10 +191,6 @@ class NeoAdapter:
             filters.append(filter_entry)
             all_exts_wildcard.update(wildcard_exts)
 
-        if all_exts_wildcard:
-            all_supported_entry = f"All Supported Files ({' '.join(sorted(list(all_exts_wildcard)))})"
-            filters.insert(0, all_supported_entry)
-
         filters.append("All Files (*)")
         log.debug(f"Generated filter string using IODict: {' ;; '.join(filters)}")
         return ";;".join(filters)

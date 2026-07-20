@@ -420,16 +420,27 @@ class PlotZoomSyncManager(QtCore.QObject):
 
         log.debug(f"Y zoom slider changed to: {value}")
 
-        new_y_range = self._calculate_new_range(self.base_y_range, value)
-        if new_y_range:
-            self._updating_viewranges = True
-            try:
-                self.view_box.setYRange(new_y_range[0], new_y_range[1], padding=0)
-                # Update scrollbar position to match new zoom level
-                if self.y_scrollbar:
-                    self._update_scrollbar_from_view(self.y_scrollbar, self.base_y_range, new_y_range)
-            finally:
-                self._updating_viewranges = False
+        # Calculate zoom factor from slider (same formula as _calculate_new_range)
+        normalized = (float(value) - self.SLIDER_RANGE_MIN) / (self.SLIDER_RANGE_MAX - self.SLIDER_RANGE_MIN)
+        zoom_factor = max(self.MIN_ZOOM_FACTOR, 1.0 - normalized * (1.0 - self.MIN_ZOOM_FACTOR))
+        base_span = max(abs(self.base_y_range[1] - self.base_y_range[0]), 1e-12)
+        new_span = base_span * zoom_factor
+
+        # Centre the zoom on the current visible Y centre, not the base range
+        # centre — so panning Y first and then zooming feels natural.
+        cur_y = self.view_box.viewRange()[1]
+        current_center = (cur_y[0] + cur_y[1]) / 2.0
+        base_min, base_max = self.base_y_range
+        center = max(base_min + new_span / 2.0, min(base_max - new_span / 2.0, current_center))
+        new_y_range = (center - new_span / 2.0, center + new_span / 2.0)
+
+        self._updating_viewranges = True
+        try:
+            self.view_box.setYRange(new_y_range[0], new_y_range[1], padding=0)
+            if self.y_scrollbar:
+                self._update_scrollbar_from_view(self.y_scrollbar, self.base_y_range, new_y_range)
+        finally:
+            self._updating_viewranges = False
 
     def _on_manual_limits_changed(self):
         """Handle manual limit input changes."""

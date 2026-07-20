@@ -14,7 +14,7 @@ These tests focus on:
 """
 
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
@@ -111,6 +111,35 @@ class TestUpdatePerformanceSettings:
         engine = BatchAnalysisEngine(max_workers=4)
         engine.update_performance_settings({"max_cpu_cores": 0})
         assert engine.max_workers >= 1
+
+    def test_ram_budget_caps_parallel_worker_count(self, tmp_path):
+        """A configured RAM budget must reduce unsafe file-level parallelism."""
+        large_path = tmp_path / "large.abf"
+        with large_path.open("wb") as handle:
+            handle.truncate(200 * 1024 * 1024)
+
+        engine = BatchAnalysisEngine(max_workers=4, max_ram_allocation_gb=0.5)
+        assert engine._effective_worker_count([large_path, large_path]) == 1
+
+
+def test_parallel_worker_bootstraps_plugins_before_processing():
+    """A spawned worker must load plugins before evaluating its pipeline."""
+    from synaptipy.core.analysis.batch_engine import _worker_process_file
+
+    result_df = MagicMock()
+    result_df.empty = False
+    result_df.to_dict.return_value = [{"analysis": "custom_plugin", "value": 1.0}]
+
+    with (
+        patch("synaptipy.application.plugin_manager.PluginManager.load_plugins", return_value=[]) as load_plugins,
+        patch("synaptipy.core.analysis.batch_engine.BatchAnalysisEngine") as engine_cls,
+    ):
+        engine_cls.return_value._run_batch_sequential.return_value = result_df
+        result = _worker_process_file("recording.abf", [{"analysis": "custom_plugin"}], None)
+
+    load_plugins.assert_called_once()
+    engine_cls.assert_called_once_with(max_workers=1)
+    assert result == [{"analysis": "custom_plugin", "value": 1.0}]
 
 
 # ---------------------------------------------------------------------------

@@ -140,6 +140,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # --- Initialize State Variables (Specific to MainWindow) ---
         self.saved_analysis_results: List[Dict[str, Any]] = []
+        # Each asynchronous load keeps its own context.  A single mutable
+        # "pending" context can attach file B's navigation state to file A
+        # when users open files in quick succession.
+        self._load_request_serial = 0
+        self._latest_load_request = 0
+        self._pending_load_requests: Dict[Path, List[Dict[str, Any]]] = {}
 
         # --- Setup Core UI Components ---
         self._setup_menu_and_status_bar()
@@ -675,6 +681,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
             dialog = PreferencesDialog(self)
             dialog.sigPluginsToggled.connect(self._on_plugins_toggled)
+            dialog.sigPerformanceChanged.connect(self._on_performance_settings_changed)
             dialog.exec()
             log.debug("Preferences dialog closed")
         except Exception as e:
@@ -688,9 +695,10 @@ class MainWindow(QtWidgets.QMainWindow):
         try:
             from synaptipy.application.plugin_manager import PluginManager
 
-            PluginManager.reload_plugins()
+            failures = PluginManager.reload_plugins()
         except Exception as e:
             log.error(f"Failed to reload plugins: {e}")
+            failures = []
 
         if hasattr(self, "analyser_tab") and self.analyser_tab:
             try:
@@ -698,6 +706,27 @@ class MainWindow(QtWidgets.QMainWindow):
                 log.info("Analyser tabs rebuilt after plugin toggle.")
             except Exception as e:
                 log.error(f"Failed to rebuild analyser tabs: {e}")
+
+        if failures:
+            QtCore.QTimer.singleShot(0, lambda: self._show_plugin_load_failures(failures))
+
+    @QtCore.Slot(dict)
+    def _on_performance_settings_changed(self, settings: dict) -> None:
+        """Publish Preferences performance limits for newly-created batch jobs."""
+        self.session_manager.performance_settings = settings
+
+    def _show_plugin_load_failures(self, failures) -> None:
+        """Show one non-fatal, OK-only report for optional plugin failures."""
+        if not failures:
+            return
+        details = "\n".join(f"• {failure.path.name}: {failure.reason}" for failure in failures)
+        QtWidgets.QMessageBox.warning(
+            self,
+            "Some Plugins Were Not Loaded",
+            "The application remains available, but these optional plugins "
+            f"could not be loaded:\n\n{details}\n\n"
+            "The remaining analyses can still be used. See the log for details.",
+        )
 
     def _show_analysis_config(self):
         """Show the global analysis configuration dialog."""
@@ -783,15 +812,14 @@ class MainWindow(QtWidgets.QMainWindow):
         log.debug(f"Background loading completed successfully for: {recording_data.source_file.name}")
 
         try:
-            # Get the file list and current index from the current state
-            # These should have been set when _load_in_explorer was called
-            if hasattr(self, "_pending_file_list") and hasattr(self, "_pending_current_index"):
-                file_list = self._pending_file_list
-                current_index = self._pending_current_index
+            request = self._take_pending_load(recording_data.source_file)
+            if request is not None and request["id"] != self._latest_load_request:
+                log.info("Ignoring stale load completion for %s", recording_data.source_file.name)
+                return
 
-                # Clear the pending state
-                delattr(self, "_pending_file_list")
-                delattr(self, "_pending_current_index")
+            if request is not None:
+                file_list = request["file_list"]
+                current_index = request["current_index"]
 
                 # CRITICAL FIX: Pass the pre-loaded Recording object directly to avoid double-loading
                 log.debug(
@@ -844,17 +872,38 @@ class MainWindow(QtWidgets.QMainWindow):
             #     except Exception as e_analyse_update:
             #         log.error(f"Error updating analyser tab state: {e_analyse_update}", exc_info=True)
 
-    def _on_data_error(self, error_message: str):
+    def _on_data_error(self, payload):
         """Handle data loading errors."""
+        request = None
+        if isinstance(payload, tuple) and len(payload) == 2:
+            file_path, error_message = payload
+            request = self._take_pending_load(Path(file_path))
+        else:
+            # Retain compatibility with legacy emitters while still reporting
+            # the error rather than allowing a failed request to crash the UI.
+            error_message = str(payload)
+        if request is not None and request["id"] != self._latest_load_request:
+            log.info("Ignoring stale load failure: %s", error_message)
+            return
         log.error(f"Background loading failed: {error_message}")
         QtWidgets.QMessageBox.critical(self, "File Loading Error", f"Failed to load file:\n{error_message}")
         self.status_bar.showMessage("File loading failed", 5000)
 
-        # Clear any pending state
-        if hasattr(self, "_pending_file_list"):
-            delattr(self, "_pending_file_list")
-        if hasattr(self, "_pending_current_index"):
-            delattr(self, "_pending_current_index")
+    @staticmethod
+    def _load_path_key(path: Path) -> Path:
+        """Normalise paths used to match loader completions to requests."""
+        return Path(path).resolve(strict=False)
+
+    def _take_pending_load(self, path: Path):
+        """Remove and return the oldest outstanding request for *path*."""
+        key = self._load_path_key(path)
+        requests = self._pending_load_requests.get(key)
+        if not requests:
+            return None
+        request = requests.pop(0)
+        if not requests:
+            self._pending_load_requests.pop(key, None)
+        return request
 
         # Update UI state
         self._update_menu_state()
@@ -914,9 +963,13 @@ class MainWindow(QtWidgets.QMainWindow):
             return
 
         try:
-            # Store the file list and current index for use when data is ready
-            self._pending_file_list = file_list
-            self._pending_current_index = current_index
+            self._load_request_serial += 1
+            request_id = self._load_request_serial
+            self._latest_load_request = request_id
+            key = self._load_path_key(initial_filepath_to_load)
+            self._pending_load_requests.setdefault(key, []).append(
+                {"id": request_id, "file_list": list(file_list), "current_index": current_index}
+            )
 
             # Initiate background loading using signal
             log.debug(f"Initiating background load for: {initial_filepath_to_load} (lazy_load: {lazy_load})")
@@ -926,11 +979,11 @@ class MainWindow(QtWidgets.QMainWindow):
             log.error(f"Error occurred trying to initiate background load: {e}", exc_info=True)
             QtWidgets.QMessageBox.critical(self, "Load Error", f"An error occurred initiating the file load:\n{e}")
 
-            # Clear any pending state on error
-            if hasattr(self, "_pending_file_list"):
-                delattr(self, "_pending_file_list")
-            if hasattr(self, "_pending_current_index"):
-                delattr(self, "_pending_current_index")
+            if "key" in locals():
+                requests = self._pending_load_requests.get(key, [])
+                self._pending_load_requests[key] = [r for r in requests if r["id"] != request_id]
+                if not self._pending_load_requests[key]:
+                    self._pending_load_requests.pop(key, None)
 
             # Update UI state
             self._update_menu_state()

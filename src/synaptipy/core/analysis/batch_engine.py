@@ -103,7 +103,18 @@ class BatchAnalysisEngine:
         results_df = engine.run_batch(files, pipeline)
     """
 
-    def __init__(self, neo_adapter: Optional[NeoAdapter] = None, max_workers: int = 1):
+    # Raw electrophysiology files routinely expand while Neo/NumPy objects,
+    # trial arrays, and analysis intermediates are created.  This conservative
+    # multiplier keeps the configured RAM budget meaningful without assuming a
+    # particular file format or compression ratio.
+    _RAM_ESTIMATE_MULTIPLIER = 4
+
+    def __init__(
+        self,
+        neo_adapter: Optional[NeoAdapter] = None,
+        max_workers: int = 1,
+        max_ram_allocation_gb: Optional[float] = None,
+    ):
         """
         Initialize the batch analysis engine.
 
@@ -113,6 +124,8 @@ class BatchAnalysisEngine:
                          1 (default) means fully sequential execution.
                          Values > 1 enable :class:`~concurrent.futures.ProcessPoolExecutor`
                          parallelism.  Pass ``-1`` to use all available CPU cores.
+            max_ram_allocation_gb: Optional total memory budget used to cap
+                concurrent file workers conservatively.
         """
         self.neo_adapter = neo_adapter if neo_adapter else NeoAdapter()
         self._cancelled = False
@@ -121,6 +134,9 @@ class BatchAnalysisEngine:
             self.max_workers: int = cpu_count
         else:
             self.max_workers = max(1, int(max_workers))
+        self.max_ram_allocation_gb = (
+            max(0.5, float(max_ram_allocation_gb)) if max_ram_allocation_gb is not None else None
+        )
 
     def cancel(self):
         """Request cancellation of the current batch run."""
@@ -145,10 +161,39 @@ class BatchAnalysisEngine:
             log.info("BatchAnalysisEngine: max_workers updated to %d.", self.max_workers)
 
         if "max_ram_allocation_gb" in settings:
-            log.info(
-                "BatchAnalysisEngine: max_ram_allocation_gb=%s noted (OOM guard via gc.collect).",
-                settings["max_ram_allocation_gb"],
+            self.max_ram_allocation_gb = max(0.5, float(settings["max_ram_allocation_gb"]))
+            log.info("BatchAnalysisEngine: RAM budget updated to %.2f GB.", self.max_ram_allocation_gb)
+
+    def _effective_worker_count(self, files: List[Union[Path, "Recording"]]) -> int:
+        """Return a worker count that respects the configured RAM budget."""
+        if self.max_ram_allocation_gb is None or self.max_workers <= 1:
+            return self.max_workers
+
+        sizes = []
+        for item in files:
+            if not isinstance(item, (str, Path)):
+                continue
+            try:
+                sizes.append(Path(item).stat().st_size)
+            except OSError:
+                # Unknown size is handled by the configured CPU limit rather
+                # than preventing a valid batch from running.
+                continue
+        if not sizes:
+            return self.max_workers
+
+        estimated_per_worker = max(sizes) * self._RAM_ESTIMATE_MULTIPLIER
+        budget_bytes = int(self.max_ram_allocation_gb * 1024**3)
+        budget_workers = max(1, budget_bytes // max(1, estimated_per_worker))
+        effective = min(self.max_workers, budget_workers)
+        if effective < self.max_workers:
+            log.warning(
+                "BatchAnalysisEngine: reducing parallelism from %d to %d to respect the %.2f GB RAM budget.",
+                self.max_workers,
+                effective,
+                self.max_ram_allocation_gb,
             )
+        return effective
 
     @staticmethod
     def list_available_analyses() -> List[str]:
@@ -385,6 +430,7 @@ class BatchAnalysisEngine:
         pipeline_config: List[Dict[str, Any]],
         progress_callback: Optional[Callable[[int, int, str], None]],
         channel_filter: Optional[List[str]],
+        worker_count: Optional[int] = None,
     ) -> pd.DataFrame:
         """Distribute file-level processing across :attr:`max_workers` worker processes.
 
@@ -414,7 +460,7 @@ class BatchAnalysisEngine:
 
         # Submit path-based tasks to the pool
         future_to_idx: Dict[Any, int] = {}
-        pool_kwargs: Dict[str, Any] = {"max_workers": self.max_workers}
+        pool_kwargs: Dict[str, Any] = {"max_workers": worker_count or self.max_workers}
         # Use spawn context on all platforms for process-safety with Qt/numpy
         ctx = multiprocessing.get_context("spawn")
         pool_kwargs["mp_context"] = ctx
@@ -529,12 +575,15 @@ class BatchAnalysisEngine:
             log.info("BatchAnalysisEngine: cross-file average mode enabled (%d files).", total_files)
             return self._run_cross_file_average(files, pipeline_config, progress_callback, channel_filter)
 
-        # Route to parallel executor when max_workers > 1 and we have multiple files
-        if self.max_workers > 1 and total_files > 1:
+        # Route to parallel executor when CPU and RAM limits allow it.
+        effective_workers = self._effective_worker_count(files)
+        if effective_workers > 1 and total_files > 1:
             log.info(
-                "BatchAnalysisEngine: starting parallel batch (%d workers, %d files).", self.max_workers, total_files
+                "BatchAnalysisEngine: starting parallel batch (%d workers, %d files).", effective_workers, total_files
             )
-            return self._run_batch_parallel(files, pipeline_config, progress_callback, channel_filter)
+            return self._run_batch_parallel(
+                files, pipeline_config, progress_callback, channel_filter, worker_count=effective_workers
+            )
 
         return self._run_batch_sequential(files, pipeline_config, progress_callback, channel_filter, rs_tolerance)
 
@@ -1511,6 +1560,12 @@ def _worker_process_file(
 
     # Trigger all @AnalysisRegistry.register decorators in this new process
     import synaptipy.core.analysis  # noqa: F401,F811
+    from synaptipy.application.plugin_manager import PluginManager
+
+    # Spawned workers start with a fresh interpreter.  Load optional plugins
+    # here as well so a pipeline behaves identically with one or many workers.
+    for failure in PluginManager.load_plugins():
+        log.warning("Worker did not load plugin %s: %s", failure.path.name, failure.reason)
 
     engine = BatchAnalysisEngine(max_workers=1)
     try:

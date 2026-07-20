@@ -186,7 +186,7 @@ def my_analysis_wrapper(data, time, sampling_rate, **kwargs):
 
 Every wrapper must return a nested dictionary with a `module_used` key and a `metrics` sub-dictionary. Keys prefixed with `_` pass arrays to plot overlays without appearing in the results table. The full specification is in `docs/extending_synaptipy.md`.
 
-Plugin discovery follows two paths: `examples/plugins/` (bundled examples) and `~/.synaptipy/plugins/` (user additions). A user copy with an identical filename takes precedence. Toggling **Enable Custom Plugins** in **Edit > Preferences** reloads all plugins and regenerates the Analyser tab UI within the running process. Import errors in individual plugins are caught and logged; the remaining plugins continue to load normally.
+Plugin discovery always includes `~/.synaptipy/plugins/` (user additions). Example plugins can be downloaded on demand from **Help > Download Example Plugins…**; source checkouts and desktop bundles may also include them for development/demo use. A user copy with an identical filename takes precedence. Toggling **Enable Custom Plugins** in **Edit > Preferences** reloads all plugins and regenerates the Analyser tab UI within the running process. If one or more optional plugins cannot load, Synaptipy continues normally and shows one concise report after startup.
 
 ---
 

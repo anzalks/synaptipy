@@ -340,12 +340,13 @@ Synaptipy source code**.  All you need is a single Python file - Synaptipy
 generates the parameter panel, Run button, results table, and plot overlays
 automatically from the metadata you provide.
 
-#### Bundled Example Plugins
+#### Downloadable Example Plugins
 
-Five ready-to-run example plugins ship with every Synaptipy installation.
-When **Enable Custom Plugins** is checked in **Edit > Preferences** (it is on
-by default), they appear automatically as new sub-tabs in the Analyser and are
-the fastest way to see what the plugin system can do before writing your own.
+Download five ready-to-run example plugins from **Help → Download Example
+Plugins…**. When **Enable Custom Plugins** is checked in **Edit > Preferences**
+(it is on by default), they appear automatically as new sub-tabs in the
+Analyser and are the fastest way to see what the plugin system can do before
+writing your own.
 
 | File | Tab label | What it measures |
 |------|-----------|-----------------|
@@ -357,8 +358,7 @@ the fastest way to see what the plugin system can do before writing your own.
 
 ![Analyser tab overview](screenshots/analyser_tab.png)
 
-To customise an example, copy it to `~/.synaptipy/plugins/` and edit your copy.
-Synaptipy always prefers the user copy over the bundled file.
+To customise an example, edit its copy in `~/.synaptipy/plugins/`.
 
 ---
 
@@ -1564,4 +1564,3 @@ driven by metadata in the decorator.
 A ready-to-copy template is included at `src/synaptipy/templates/plugin_template.py`.
 For the full step-by-step guide, parameter reference, and annotated examples,
 see **[Writing Custom Analysis Plugins](../extending_synaptipy.md)**.
-

@@ -181,8 +181,10 @@ Synaptipy supports two ways to add new analysis functions:
  `src/synaptipy/core/analysis/`, register the import in `__init__.py`,
  and add tests.
 
-Five bundled example plugins ship in `examples/plugins/` and are loaded
-automatically when **Enable Custom Plugins** is checked in Preferences:
+Five example plugins are available from **Help → Download Example Plugins…**.
+They are saved to `~/.synaptipy/plugins/` and load when **Enable Custom
+Plugins** is checked in Preferences.  Source checkouts and desktop bundles may
+also expose the same examples in `examples/plugins/`:
 
 | Plugin file | Tab label | Purpose |
 |---|---|---|
