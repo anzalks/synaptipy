@@ -143,9 +143,13 @@ def test_list_analyses_runs_without_error(capsys):
 
 
 def test_main_list_analyses(capsys):
+    from unittest.mock import patch
+
     from synaptipy.application.cli.main import main
 
-    rc = main(["list-analyses"])
+    with patch("synaptipy.application.cli.main.PluginManager.load_plugins", return_value=[]) as load_plugins:
+        rc = main(["list-analyses"])
+    load_plugins.assert_called_once()
     assert rc == 0
     assert len(capsys.readouterr().out.strip()) > 0
 

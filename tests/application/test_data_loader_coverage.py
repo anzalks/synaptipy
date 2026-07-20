@@ -95,12 +95,16 @@ class TestLoadFileErrorPaths:
         self.loader.data_ready.connect(self.ready.append)
         self.loader.loading_progress.connect(self.progress.append)
 
+    @staticmethod
+    def _error_message(payload):
+        return payload[1] if isinstance(payload, tuple) else payload
+
     def test_file_not_found_emits_error(self, tmp_path):
         """Line 70: non-existent file → data_error emitted."""
         missing = tmp_path / "missing.abf"
         self.loader.load_file(missing)
         assert len(self.errors) == 1
-        assert "not found" in self.errors[0].lower() or "File not found" in self.errors[0]
+        assert "not found" in self._error_message(self.errors[0]).lower()
         assert not self.ready
 
     def test_path_is_directory_emits_error(self, tmp_path):
@@ -108,7 +112,7 @@ class TestLoadFileErrorPaths:
         # tmp_path IS a directory
         self.loader.load_file(tmp_path)
         assert len(self.errors) == 1
-        assert "not a file" in self.errors[0].lower() or "not a file" in self.errors[0]
+        assert "not a file" in self._error_message(self.errors[0]).lower()
         assert not self.ready
 
     def test_cache_hit_emits_data_ready_immediately(self, tmp_path):
@@ -136,7 +140,7 @@ class TestLoadFileErrorPaths:
             self.loader.load_file(real_file)
 
         assert len(self.errors) == 1
-        assert "invalid data type" in self.errors[0].lower()
+        assert "invalid data type" in self._error_message(self.errors[0]).lower()
         assert not self.ready
 
     def test_recording_no_channels_emits_error(self, tmp_path):
@@ -149,7 +153,7 @@ class TestLoadFileErrorPaths:
             self.loader.load_file(real_file)
 
         assert len(self.errors) == 1
-        assert "no channels" in self.errors[0].lower()
+        assert "no channels" in self._error_message(self.errors[0]).lower()
         assert not self.ready
 
     def test_successful_load_caches_and_emits(self, tmp_path):
@@ -180,7 +184,7 @@ class TestLoadFileErrorPaths:
             self.loader.load_file(real_file)
 
         assert len(self.errors) == 1
-        assert "synaptipy error" in self.errors[0].lower()
+        assert "synaptipy error" in self._error_message(self.errors[0]).lower()
         assert not self.ready
 
     def test_generic_exception_emits_error(self, tmp_path):
@@ -196,7 +200,7 @@ class TestLoadFileErrorPaths:
             self.loader.load_file(real_file)
 
         assert len(self.errors) == 1
-        assert "unexpected error" in self.errors[0].lower()
+        assert "unexpected error" in self._error_message(self.errors[0]).lower()
         assert not self.ready
 
     def test_string_path_is_coerced_to_path(self, tmp_path):

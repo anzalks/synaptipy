@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from synaptipy import __version__
+from synaptipy.application.plugin_manager import PluginManager
 from synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
 
 
@@ -69,6 +70,17 @@ def _list_analyses() -> int:
     return 0
 
 
+def _bootstrap_plugins_for_cli() -> None:
+    """Load the same approved optional plugins used by the GUI.
+
+    Plugin failures are diagnostic only: core analyses and every successfully
+    imported plugin remain usable.  The GUI presents failures in a dialog;
+    the headless CLI reports them to stderr instead.
+    """
+    for failure in PluginManager.load_plugins():
+        print(f"Plugin not loaded: {failure.path.name}: {failure.reason}", file=sys.stderr)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Headless Synaptipy batch analysis CLI.")
     parser.add_argument("--version", action="version", version=f"synaptipy {__version__}")
@@ -93,6 +105,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv=None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    _bootstrap_plugins_for_cli()
     return args.func(args)
 
 

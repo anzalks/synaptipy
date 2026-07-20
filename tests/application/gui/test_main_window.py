@@ -23,10 +23,11 @@ def reset_main_window_state(main_window):
     # Clear data loader cache (test_data_loader_cache_integration adds entries)
     if hasattr(main_window, "data_loader") and hasattr(main_window.data_loader, "cache"):
         main_window.data_loader.cache.clear()
-    # Clear pending file loading attributes (test_background_* sets these)
-    for attr in ("_pending_file_list", "_pending_current_index"):
-        if hasattr(main_window, attr):
-            delattr(main_window, attr)
+    # Clear asynchronous file-load contexts used by background loading tests.
+    if hasattr(main_window, "_pending_load_requests"):
+        main_window._pending_load_requests.clear()
+        main_window._load_request_serial = 0
+        main_window._latest_load_request = 0
     # Clear current recording (test_background_file_loading sets this)
     if hasattr(main_window, "session_manager"):
         main_window.session_manager.current_recording = None
@@ -162,9 +163,10 @@ def test_background_file_loading(main_window, mock_recording):
     tab_widget.setCurrentWidget is also patched to prevent Qt geometry
     recalculations that post new ViewBox callbacks on macOS.
     """
-    # Set up pending state as if _load_in_explorer was called
-    main_window._pending_file_list = [mock_recording.source_file]
-    main_window._pending_current_index = 0
+    # Set up a request as if _load_in_explorer had queued it.
+    key = main_window._load_path_key(mock_recording.source_file)
+    main_window._latest_load_request = 1
+    main_window._pending_load_requests[key] = [{"id": 1, "file_list": [mock_recording.source_file], "current_index": 0}]
 
     with (
         patch.object(main_window.explorer_tab, "_display_recording"),
@@ -176,9 +178,7 @@ def test_background_file_loading(main_window, mock_recording):
     # Assert: Check that SessionManager was updated with the recording
     assert main_window.session_manager.current_recording == mock_recording
 
-    # Check that pending state was cleared
-    assert not hasattr(main_window, "_pending_file_list")
-    assert not hasattr(main_window, "_pending_current_index")
+    assert not main_window._pending_load_requests
 
 
 def test_background_loading_error_handling(main_window, qtbot):
@@ -186,20 +186,31 @@ def test_background_loading_error_handling(main_window, qtbot):
     error_message = "Test error message"
 
     with patch("PySide6.QtWidgets.QMessageBox.critical") as message_box_spy:
-        # Set up pending state
-        main_window._pending_file_list = [Path("test.abf")]
-        main_window._pending_current_index = 0
+        key = main_window._load_path_key(Path("test.abf"))
+        main_window._latest_load_request = 1
+        main_window._pending_load_requests[key] = [{"id": 1, "file_list": [Path("test.abf")], "current_index": 0}]
 
         # Act: Trigger the data_error signal
         with qtbot.waitSignal(main_window.data_loader.data_error, timeout=1000):
-            main_window.data_loader.data_error.emit(error_message)
+            main_window.data_loader.data_error.emit((Path("test.abf"), error_message))
 
         # Assert: Check that error dialog was shown
         message_box_spy.assert_called_once()
 
-        # Check that pending state was cleared
-        assert not hasattr(main_window, "_pending_file_list")
-        assert not hasattr(main_window, "_pending_current_index")
+        assert not main_window._pending_load_requests
+
+
+def test_stale_file_completion_is_ignored(main_window, mock_recording):
+    """An earlier load must not replace the most recently requested file."""
+    key = main_window._load_path_key(mock_recording.source_file)
+    main_window._latest_load_request = 2
+    main_window._pending_load_requests[key] = [{"id": 1, "file_list": [mock_recording.source_file], "current_index": 0}]
+
+    with patch.object(main_window.tab_widget, "setCurrentWidget") as set_current:
+        main_window._on_data_ready(mock_recording)
+
+    set_current.assert_not_called()
+    assert main_window.session_manager.current_recording is None
 
 
 def test_loading_progress_updates(main_window, qtbot):

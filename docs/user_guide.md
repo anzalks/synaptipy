@@ -717,21 +717,20 @@ fails silently.
 Toggling "Enable Custom Plugins" does **not** require an application restart.
 When the checkbox state changes and the dialog is accepted, Synaptipy:
 
-1. Calls `PluginManager.reload_plugins()`, which first calls
-   `AnalysisRegistry.unregister_plugins()` to purge every plugin-sourced
-   entry (those flagged `source="plugin"`) from the registry while leaving
-   all built-in analyses intact.
-2. If the setting is now **enabled**, re-executes every `.py` file discovered
-   in `examples/plugins/` (bundled examples) then `~/.synaptipy/plugins/`
-   (user additions). Each file's `@AnalysisRegistry.register(...)` decorator
-   re-runs and re-populates the registry.
+1. Calls `PluginManager.reload_plugins()`.  If user plugin code has changed,
+   Synaptipy asks for consent before it re-executes that code.
+2. If the setting is now **enabled**, re-executes every `.py` file in
+   `~/.synaptipy/plugins/` (and optional source/bundle examples). Each file's
+   `@AnalysisRegistry.register(...)` decorator re-runs and re-populates the
+   registry while built-in analyses remain intact.
 3. Calls `AnalyserTab.rebuild_analysis_tabs()` to destroy the existing
    sub-tab widgets and regenerate them from the updated registry - all within
    the running process.
 
 The net effect is that plugin tabs appear or disappear immediately without
 reloading the application. A syntax error or import failure in a single plugin
-is caught and logged; remaining plugins still load normally.
+is caught and logged; remaining plugins still load normally, and Synaptipy
+shows one non-blocking summary dialog.
 
 > **Tip:** If you install a new plugin file while Synaptipy is running, open
 > Preferences and toggle "Enable Custom Plugins" off then on to force an
@@ -739,8 +738,9 @@ is caught and logged; remaining plugins still load normally.
 
 #### Included Example Plugins
 
-Synaptipy ships five ready-to-run example plugins in `examples/plugins/`.
-With **Enable Custom Plugins** active they load automatically:
+Download five ready-to-run example plugins from **Help → Download Example
+Plugins…**. With **Enable Custom Plugins** active they load automatically from
+`~/.synaptipy/plugins/`:
 
 | Plugin file | Analyser tab label | What it measures |
 |-------------|--------------------|------------------|
@@ -750,8 +750,8 @@ With **Enable Custom Plugins** active they load automatically:
 | `miniml_integration.py` | miniML Events | Deep-learning miniature event detection via [miniML](https://github.com/delvendahl/miniML); requires additional setup (see [extending_synaptipy.md](extending_synaptipy.md#12-deep-learning--third-party-integrations-eg-miniml)) |
 | `spike_interface_integration.py` | SpikeInterface Spikes | Spike detection via [SpikeInterface](https://spikeinterface.readthedocs.io/en/stable/); requires `pip install spikeinterface` (see [extending_synaptipy.md](extending_synaptipy.md#11-spikeinterface-integration-plugin)) |
 
-Copy any of these files to `~/.synaptipy/plugins/` and edit your copy to create
-a personalised variant without modifying the Synaptipy installation.
+Edit a downloaded copy in `~/.synaptipy/plugins/` to create a personalised
+variant without modifying the Synaptipy installation.
 
 ### Command Line Arguments
 

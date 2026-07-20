@@ -55,6 +55,9 @@ class DataCache:
                 return
             self.max_size = max_size
             self._cache: OrderedDict[Path, Recording] = OrderedDict()
+            # A path alone is not a safe cache identity: acquisition/export
+            # workflows can replace a recording without changing its name.
+            self._signatures: Dict[Path, Optional[Tuple[int, int]]] = {}
 
             # Active Trace State (Single Source of Truth for Live Analysis)
             # Tuple: (data_array, sampling_rate, metadata_dict)
@@ -91,6 +94,12 @@ class DataCache:
 
         with self._lock:
             if path in self._cache:
+                if self._signatures.get(path) != self._file_signature(path):
+                    recording = self._cache.pop(path)
+                    self._signatures.pop(path, None)
+                    self._cleanup_recording(recording)
+                    log.info("Invalidated stale cache entry for: %s", path.name)
+                    return None
                 # Move to end (most recently used)
                 recording = self._cache.pop(path)
                 self._cache[path] = recording
@@ -122,10 +131,12 @@ class DataCache:
 
             # Add new entry
             self._cache[path] = recording
+            self._signatures[path] = self._file_signature(path)
 
             # Evict oldest entries if cache is full
             while len(self._cache) > self.max_size:
                 oldest_path, oldest_recording = self._cache.popitem(last=False)
+                self._signatures.pop(oldest_path, None)
                 log.debug(f"Evicted from cache: {oldest_path.name}")
                 # Clean up the evicted recording if needed
                 self._cleanup_recording(oldest_recording)
@@ -148,6 +159,7 @@ class DataCache:
         with self._lock:
             if path in self._cache:
                 recording = self._cache.pop(path)
+                self._signatures.pop(path, None)
                 self._cleanup_recording(recording)
                 log.debug(f"Removed from cache: {path.name}")
                 return True
@@ -161,6 +173,7 @@ class DataCache:
             for recording in self._cache.values():
                 self._cleanup_recording(recording)
             self._cache.clear()
+            self._signatures.clear()
             self._active_trace = None
 
     def size(self) -> int:
@@ -174,11 +187,19 @@ class DataCache:
             return len(self._cache) >= self.max_size
 
     def contains(self, path: Path) -> bool:
-        """Check if a path exists in the cache."""
+        """Check whether *path* has a current, non-stale cache entry."""
         if not isinstance(path, Path):
             path = Path(path)
         with self._lock:
-            return path in self._cache
+            if path not in self._cache:
+                return False
+            if self._signatures.get(path) != self._file_signature(path):
+                recording = self._cache.pop(path)
+                self._signatures.pop(path, None)
+                self._cleanup_recording(recording)
+                log.info("Invalidated stale cache entry for: %s", path.name)
+                return False
+            return True
 
     def get_stats(self) -> Dict[str, Any]:
         """
@@ -227,6 +248,15 @@ class DataCache:
             self._active_trace = None
 
     # --- Internal Cleanup ---
+
+    @staticmethod
+    def _file_signature(path: Path) -> Optional[Tuple[int, int]]:
+        """Return ``(size, mtime_ns)`` or ``None`` when the path is unavailable."""
+        try:
+            stat = path.stat()
+            return stat.st_size, stat.st_mtime_ns
+        except OSError:
+            return None
 
     def _cleanup_recording(self, recording: Recording) -> None:
         """

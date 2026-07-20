@@ -31,8 +31,21 @@ hiddenimports += collect_submodules("pynwb")
 hiddenimports += collect_submodules("hdmf")
 hiddenimports += collect_submodules("dask")
 
-# Include our local resources (icons, stylesheets, and compiled Qt Help docs)
-datas = [("src/synaptipy/resources", "synaptipy/resources")]
+# Include user-facing local resources while excluding Sphinx build caches and
+# internal development reports.  The rendered HTML manual remains available
+# offline in the desktop bundle.
+datas = []
+_RESOURCE_ROOT = os.path.join("src", "synaptipy", "resources")
+_RESOURCE_EXCLUDED_PARTS = {".doctrees", "_sources", "_modules", "development_logs", "decisions", "__pycache__"}
+for _root, _dirs, _files in os.walk(_RESOURCE_ROOT):
+    _dirs[:] = [d for d in _dirs if d not in _RESOURCE_EXCLUDED_PARTS]
+    for _filename in _files:
+        if _filename.endswith((".pyc", ".pyo")) or _filename == ".DS_Store":
+            continue
+        _source = os.path.join(_root, _filename)
+        _relative_parent = os.path.relpath(_root, _RESOURCE_ROOT)
+        _destination = os.path.join("synaptipy", "resources", _relative_parent)
+        datas.append((_source, _destination))
 # Example plugins shipped in-repo -- consumed via EXAMPLES_PLUGIN_DIR in frozen builds
 datas += [("examples/plugins", "synaptipy/examples/plugins")]
 datas += collect_data_files("pynwb")

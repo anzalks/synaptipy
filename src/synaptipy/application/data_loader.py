@@ -38,7 +38,9 @@ class DataLoader(QtCore.QObject):
 
     # Qt signals
     data_ready = QtCore.Signal(object)  # Emits the loaded Recording object
-    data_error = QtCore.Signal(str)  # Emits error message if loading fails
+    # Emits ``(path, message)`` for loader failures.  Object keeps direct
+    # callers/tests that emit a legacy string compatible with the UI slot.
+    data_error = QtCore.Signal(object)
     loading_started = QtCore.Signal(str)  # Emits file path when loading starts
     loading_progress = QtCore.Signal(int)  # Emits progress percentage (0-100)
 
@@ -84,6 +86,10 @@ class DataLoader(QtCore.QObject):
             pass  # Best-effort; fall back to caller's choice
         return False
 
+    def _emit_error(self, file_path: Path, message: str) -> None:
+        """Report an error with the path needed to retire the right request."""
+        self.data_error.emit((Path(file_path), message))
+
     @QtCore.Slot(Path, bool)
     def load_file(self, file_path: Path, lazy_load: bool = False) -> None:  # noqa: C901
         """
@@ -115,13 +121,13 @@ class DataLoader(QtCore.QObject):
             if not file_path.exists():
                 error_msg = f"File not found: {file_path}"
                 log.error(error_msg)
-                self.data_error.emit(error_msg)
+                self._emit_error(file_path, error_msg)
                 return
 
             if not file_path.is_file():
                 error_msg = f"Path is not a file: {file_path}"
                 log.error(error_msg)
-                self.data_error.emit(error_msg)
+                self._emit_error(file_path, error_msg)
                 return
 
             self.loading_progress.emit(20)
@@ -147,13 +153,13 @@ class DataLoader(QtCore.QObject):
             if not isinstance(recording_data, Recording):
                 error_msg = f"NeoAdapter returned invalid data type: {type(recording_data)}"
                 log.error(error_msg)
-                self.data_error.emit(error_msg)
+                self._emit_error(file_path, error_msg)
                 return
 
             if not recording_data.channels:
                 error_msg = f"No channels found in file: {file_path}"
                 log.error(error_msg)
-                self.data_error.emit(error_msg)
+                self._emit_error(file_path, error_msg)
                 return
 
             self.loading_progress.emit(90)
@@ -172,13 +178,13 @@ class DataLoader(QtCore.QObject):
             # Handle known Synaptipy errors
             error_msg = f"Synaptipy error loading {file_path}: {e}"
             log.error(error_msg)
-            self.data_error.emit(error_msg)
+            self._emit_error(file_path, error_msg)
 
         except Exception as e:
             # Handle unexpected errors
             error_msg = f"Unexpected error loading {file_path}: {e}"
             log.error(error_msg, exc_info=True)
-            self.data_error.emit(error_msg)
+            self._emit_error(file_path, error_msg)
 
         finally:
             # Ensure progress is complete

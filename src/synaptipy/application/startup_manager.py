@@ -111,6 +111,7 @@ class StartupManager(QtCore.QObject):
         self.main_window: Optional[MainWindow] = None
         self._loading_complete = False
         self._start_time = time.time()
+        self._plugin_load_failures = []
 
     def start_loading(self) -> WelcomeScreen:
         """
@@ -163,7 +164,7 @@ class StartupManager(QtCore.QObject):
         try:
             from synaptipy.application.plugin_manager import PluginManager
 
-            PluginManager.load_plugins()
+            self._plugin_load_failures = PluginManager.load_plugins()
         except Exception as e:
             log.error(f"Critical error loading plugins during startup: {e}")
 
@@ -268,9 +269,29 @@ class StartupManager(QtCore.QObject):
                 # Start background version check — done after show() so the
                 # main-thread event loop is fully running when the signal fires.
                 self._start_version_check()
+                if self._plugin_load_failures:
+                    QtCore.QTimer.singleShot(0, self._show_plugin_load_failures)
 
             except Exception as e:
                 log.error(f"Transition to main window failed: {e}", exc_info=True)
+
+    def _show_plugin_load_failures(self) -> None:
+        """Inform the user about failed optional plugins after startup.
+
+        A broken plugin must never prevent Synaptipy or the remaining plugins
+        from loading.  One concise OK-only dialog makes the failure visible
+        without interrupting startup with a dialog per file.
+        """
+        if not self._plugin_load_failures or self.main_window is None:
+            return
+        details = "\n".join(f"• {failure.path.name}: {failure.reason}" for failure in self._plugin_load_failures)
+        QtWidgets.QMessageBox.warning(
+            self.main_window,
+            "Some Plugins Were Not Loaded",
+            "Synaptipy started normally, but the following optional plugins "
+            f"could not be loaded:\n\n{details}\n\n"
+            "The remaining analyses are available. See the log for details.",
+        )
 
     def _start_version_check(self) -> None:
         """Launch :class:`VersionCheckerWorker` once the main window is visible."""

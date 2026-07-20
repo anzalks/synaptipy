@@ -112,6 +112,15 @@ class TestUpdatePerformanceSettings:
         engine.update_performance_settings({"max_cpu_cores": 0})
         assert engine.max_workers >= 1
 
+    def test_ram_budget_caps_parallel_worker_count(self, tmp_path):
+        """A configured RAM budget must reduce unsafe file-level parallelism."""
+        large_path = tmp_path / "large.abf"
+        with large_path.open("wb") as handle:
+            handle.truncate(200 * 1024 * 1024)
+
+        engine = BatchAnalysisEngine(max_workers=4, max_ram_allocation_gb=0.5)
+        assert engine._effective_worker_count([large_path, large_path]) == 1
+
 
 # ---------------------------------------------------------------------------
 # _append_batch_error_log()

@@ -175,7 +175,8 @@ class PreferencesDialog(QtWidgets.QDialog):
         plugins_layout = QtWidgets.QVBoxLayout(plugins_group)
 
         plugins_description = QtWidgets.QLabel(
-            "Custom plugins are loaded from <b>~/.synaptipy/plugins/</b> and " "<b>examples/plugins/</b> at startup."
+            "Custom plugins are loaded from <b>~/.synaptipy/plugins/</b> at startup. "
+            "Use <b>Help → Download Example Plugins…</b> to install the optional examples."
         )
         plugins_description.setWordWrap(True)
         style_as_subdued(plugins_description)
@@ -183,7 +184,7 @@ class PreferencesDialog(QtWidgets.QDialog):
 
         self.enable_plugins_checkbox = QtWidgets.QCheckBox("Enable Custom Plugins")
         self.enable_plugins_checkbox.setToolTip(
-            "When checked, Synaptipy loads Python plugins from the user and examples plugin directories."
+            "When checked, Synaptipy loads Python plugins from your user plugin directory."
         )
         plugins_layout.addWidget(self.enable_plugins_checkbox)
 

@@ -3,15 +3,17 @@
 """
 Plugin Manager for synaptipy.
 
-Scans two plugin directories and dynamically loads external Python scripts.
+Scans the user plugin directory and, when running from a source checkout or
+desktop bundle, an optional example-plugin directory.
 Any script using the @AnalysisRegistry.register decorator will automatically
 populate the UI and Batch Engine.
 
 Search order:
 
-1. Built-in examples: ``<project_root>/examples/plugins/`` - shipped with the
-   package so features work out-of-the-box.
-2. User plugins: ``~/.synaptipy/plugins/`` - personal or third-party additions.
+1. Example plugins: available in source checkouts and desktop bundles, and
+   downloadable from the application's Help menu.
+2. User plugins: ``~/.synaptipy/plugins/`` - personal, downloaded, or
+   third-party additions.
 
 When the same stem name appears in both directories the user's copy takes
 precedence and a warning is logged.
@@ -26,6 +28,7 @@ import importlib.util
 import logging
 import os
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
 
@@ -39,14 +42,22 @@ PLUGIN_DIR = Path.home() / ".synaptipy" / "plugins"
 _THIS_FILE = Path(__file__).resolve()
 
 
+@dataclass(frozen=True)
+class PluginLoadFailure:
+    """A plugin that failed to import without stopping the application."""
+
+    path: Path
+    reason: str
+
+
 def _get_bundled_plugin_dir() -> Optional[Path]:
-    """Return the bundled examples/plugins/ directory if it exists.
+    """Return an optional example-plugin directory if it exists.
 
     Tries three strategies in order so the lookup works in all deployment
-    modes: editable / source-tree installs, regular pip wheel installs where
-    examples are shipped as Synaptipy package data, and PyInstaller bundles.
-    Returns ``None`` if the directory cannot be located -- callers must handle
-    this gracefully and continue to the user plugin dir.
+    The normal pip wheel deliberately does not contain downloadable examples;
+    users obtain those through Help -> Download Example Plugins.  Source-tree
+    and PyInstaller builds may include examples for development/demo use.
+    Returns ``None`` when no optional directory is present.
     """
     # Strategy 0: PyInstaller one-folder bundle
     if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
@@ -61,9 +72,7 @@ def _get_bundled_plugin_dir() -> Optional[Path]:
     if candidate.is_dir():
         return candidate
 
-    # Strategy 2: examples shipped as Synaptipy package data
-    # (works when pyproject.toml includes examples/plugins/*.py under
-    # [tool.setuptools.package-data] "Synaptipy")
+    # Strategy 2: examples included by a desktop bundle as package data.
     try:
         ref = importlib.resources.files("synaptipy") / "examples" / "plugins"
         resolved = Path(str(ref))
@@ -72,14 +81,7 @@ def _get_bundled_plugin_dir() -> Optional[Path]:
     except (TypeError, FileNotFoundError, AttributeError):
         pass
 
-    # Strategy 3: examples installed alongside the package in site-packages
-    pkg_spec = importlib.util.find_spec("synaptipy")
-    if pkg_spec and pkg_spec.origin:
-        candidate = Path(pkg_spec.origin).parent.parent / "examples" / "plugins"
-        if candidate.is_dir():
-            return candidate
-
-    log.debug("Bundled plugin dir not found -- skipping")
+    log.debug("Optional example plugin dir not found; downloaded plugins remain available.")
     return None
 
 
@@ -134,8 +136,8 @@ class PluginManager:
         return result
 
     @classmethod
-    def _load_single_plugin(cls, p_file: Path) -> None:
-        """Attempt to import one plugin file and log any failure gracefully."""
+    def _load_single_plugin(cls, p_file: Path) -> Optional[PluginLoadFailure]:
+        """Attempt to import one plugin file without stopping other plugins."""
         module_name = f"synaptipy_plugin_{p_file.stem}"
         try:
             # Always evict any cached module so @AnalysisRegistry.register
@@ -147,18 +149,23 @@ class PluginManager:
                 del sys.modules[module_name]
             spec = importlib.util.spec_from_file_location(module_name, str(p_file))
             if spec is None or spec.loader is None:
-                log.warning(f"Could not load plugin specification for {p_file.name}")
-                return
+                reason = "Could not create an import specification."
+                log.warning("Could not load plugin specification for %s", p_file.name)
+                return PluginLoadFailure(p_file, reason)
             module = importlib.util.module_from_spec(spec)
             sys.modules[module_name] = module
             spec.loader.exec_module(module)
             log.info(f"Successfully loaded plugin: {p_file.name}")
+            return None
         except ImportError as e:
             log.error(f"ImportError while loading plugin '{p_file.name}': {e}", exc_info=False)
+            return PluginLoadFailure(p_file, f"ImportError: {e}")
         except SyntaxError as e:
             log.error(f"SyntaxError in plugin '{p_file.name}': {e}", exc_info=False)
+            return PluginLoadFailure(p_file, f"SyntaxError: {e}")
         except Exception as e:
             log.error(f"Unexpected error loading plugin '{p_file.name}': {e}", exc_info=False)
+            return PluginLoadFailure(p_file, f"{type(e).__name__}: {e}")
 
     @classmethod
     def _warn_user_plugins(cls, user_plugin_files: List[Path]) -> bool:
@@ -237,7 +244,7 @@ class PluginManager:
         return True
 
     @classmethod
-    def load_plugins(cls):
+    def load_plugins(cls) -> List[PluginLoadFailure]:
         """
         Dynamically imports all plugins discovered by ``get_plugin_files()``.
 
@@ -250,14 +257,14 @@ class PluginManager:
         """
         if not QSettings().value("enable_plugins", True, type=bool):
             log.info("Plugin loading is disabled via Preferences (enable_plugins=False). Skipping.")
-            return
+            return []
 
         cls.create_plugin_directory()
         plugin_files = cls.get_plugin_files()
 
         if not plugin_files:
             log.debug("No plugins found.")
-            return
+            return []
 
         log.info("Discovered %d plugin(s). Attempting to load...", len(plugin_files))
 
@@ -268,7 +275,7 @@ class PluginManager:
             plugin_files = [p for p in plugin_files if p not in user_plugins]
             if not plugin_files:
                 log.info("No example plugins to load after user declined external plugins.")
-                return
+                return []
 
         # Make both plugin directories importable so plugins can pull in
         # sibling helper modules if they need to.
@@ -279,13 +286,17 @@ class PluginManager:
             if search_dir.is_dir() and dir_str not in sys.path:
                 sys.path.insert(0, dir_str)
 
+        failures = []
         for p_file in plugin_files:
-            cls._load_single_plugin(p_file)
+            failure = cls._load_single_plugin(p_file)
+            if failure is not None:
+                failures.append(failure)
 
-        log.info("Finished loading plugins.")
+        log.info("Finished loading plugins (%d failed).", len(failures))
+        return failures
 
     @classmethod
-    def reload_plugins(cls):
+    def reload_plugins(cls) -> List[PluginLoadFailure]:
         """
         Hot-reload plugins without restarting the application.
 
@@ -296,30 +307,34 @@ class PluginManager:
         """
         from synaptipy.core.analysis.registry import AnalysisRegistry
 
-        AnalysisRegistry.unregister_plugins()
-        log.debug("Plugin analyses unregistered for hot-reload.")
-
         if not QSettings().value("enable_plugins", True, type=bool):
+            AnalysisRegistry.unregister_plugins()
             log.info("Plugin reload: enable_plugins is False - plugins will not be re-loaded.")
-            return
+            return []
 
         cls.create_plugin_directory()
         plugin_files = cls.get_plugin_files()
 
         if not plugin_files:
             log.debug("No plugins found during hot-reload.")
-            return
+            AnalysisRegistry.unregister_plugins()
+            return []
+
+        # Confirm changed user code *before* discarding working registrations.
+        # Cancelling the warning therefore leaves the existing UI untouched.
+        user_plugins = [p for p in plugin_files if p.parent.resolve() == PLUGIN_DIR.resolve()]
+        if not cls._warn_user_plugins(user_plugins):
+            log.info("Plugin reload cancelled; keeping the currently loaded plugins.")
+            return []
+
+        AnalysisRegistry.unregister_plugins()
+        log.debug("Plugin analyses unregistered for hot-reload.")
 
         log.info("Hot-reloading %d plugin(s)...", len(plugin_files))
 
-        bundled_dir = _get_bundled_plugin_dir()
-        sys_path_dirs = ([bundled_dir] if bundled_dir is not None else []) + [PLUGIN_DIR]
-        for search_dir in sys_path_dirs:
-            dir_str = str(search_dir)
-            if search_dir.is_dir() and dir_str not in sys.path:
-                sys.path.insert(0, dir_str)
-
-        for p_file in plugin_files:
-            cls._load_single_plugin(p_file)
-
-        log.info("Hot-reload complete.")
+        # ``load_plugins`` repeats the fingerprint comparison, but it now
+        # matches the acknowledgement above and performs the common import and
+        # error-reporting path used by GUI, CLI, and worker processes.
+        failures = cls.load_plugins()
+        log.info("Hot-reload complete (%d failed).", len(failures))
+        return failures
