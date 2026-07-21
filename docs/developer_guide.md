@@ -287,14 +287,24 @@ CI runs on all three platforms across Python 3.10, 3.11, and 3.12:
 CI enforces `black --check`, `isort --check`, and `flake8`. PRs that fail
 any of these checks are rejected.
 
-Two additional jobs run automatically:
+Additional release-safety jobs run automatically on every push and pull request:
 
 - **`minimum-viable`**: Python 3.10 with exact lower-bound versions
   (`numpy==2.0.0`, `scipy==1.14.0`, `neo==0.14.0`, `pyqtgraph==0.13.3`,
   `pyside6==6.7.3`). Confirms the stated minimum requirements actually work.
-- **`bleeding-edge`**: Python 3.12 with all upgradable deps set to latest
-  (PySide6 excluded). Runs with `continue-on-error: true` to give early
-  warning of upcoming breakage without blocking the PR.
+- **`latest-dependencies`**: Python 3.12 with all upgradable dependencies set
+  to their latest compatible versions (PySide6 remains pinned at 6.7.3). It is
+  required, not advisory.
+- **`hidpi`** and **`notebooks`**: high-DPI Qt/pyqtgraph checks and executable
+  tutorial notebooks, respectively.
+- **`wheel-install`**: builds the wheel and installs it into a clean virtual
+  environment, verifying the user-facing pip installation path.
+- **`security`**: scans the packaged source for common security issues.
+
+After all required jobs pass for a direct push to `main`, CI creates the
+validated release tag and dispatches the installer and release workflows. The
+release workflow repeats the full cross-platform test matrix and verifies the
+documentation and published distribution before publishing.
 
 ### Golden Master Tests
 

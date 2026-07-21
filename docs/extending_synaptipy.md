@@ -935,7 +935,8 @@ Save this as `~/.synaptipy/plugins/synaptic_charge.py` (or copy it from
 """
 Custom Synaptipy Plugin: Synaptic Charge Transfer (Area Under Curve).
 
-Drop this file in ~/.synaptipy/plugins/ and restart synaptipy.
+Drop this file in ~/.synaptipy/plugins/, then toggle **Enable Custom Plugins**
+off and on in Preferences to reload it without restarting Synaptipy.
 A new "Synaptic Charge Transfer" tab will appear in the Analyser.
 """
 import logging

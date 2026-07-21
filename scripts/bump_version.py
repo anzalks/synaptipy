@@ -17,8 +17,9 @@ Required update targets
 - CHANGELOG.md               — prepends a new [X.Y.Z] section under [Unreleased]
 
 The script also updates matching release references in ``docs/references.md``,
-``paper/envs/*.txt``, and ``README.md`` when they exist.  Those legacy or
-derived references are optional and cause a warning, not a failed bump.
+the cross-platform installer guide, ``paper/envs/*.txt``, and ``README.md``
+when they exist.  Those legacy or derived references are optional and cause a
+warning, not a failed bump.
 
 What this script NEVER touches
 --------------------------------
@@ -186,6 +187,16 @@ def bump(old_version: str, new_version: str, *, dry_run: bool = False) -> None:
         f"Visualization and Analysis Suite (v{new_version}).",
         dry_run=dry_run,
     )
+
+    # Cross-platform setup guide — update any versioned installer filename
+    # examples when present. The guide deliberately uses wildcard filenames in
+    # normal prose, but this keeps historical/versioned release instructions
+    # correct if a maintainer adds a concrete example.
+    cross_platform_guide = ROOT / "docs" / "development" / "manuals" / "CROSS_PLATFORM_SETUP.md"
+    if cross_platform_guide.exists() and old_version in cross_platform_guide.read_text(encoding="utf-8"):
+        _replace_all(cross_platform_guide, old_version, new_version, dry_run=dry_run)
+    else:
+        print("  cross-platform installer guide has no versioned examples to update")
 
     # paper/envs/*.txt
     envs_dir = ROOT / "paper" / "envs"

@@ -22,6 +22,7 @@ def _release_repo(tmp_path: Path) -> Path:
     (root / "scripts").mkdir(parents=True)
     shutil.copy2(BUMP_SCRIPT, root / "scripts" / "bump_version.py")
     (root / "src" / "synaptipy").mkdir(parents=True)
+    (root / "docs" / "development" / "manuals").mkdir(parents=True)
     (root / "installer" / "linux").mkdir(parents=True)
     (root / "pyproject.toml").write_text('version = "1.0.0"\n', encoding="utf-8")
     (root / "src" / "synaptipy" / "__init__.py").write_text('__version__ = "1.0.0"\n', encoding="utf-8")
@@ -29,6 +30,9 @@ def _release_repo(tmp_path: Path) -> Path:
     (root / "installer" / "windows_setup.iss").write_text('#define MyAppVersion "1.0.0"\n', encoding="utf-8")
     (root / "installer" / "linux" / "synaptipy.desktop").write_text("X-AppVersion=1.0.0\n", encoding="utf-8")
     (root / "CHANGELOG.md").write_text("## [Unreleased]\n", encoding="utf-8")
+    (root / "docs" / "development" / "manuals" / "CROSS_PLATFORM_SETUP.md").write_text(
+        "Download Synaptipy_v1.0.0.dmg from the releases page.\n", encoding="utf-8"
+    )
     _git(root, "init")
     _git(root, "config", "user.email", "tests@example.invalid")
     _git(root, "config", "user.name", "Synaptipy tests")
@@ -57,6 +61,9 @@ def test_bump_commits_and_creates_local_annotated_tag(tmp_path: Path) -> None:
     assert "chore: bump version to 1.0.1" in _git(root, "log", "-1", "--format=%s").stdout
     assert _git(root, "cat-file", "-t", "v1.0.1").stdout.strip() == "tag"
     assert 'version = "1.0.1"' in (root / "pyproject.toml").read_text(encoding="utf-8")
+    assert "Synaptipy_v1.0.1.dmg" in (root / "docs" / "development" / "manuals" / "CROSS_PLATFORM_SETUP.md").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_bump_rejects_a_dirty_repository(tmp_path: Path) -> None:

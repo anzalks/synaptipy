@@ -21,7 +21,7 @@ modules spanning intrinsic membrane properties, action potential characterizatio
 event detection, and evoked responses (Evoked Sync, Paired-Pulse Ratio, Stimulus Train STP).
 A batch processing engine implements composable analysis pipelines. An extensible plugin
 interface permits integration of user-written analysis routines without modification to the
-core package. Three example plugins are distributed with the application. File I/O is handled
+core package. Five example plugins are available for download from the application. File I/O is handled
 via `Neo <https://neo.readthedocs.io/en/latest/>`_, supporting Axon ABF, WinWCP, CED/Spike2,
 Intan, Igor Pro, NWB, Open Ephys, and additional formats. NWB 2.x export is provided via
 `PyNWB <https://pynwb.readthedocs.io/en/stable/>`_.

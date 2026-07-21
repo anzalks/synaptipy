@@ -7,13 +7,12 @@ reproducible science. This tutorial covers every feature of the application in d
 including the mathematical methods used in each analysis module.
 
 ```{note}
-Screenshots in this tutorial reflect the current release.  Where a screenshot
+Screenshots in this tutorial reflect the current release. Where a screenshot
 shows a UI element that differs from what you see, the behaviour described in
-the text is authoritative.  The **Manual Trial Averaging** panel (Section 1.3)
-and the **Analysis Selection** panel (Section 1.6) were updated in v0.1.5b6:
-the "Selected:" label now shows only trials queued for cross-file analysis
-(not the display-only "Plot Selected Trials" value), and the "Mark Current
-Trial" workflow requires **Cycle Single Trial** plot mode.
+the text is authoritative. The **Manual Trial Averaging** panel's
+"Selected:" label shows only trials queued for cross-file analysis (not the
+display-only "Plot Selected Trials" value), and **Mark Current Trial** requires
+**Cycle Single Trial** plot mode.
 ```
 
 ---
@@ -535,9 +534,11 @@ return {
 If your function encounters an error, return `{"error": "message"}` and the GUI
 will display the message instead of a results table.
 
-#### Step 6 - Restart and use
+#### Step 6 - Reload and use
 
-Save your file, restart Synaptipy, and your new tab appears in the Analyser:
+Save your file, then open **Preferences** and toggle **Enable Custom Plugins**
+off and back on. Synaptipy reloads the plugin and the new tab appears in the
+Analyser without restarting the application:
 
 ```
 Analyser → ... | Baseline | Spikes | Synaptic Charge (AUC)
@@ -550,7 +551,8 @@ immediately.
 
 #### Tips
 
-- **No rebuild needed** - just save the `.py` file and restart synaptipy.
+- **No rebuild needed** - save the `.py` file, then toggle **Enable Custom
+  Plugins** off and on in Preferences to reload it.
 - **Errors are safe** - if your plugin has a syntax error or crashes, Synaptipy
   logs the error and keeps running (your tab simply won't appear).  Check the log
   at `~/.synaptipy/logs/` (Windows: `C:\Users\<YourUsername>\.synaptipy\logs\`).

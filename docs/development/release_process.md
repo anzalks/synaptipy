@@ -43,10 +43,12 @@ The script updates these required release locations:
 - the Windows installer version and Linux desktop-entry version;
 - `CHANGELOG.md`, including its release comparison links.
 
-It also updates matching release text in `docs/references.md` and versioned
-paper-environment files when present. Legacy version text in `README.md` is
-updated only when it exists; it is not a required release target. Missing
-optional text produces a warning rather than a partial release.
+It also updates matching release text in `docs/references.md`, the
+cross-platform installer guide, versioned paper-environment files, and
+`README.md` when present. These derived references are optional: missing text
+produces a warning rather than a partial release. The installer guide normally
+uses wildcard filenames, so it only changes when a maintainer has deliberately
+included a concrete versioned example.
 
 On a normal run, the script stages the resulting clean release update with
 `git add -A`, creates the commit `chore: bump version to X.Y.Z`, and creates an
