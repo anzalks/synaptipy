@@ -78,7 +78,9 @@ class SessionManager(QObject):
     def current_recording(self, recording: Optional[Recording]):
         if self._current_recording != recording:
             self._current_recording = recording
-            log.debug(f"Current recording changed to: {recording.source_file.name if recording else 'None'}")
+            source_file = getattr(recording, "source_file", None) if recording else None
+            source_name = getattr(source_file, "name", "In-memory recording") if recording else "None"
+            log.debug(f"Current recording changed to: {source_name}")
             self.current_recording_changed.emit(recording)
 
     @property

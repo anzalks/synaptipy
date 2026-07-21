@@ -170,6 +170,13 @@ def test_export_analysis_results(base_recording, base_metadata, tmp_path):
     exporter.export(base_recording, out_file, base_metadata, analysis_results=analysis_results)
     assert out_file.exists()
 
+    from pynwb import NWBHDF5IO
+
+    with NWBHDF5IO(str(out_file), "r") as io:
+        nwbfile = io.read()
+        assert "analysis" in nwbfile.processing
+        assert "Vm_event_detection" in nwbfile.processing["analysis"].data_interfaces
+
 
 def test_export_invalid_session_metadata(base_recording, base_metadata, tmp_path):
     exporter = NWBExporter()

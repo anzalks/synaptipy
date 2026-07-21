@@ -10,6 +10,7 @@ Email: anzal.ks@gmail.com
 """
 
 import logging
+import math
 from typing import Any, Dict, Optional, Tuple
 
 import pyqtgraph as pg
@@ -33,6 +34,8 @@ def set_force_opaque_trials(force_opaque: bool):
     # Trigger a preference update signal so plots refresh immediately
     manager = get_plot_customization_manager()
     manager._pen_cache.clear()  # Clear cache to force pen regeneration
+    manager._settings.setValue("performance/force_opaque_trials", _force_opaque_trials)
+    QtCore.QTimer.singleShot(0, manager._settings.sync)
     # Direct emission for immediate response
     _plot_signals.preferences_updated.emit()
 
@@ -90,9 +93,11 @@ class PlotCustomizationManager:
 
     def __init__(self):
         """Initialize with default plotting preferences."""
+        global _force_opaque_trials
         self._settings = QtCore.QSettings(APP_NAME, "PlotCustomization")
         self._load_defaults()
         self._load_user_preferences()
+        _force_opaque_trials = self._settings.value("performance/force_opaque_trials", False, type=bool)
 
         # Cache for pens to avoid recreating them every time
         self._pen_cache = {}
@@ -283,29 +288,10 @@ class PlotCustomizationManager:
 
         # Create new pen with proper opacity handling
         color_str = self.defaults["average"]["color"]
-        try:
-            width = float(self.defaults["average"]["width"])
-        except (ValueError, TypeError):
-            width = 1.0
-        opacity = self.defaults["average"]["opacity"]
-
-        # Convert opacity to alpha: opacity 100% = fully opaque (alpha 1.0), opacity 0% = invisible (alpha 0.0)
+        width = self._safe_width(self.defaults["average"]["width"])
+        opacity = self._safe_opacity(self.defaults["average"]["opacity"])
         alpha = opacity / 100.0
-
-        # Convert hex color to QColor with proper alpha
-        from PySide6.QtGui import QColor
-
-        if color_str.startswith("#"):
-            # Parse hex color
-            r = int(color_str[1:3], 16)
-            g = int(color_str[3:5], 16)
-            b = int(color_str[5:7], 16)
-            alpha_value = int(alpha * 255)
-            color = QColor(r, g, b, alpha_value)
-        else:
-            # Named color
-            color = QColor(color_str)
-            color.setAlpha(int(alpha * 255))
+        color = self._make_qcolor(color_str, opacity, fallback="#000000")
 
         pen = pg.mkPen(color=color, width=width)
         log.debug(
@@ -329,11 +315,8 @@ class PlotCustomizationManager:
         # Use the customized single trial color as default
         color_str = self.defaults["single_trial"]["color"]
 
-        try:
-            width = float(self.defaults["single_trial"]["width"])
-        except (ValueError, TypeError):
-            width = 1.0
-        opacity = self.defaults["single_trial"]["opacity"]
+        width = self._safe_width(self.defaults["single_trial"]["width"])
+        opacity = self._safe_opacity(self.defaults["single_trial"]["opacity"])
 
         # Convert opacity to alpha: opacity 100% = fully opaque (alpha 1.0), opacity 0% = invisible (alpha 0.0)
         alpha = opacity / 100.0
@@ -344,20 +327,7 @@ class PlotCustomizationManager:
             log.debug("[get_single_trial_pen] Performance mode ON: Forcing alpha to 1.0")
             alpha = 1.0
 
-        # Convert hex color to QColor with proper alpha
-        from PySide6.QtGui import QColor
-
-        if color_str.startswith("#"):
-            # Parse hex color
-            r = int(color_str[1:3], 16)
-            g = int(color_str[3:5], 16)
-            b = int(color_str[5:7], 16)
-            alpha_value = int(alpha * 255)
-            color = QColor(r, g, b, alpha_value)
-        else:
-            # Named color
-            color = QColor(color_str)
-            color.setAlpha(int(alpha * 255))
+        color = self._make_qcolor(color_str, round(alpha * 100), fallback="#377eb8")
 
         pen = pg.mkPen(color=color, width=width)
         log.debug(
@@ -379,20 +349,14 @@ class PlotCustomizationManager:
             return cached_pen
 
         # Create new pen with proper opacity handling
-        try:
-            width = float(self.defaults["grid"]["width"])
-        except (ValueError, TypeError):
-            width = 1.0
-        opacity = self.defaults["grid"]["opacity"]
+        width = self._safe_width(self.defaults["grid"]["width"])
+        opacity = self._safe_opacity(self.defaults["grid"]["opacity"])
 
         # Convert opacity to alpha: opacity 100% = fully opaque (alpha 1.0), opacity 0% = invisible (alpha 0.0)
         alpha = opacity / 100.0
 
-        # Create color with proper alpha - always black for grid
-        from PySide6.QtGui import QColor
-
-        alpha_value = int(alpha * 255)
-        color = QColor(0, 0, 0, alpha_value)  # Black with custom alpha
+        # Grid colour is intentionally fixed to black by the customization UI.
+        color = self._make_qcolor("#000000", opacity, fallback="#000000")
 
         pen = pg.mkPen(color=color, width=width)
         log.debug(
@@ -630,18 +594,41 @@ class PlotCustomizationManager:
         except Exception as e:
             log.debug(f"Could not update plot item pens: {e}")
 
-    def _make_qcolor(self, color_str: str, opacity: int):
-        """Convert a hex/named colour string and opacity (0-100) to QColor."""
+    @staticmethod
+    def _safe_opacity(value: Any, default: int = 100) -> int:
+        """Coerce persisted opacity safely into the UI's 0–100 range."""
+        try:
+            return max(0, min(100, int(float(value))))
+        except (TypeError, ValueError):
+            return default
+
+    @staticmethod
+    def _safe_width(value: Any, default: float = 1.0) -> float:
+        """Coerce persisted pen widths to finite positive values."""
+        try:
+            width = float(value)
+            return width if math.isfinite(width) and width > 0 else default
+        except (TypeError, ValueError):
+            return default
+
+    @staticmethod
+    def _safe_size(value: Any, default: int = 8) -> int:
+        """Coerce persisted marker sizes to a finite positive integer."""
+        try:
+            size = int(float(value))
+            return size if size > 0 else default
+        except (TypeError, ValueError):
+            return default
+
+    def _make_qcolor(self, color_str: Any, opacity: Any, fallback: str = "#000000"):
+        """Convert a persisted colour safely, falling back when it is invalid."""
         from PySide6.QtGui import QColor
 
-        alpha_value = int(max(0, min(100, opacity)) / 100.0 * 255)
-        if color_str.startswith("#"):
-            r = int(color_str[1:3], 16)
-            g = int(color_str[3:5], 16)
-            b = int(color_str[5:7], 16)
-            return QColor(r, g, b, alpha_value)
-        color = QColor(color_str)
-        color.setAlpha(alpha_value)
+        color = QColor(str(color_str))
+        if not color.isValid():
+            log.warning("Invalid saved plot colour %r; using %s.", color_str, fallback)
+            color = QColor(fallback)
+        color.setAlpha(int(self._safe_opacity(opacity) / 100.0 * 255))
         return color
 
     @staticmethod
@@ -667,10 +654,10 @@ class PlotCustomizationManager:
         """
         prefs = self.defaults.get("scatter_points", {})
         color_str = prefs.get("color", "#ffff00")
-        opacity = int(prefs.get("opacity", 100))
-        size = int(prefs.get("size", 8))  # noqa: F841 — size consumed by caller
-        fill_color = self._make_qcolor(color_str, opacity)
-        border_color = self._make_qcolor(color_str, 100)
+        opacity = self._safe_opacity(prefs.get("opacity", 100))
+        size = self._safe_size(prefs.get("size", 8))  # noqa: F841 — size consumed by caller
+        fill_color = self._make_qcolor(color_str, opacity, fallback="#ffff00")
+        border_color = self._make_qcolor(color_str, 100, fallback="#ffff00")
         pen = pg.mkPen(color=border_color, width=1)
         brush = pg.mkBrush(color=fill_color)
         return pen, brush
@@ -681,14 +668,14 @@ class PlotCustomizationManager:
 
     def get_scatter_size(self) -> int:
         """Return the symbol size (pixels) for scatter point items."""
-        return int(self.defaults.get("scatter_points", {}).get("size", 8))
+        return self._safe_size(self.defaults.get("scatter_points", {}).get("size", 8))
 
     def get_selection_window_brush(self) -> "pg.mkBrush":
         """Return brush for LinearRegionItem selection windows."""
         prefs = self.defaults.get("selection_windows", {})
         color_str = prefs.get("color", "#00aaff")
-        opacity = int(prefs.get("opacity", 30))
-        fill_color = self._make_qcolor(color_str, opacity)
+        opacity = self._safe_opacity(prefs.get("opacity", 30))
+        fill_color = self._make_qcolor(color_str, opacity, fallback="#00aaff")
         return pg.mkBrush(color=fill_color)
 
     def get_selection_window_pen(self) -> "pg.mkPen":
@@ -696,7 +683,7 @@ class PlotCustomizationManager:
         prefs = self.defaults.get("selection_windows", {})
         color_str = prefs.get("color", "#00aaff")
         line_style = prefs.get("line_style", "dash")
-        border_color = self._make_qcolor(color_str, 100)
+        border_color = self._make_qcolor(color_str, 100, fallback="#00aaff")
         qt_style = self._line_style_to_qt(line_style)
         return pg.mkPen(color=border_color, width=1, style=qt_style)
 
@@ -704,21 +691,18 @@ class PlotCustomizationManager:
         """Return brush for AUC / synaptic-charge area fills (FillBetweenItem)."""
         prefs = self.defaults.get("auc_fill", {})
         color_str = prefs.get("color", "#ff7700")
-        opacity = int(prefs.get("opacity", 40))
-        fill_color = self._make_qcolor(color_str, opacity)
+        opacity = self._safe_opacity(prefs.get("opacity", 40))
+        fill_color = self._make_qcolor(color_str, opacity, fallback="#ff7700")
         return pg.mkBrush(color=fill_color)
 
     def get_hv_line_pen(self) -> "pg.mkPen":
         """Return pen for horizontal/vertical InfiniteLine markers (thresholds, stim onset)."""
         prefs = self.defaults.get("hv_lines", {})
         color_str = prefs.get("color", "#ff0000")
-        opacity = int(prefs.get("opacity", 80))
-        try:
-            width = float(prefs.get("width", 1))
-        except (ValueError, TypeError):
-            width = 1.0
+        opacity = self._safe_opacity(prefs.get("opacity", 80))
+        width = self._safe_width(prefs.get("width", 1))
         line_style = prefs.get("line_style", "dash")
-        color = self._make_qcolor(color_str, opacity)
+        color = self._make_qcolor(color_str, opacity, fallback="#ff0000")
         qt_style = self._line_style_to_qt(line_style)
         return pg.mkPen(color=color, width=width, style=qt_style)
 
@@ -811,11 +795,8 @@ def get_trace_overlay_pen():
     mgr = get_plot_customization_manager()
     prefs = mgr.defaults.get("trace_overlay", {})
     import pyqtgraph as pg
-    from PySide6.QtGui import QColor
-
-    color = QColor(prefs.get("color", "#00cfff"))
-    color.setAlpha(max(0, min(255, int(prefs.get("opacity", 60) / 100.0 * 255))))
-    return pg.mkPen(color=color, width=int(prefs.get("width", 3)))
+    color = mgr._make_qcolor(prefs.get("color", "#00cfff"), prefs.get("opacity", 60), fallback="#00cfff")
+    return pg.mkPen(color=color, width=mgr._safe_width(prefs.get("width", 3), default=3.0))
 
 
 def get_event_fit_overlay_pen():
@@ -823,11 +804,8 @@ def get_event_fit_overlay_pen():
     mgr = get_plot_customization_manager()
     prefs = mgr.defaults.get("event_fit_overlay", {})
     import pyqtgraph as pg
-    from PySide6.QtGui import QColor
-
-    color = QColor(prefs.get("color", "#ff9900"))
-    color.setAlpha(max(0, min(255, int(prefs.get("opacity", 80) / 100.0 * 255))))
-    return pg.mkPen(color=color, width=int(prefs.get("width", 2)))
+    color = mgr._make_qcolor(prefs.get("color", "#ff9900"), prefs.get("opacity", 80), fallback="#ff9900")
+    return pg.mkPen(color=color, width=mgr._safe_width(prefs.get("width", 2), default=2.0))
 
 
 def get_plot_pens(is_average: bool, trial_index: int = 0) -> pg.Qt.QtGui.QPen:
@@ -841,27 +819,8 @@ def get_plot_pens(is_average: bool, trial_index: int = 0) -> pg.Qt.QtGui.QPen:
     Returns:
         A configured QPen object.
     """
-    from PySide6.QtGui import QColor
-
     manager = get_plot_customization_manager()
-    prefs = manager.get_all_preferences()
-
-    if is_average:
-        config = prefs.get("average", {})
-        color_str = config.get("color", "#FF0000")  # Default red
-        width = config.get("width", 2)
-        opacity = config.get("opacity", 100)
-    else:
-        config = prefs.get("single_trial", {})
-        color_str = config.get("color", "#808080")  # Default gray
-        width = config.get("width", 1)
-        opacity = config.get("opacity", 50)
-
-    color = QColor(color_str)
-    color.setAlphaF(opacity / 100.0)
-
-    pen = pg.mkPen(color=color, width=width)
-    return pen
+    return manager.get_average_pen() if is_average else manager.get_single_trial_pen(trial_index)
 
 
 def apply_plot_theme(plot_widget, background_color: str = "white", axis_color: str = "black"):

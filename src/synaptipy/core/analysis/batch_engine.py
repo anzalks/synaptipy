@@ -33,7 +33,7 @@ import pandas as pd
 
 # Import analysis package to trigger all registrations
 import synaptipy.core.analysis  # noqa: F401 - Import triggers all registrations
-from synaptipy.core.analysis.cross_file_utils import average_padded_trials
+from synaptipy.core.analysis.cross_file_utils import average_padded_trials, time_bases_compatible
 from synaptipy.core.analysis.registry import AnalysisRegistry
 from synaptipy.core.data_model import Recording
 from synaptipy.infrastructure.file_readers import NeoAdapter
@@ -649,12 +649,23 @@ class BatchAnalysisEngine:
                             "times": [],
                             "sampling_rate": channel.sampling_rate,
                             "units": getattr(channel, "units", "unknown"),
+                            "timebase_exclusions": 0,
                         }
 
                     for trial_idx in range(channel.num_trials):
                         trial_data = channel.get_data(trial_idx)
                         trial_time = channel.get_relative_time_vector(trial_idx)
                         if trial_data is not None and trial_time is not None:
+                            reference_times = channel_data[channel_name]["times"]
+                            if reference_times and not time_bases_compatible(reference_times[0], trial_time):
+                                channel_data[channel_name]["timebase_exclusions"] += 1
+                                log.warning(
+                                    "Cross-file avg: excluding %s / %s trial %d because its time base is incompatible.",
+                                    file_name,
+                                    channel_name,
+                                    trial_idx,
+                                )
+                                continue
                             channel_data[channel_name]["trials"].append(trial_data)
                             channel_data[channel_name]["times"].append(trial_time)
 
@@ -696,6 +707,12 @@ class BatchAnalysisEngine:
                 "channel_units": ch_data["units"],
                 "trial_count": trial_count,
             }
+            exclusions = ch_data["timebase_exclusions"]
+            if exclusions:
+                ch_meta["warning"] = (
+                    f"Excluded {exclusions} trial(s) with an incompatible time base; "
+                    "resample inputs before cross-file averaging."
+                )
 
             for task in pipeline_config:
                 if self._cancelled:

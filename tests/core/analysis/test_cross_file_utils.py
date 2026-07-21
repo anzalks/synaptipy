@@ -283,6 +283,21 @@ class TestGetCrossFileAverage:
 
         np.testing.assert_allclose(time_out, t_a)
 
+    def test_different_sampling_rate_is_excluded_not_averaged(self):
+        """Sample indices with different physical times must never be pooled."""
+        t_fast = np.arange(100) / 10_000.0
+        t_slow = np.arange(100) / 5_000.0
+        ch_fast = _make_channel({0: np.ones(100)}, {0: t_fast})
+        ch_slow = _make_channel({0: np.ones(100) * 9.0}, {0: t_slow})
+        adapter = _make_adapter(_make_recording({0: ch_fast}), _make_recording({0: ch_slow}))
+
+        _, average, n_files, _ = get_cross_file_average(
+            [{"path": Path("fast.abf")}, {"path": Path("slow.abf")}], [0], 0, adapter
+        )
+
+        assert n_files == 1
+        np.testing.assert_allclose(average, 1.0)
+
 
 # ---------------------------------------------------------------------------
 # extract_per_file_trace — empty parsed_trials (line 78)

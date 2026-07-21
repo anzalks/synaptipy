@@ -16,7 +16,9 @@ from synaptipy.shared.plot_customization import (
     get_grid_pen,
     get_plot_customization_manager,
     get_single_trial_pen,
+    get_force_opaque_trials,
     save_plot_preferences,
+    set_force_opaque_trials,
     update_plot_preference,
 )
 
@@ -92,6 +94,31 @@ class TestPlotCustomizationManager:
             # Reset
             manager.reset_to_defaults()
             assert manager.defaults["average"]["color"] == "#000000"  # Black hex
+
+    def test_invalid_persisted_values_do_not_break_pen_creation(self):
+        """A malformed QSettings value must fall back instead of crashing redraw."""
+        with patch("PySide6.QtCore.QSettings") as mock_settings:
+            mock_settings.return_value = MagicMock()
+            manager = PlotCustomizationManager()
+            manager.defaults["average"].update({"color": "#not-a-colour", "opacity": "bad", "width": "nan"})
+            pen = manager.get_average_pen()
+
+        assert pen.color().isValid()
+        assert pen.widthF() == pytest.approx(1.0)
+
+    def test_force_opaque_preference_is_persisted(self, monkeypatch):
+        """The performance toggle is saved rather than lost on restart."""
+        with patch("PySide6.QtCore.QSettings") as mock_settings:
+            settings = MagicMock()
+            settings.value.side_effect = lambda _key, default, type=None: default
+            mock_settings.return_value = settings
+            monkeypatch.setattr("synaptipy.shared.plot_customization._force_opaque_trials", False)
+            manager = PlotCustomizationManager()
+            monkeypatch.setattr("synaptipy.shared.plot_customization._plot_customization_manager", manager)
+            set_force_opaque_trials(True)
+
+        assert get_force_opaque_trials() is True
+        settings.setValue.assert_called_with("performance/force_opaque_trials", True)
 
 
 class TestPlotCustomizationFunctions:

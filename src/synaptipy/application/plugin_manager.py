@@ -22,6 +22,7 @@ This file is part of Synaptipy, licensed under the GNU Affero General Public Lic
 See the LICENSE file in the root of the repository for full license details.
 """
 
+import copy
 import hashlib
 import importlib.resources
 import importlib.util
@@ -138,6 +139,15 @@ class PluginManager:
     @classmethod
     def _load_single_plugin(cls, p_file: Path) -> Optional[PluginLoadFailure]:
         """Attempt to import one plugin file without stopping other plugins."""
+        # A plugin can execute registration decorators before a later import or
+        # top-level statement fails.  Keep a complete registry snapshot so a
+        # reported failure cannot leave a half-loaded analysis visible in the
+        # application.
+        from synaptipy.core.analysis.registry import AnalysisRegistry
+
+        registry_before = dict(AnalysisRegistry._registry)
+        metadata_before = copy.deepcopy(AnalysisRegistry._metadata)
+        original_metadata_before = copy.deepcopy(AnalysisRegistry._original_metadata)
         module_name = f"synaptipy_plugin_{p_file.stem}"
         try:
             # Always evict any cached module so @AnalysisRegistry.register
@@ -158,14 +168,36 @@ class PluginManager:
             log.info(f"Successfully loaded plugin: {p_file.name}")
             return None
         except ImportError as e:
+            cls._restore_registry_after_failed_plugin(
+                AnalysisRegistry, registry_before, metadata_before, original_metadata_before, module_name
+            )
             log.error(f"ImportError while loading plugin '{p_file.name}': {e}", exc_info=False)
             return PluginLoadFailure(p_file, f"ImportError: {e}")
         except SyntaxError as e:
+            cls._restore_registry_after_failed_plugin(
+                AnalysisRegistry, registry_before, metadata_before, original_metadata_before, module_name
+            )
             log.error(f"SyntaxError in plugin '{p_file.name}': {e}", exc_info=False)
             return PluginLoadFailure(p_file, f"SyntaxError: {e}")
         except Exception as e:
+            cls._restore_registry_after_failed_plugin(
+                AnalysisRegistry, registry_before, metadata_before, original_metadata_before, module_name
+            )
             log.error(f"Unexpected error loading plugin '{p_file.name}': {e}", exc_info=False)
             return PluginLoadFailure(p_file, f"{type(e).__name__}: {e}")
+
+    @staticmethod
+    def _restore_registry_after_failed_plugin(
+        registry, registry_before, metadata_before, original_metadata_before, module_name: str
+    ) -> None:
+        """Restore the analysis registry and discard a partially imported module."""
+        registry._registry.clear()
+        registry._registry.update(registry_before)
+        registry._metadata.clear()
+        registry._metadata.update(metadata_before)
+        registry._original_metadata.clear()
+        registry._original_metadata.update(original_metadata_before)
+        sys.modules.pop(module_name, None)
 
     @classmethod
     def _warn_user_plugins(cls, user_plugin_files: List[Path]) -> bool:

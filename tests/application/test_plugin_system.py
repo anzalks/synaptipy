@@ -189,6 +189,32 @@ class TestSettingsGate:
             AnalysisRegistry.get_function("synaptic_charge") is not None
         ), "synaptic_charge not registered after load with enable_plugins=True"
 
+    def test_failed_plugin_rolls_back_partial_registration(self, tmp_path):
+        """A plugin that raises after registering must not leave an unsafe analysis visible."""
+        from synaptipy.application.plugin_manager import PluginManager
+
+        plugin_path = tmp_path / "partially_broken.py"
+        plugin_path.write_text(
+            "from synaptipy.core.analysis.registry import AnalysisRegistry\n"
+            "@AnalysisRegistry.register('partial_failure_test')\n"
+            "def partial(data, time, sampling_rate, **kwargs):\n"
+            "    return {}\n"
+            "raise RuntimeError('plugin setup failed')\n",
+            encoding="utf-8",
+        )
+        empty_user_dir = tmp_path / "no_user_plugins"
+
+        with (
+            patch("synaptipy.application.plugin_manager._get_bundled_plugin_dir", return_value=tmp_path),
+            patch("synaptipy.application.plugin_manager.PLUGIN_DIR", empty_user_dir),
+            patch("synaptipy.application.plugin_manager.QSettings") as mock_settings_cls,
+        ):
+            mock_settings_cls.return_value.value.return_value = True
+            failures = PluginManager.load_plugins()
+
+        assert len(failures) == 1
+        assert AnalysisRegistry.get_function("partial_failure_test") is None
+
 
 # ---------------------------------------------------------------------------
 # Tests: opto_jitter schema and correctness

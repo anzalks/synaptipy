@@ -17,6 +17,22 @@ import numpy as np
 log = logging.getLogger(__name__)
 
 
+def time_bases_compatible(reference_time: np.ndarray, candidate_time: np.ndarray) -> bool:
+    """Return whether two trace time axes represent the same sample grid.
+
+    Unequal recording duration is allowed: only their overlapping prefix must
+    agree.  A differing start time or sample interval means that equal array
+    indices represent different physical times and must never be averaged.
+    """
+    reference = np.asarray(reference_time, dtype=float)
+    candidate = np.asarray(candidate_time, dtype=float)
+    overlap = min(reference.size, candidate.size)
+    if overlap == 0:
+        return False
+    scale = max(float(np.max(np.abs(reference[:overlap]))), float(np.max(np.abs(candidate[:overlap]))), 1.0)
+    return bool(np.allclose(reference[:overlap], candidate[:overlap], rtol=1e-7, atol=scale * 1e-10))
+
+
 def _resolve_effective_trials(item: Dict[str, Any], channel: Any, parsed_trials: List[int]) -> List[int]:
     """Return the list of trial indices to use for *item* within *channel*.
 
@@ -162,6 +178,13 @@ def get_cross_file_average(
         result = extract_per_file_trace(item, parsed_trials, channel_idx, neo_adapter)
         if result is not None:
             file_time, file_avg = result
+            if valid_times and not time_bases_compatible(valid_times[0], file_time):
+                log.warning(
+                    "Cross-file average: excluding %s because its time base differs from the first valid file. "
+                    "Resample recordings to a common sampling rate/time origin before averaging.",
+                    item.get("path", "<unknown>"),
+                )
+                continue
             valid_traces.append(file_avg)
             valid_times.append(file_time)
 

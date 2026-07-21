@@ -328,7 +328,8 @@ class NWBExporter:
         if not PYNWB_AVAILABLE:
             raise ExportError("pynwb library is not installed. Cannot export to NWB.")
 
-        log.debug(f"Starting NWB export for recording from: {getattr(recording, 'source_file', 'Unknown Source').name}")
+        source_file = getattr(recording, "source_file", None)
+        log.debug("Starting NWB export for recording from: %s", getattr(source_file, "name", "Unknown Source"))
         log.debug(f"Output path: {output_path}")
 
         # --- Validate Recording Object ---
@@ -729,8 +730,11 @@ class NWBExporter:
                         else:
                             preproc_module = nwbfile.processing["preprocessing"]
 
-                        # Create DynamicTable to store preprocessing steps
-                        from hdmf.common import DynamicTable, VectorData
+                        # ``DynamicTable`` is imported at module level when
+                        # HDMF is available.  Importing it locally here would
+                        # make it a function-local name and prevent the
+                        # analysis-results table above from being created.
+                        from hdmf.common import VectorData
 
                         timestamps = VectorData(
                             name="timestamp",

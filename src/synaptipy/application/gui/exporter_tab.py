@@ -263,8 +263,10 @@ class ExporterTab(QtWidgets.QWidget):
         # Update Source Label
         if self.source_file_label:
             if has_data:
-                self.source_file_label.setText(f"<i>{current_recording.source_file.name}</i>")
-                self.source_file_label.setToolTip(str(current_recording.source_file))
+                source_file = getattr(current_recording, "source_file", None)
+                source_name = getattr(source_file, "name", "In-memory recording")
+                self.source_file_label.setText(f"<i>{source_name}</i>")
+                self.source_file_label.setToolTip(str(source_file) if source_file else "In-memory recording")
             else:
                 self.source_file_label.setText("<i>None loaded</i>")
                 self.source_file_label.setToolTip("")
@@ -291,7 +293,7 @@ class ExporterTab(QtWidgets.QWidget):
         current_recording = self._session_manager.current_recording
         default_dir = self._settings.value("lastExportDirectory", "", type=str)
         default_filename = "exported_data.nwb"
-        if current_recording:
+        if current_recording and getattr(current_recording, "source_file", None):
             default_filename = current_recording.source_file.with_suffix(".nwb").name.replace("::", "_")
             if not default_dir:
                 default_dir = str(current_recording.source_file.parent)
@@ -331,7 +333,8 @@ class ExporterTab(QtWidgets.QWidget):
             )
             return
 
-        log.debug(f"Preparing NWB metadata for: {current_recording.source_file.name}")
+        source_file = getattr(current_recording, "source_file", None)
+        log.debug("Preparing NWB metadata for: %s", getattr(source_file, "name", "in-memory recording"))
 
         # New Dialog accepts recording for pre-fill
         dialog = NwbMetadataDialog(recording=current_recording, parent=self)

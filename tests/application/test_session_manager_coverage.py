@@ -73,6 +73,15 @@ class TestLjpProperty:
 
 
 class TestCurrentRecordingSetter:
+    def test_in_memory_recording_emits_without_source_file_error(self, qtbot):
+        """Synthetic/in-memory recordings are valid session values."""
+        from synaptipy.core.data_model import Recording
+
+        sm = SessionManager()
+        recording = Recording(source_file=None)
+        with qtbot.waitSignal(sm.current_recording_changed, timeout=500):
+            sm.current_recording = recording
+
     def test_same_value_does_not_emit(self, qtbot):
         """Lines 88-90: if recording does not change, no signal is emitted."""
         from synaptipy.core.data_model import Recording

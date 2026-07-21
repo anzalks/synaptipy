@@ -81,8 +81,10 @@ class BatchWorker(QtCore.QThread):
                 cross_file_average=self.cross_file_average,
             )
 
-            if not self._cancelled:
-                self.signals.finished.emit(result_df)
+            # Always notify the dialog when the engine returns, including a
+            # cancelled run.  Otherwise the dialog remains disabled because it
+            # never receives its completion signal.
+            self.signals.finished.emit(result_df)
 
         except Exception as e:
             log.error(f"Batch analysis error: {e}", exc_info=True)
@@ -950,18 +952,23 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         self.result_df = result_df
         # Don't set self.worker = None here, wait for thread to finish
 
+        was_cancelled = bool(self.worker and self.worker._cancelled)
+
         # Re-enable UI
         self.run_btn.setEnabled(True)
         self.cancel_btn.setText("Close")
 
         if result_df is not None and not result_df.empty:
             self.export_btn.setEnabled(True)
-            self.progress_bar.setValue(100)
-            self.status_label.setText(f"Completed: {len(result_df)} result rows")
+            if was_cancelled:
+                self.status_label.setText(f"Cancelled: {len(result_df)} partial result rows")
+            else:
+                self.progress_bar.setValue(100)
+                self.status_label.setText(f"Completed: {len(result_df)} result rows")
             self._display_results(result_df)
             self._save_results_to_main_window(result_df)
         else:
-            self.status_label.setText("Completed with no results")
+            self.status_label.setText("Cancelled with no results" if was_cancelled else "Completed with no results")
             self.results_info_label.setText("No results generated")
 
     def _on_error(self, error_message: str):
