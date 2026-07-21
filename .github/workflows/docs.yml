@@ -6,6 +6,8 @@ on:
     paths:
       - "docs/**"
       - "src/**"
+      - "scripts/**"
+      - ".github/workflows/**"
       - ".readthedocs.yaml"
       - "pyproject.toml"
   pull_request:
@@ -13,6 +15,8 @@ on:
     paths:
       - "docs/**"
       - "src/**"
+      - "scripts/**"
+      - ".github/workflows/**"
       - "pyproject.toml"
   workflow_dispatch:
 
