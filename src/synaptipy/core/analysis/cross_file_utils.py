@@ -182,7 +182,7 @@ def _resolve_effective_trials(item: Dict[str, Any], channel: Any, parsed_trials:
     return parsed_trials
 
 
-def extract_per_file_trace(
+def extract_per_file_trace(  # noqa: C901 - validates all file/channel/trial failure modes at one boundary
     item: Dict[str, Any],
     parsed_trials: List[int],
     channel_idx: int,
@@ -315,7 +315,7 @@ def get_cross_file_average(
     return time, average, count, unequal
 
 
-def get_cross_file_average_with_report(
+def get_cross_file_average_with_report(  # noqa: C901 - compatibility report requires explicit exclusion branches
     items: List[Dict[str, Any]],
     parsed_trials: List[int],
     channel_idx: int,
