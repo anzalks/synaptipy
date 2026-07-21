@@ -253,9 +253,11 @@ jobs:
       env:
         QT_QPA_PLATFORM: offscreen
       run: |
-        # Full E2E coverage runs in the golden 3x3 matrix. This job keeps the
-        # dependency check bounded while still exercising core and ordinary GUI paths.
-        xvfb-run python -m pytest -p faulthandler tests/core/ tests/gui/ -m "not e2e" -q --tb=short --no-cov
+        # The golden 3x3 matrix exercises every GUI and E2E test. This special
+        # dependency check concentrates on the scientific/core stack, then
+        # starts the real application in a fresh process below. Running the
+        # whole GUI suite here has shown a Qt teardown deadlock after tests.
+        xvfb-run python -m pytest -p faulthandler tests/core/ -q --tb=short --no-cov
         # Retain a bounded real MainWindow startup check for this dependency set.
         xvfb-run python -m pytest -p faulthandler tests/gui/test_e2e_gui.py::TestMainWindowInitialisation \
           --timeout=90 -q --tb=short --no-cov
@@ -351,9 +353,11 @@ jobs:
       env:
         QT_QPA_PLATFORM: offscreen
       run: |
-        # Full E2E coverage runs in the golden 3x3 matrix. This job keeps the
-        # dependency check bounded while still exercising core and ordinary GUI paths.
-        xvfb-run python -m pytest -p faulthandler tests/core/ tests/gui/ -m "not e2e" -q --tb=short --no-cov
+        # The golden 3x3 matrix exercises every GUI and E2E test. This special
+        # dependency check concentrates on the scientific/core stack, then
+        # starts the real application in a fresh process below. Running the
+        # whole GUI suite here has shown a Qt teardown deadlock after tests.
+        xvfb-run python -m pytest -p faulthandler tests/core/ -q --tb=short --no-cov
         # Retain a bounded real MainWindow startup check for this dependency set.
         xvfb-run python -m pytest -p faulthandler tests/gui/test_e2e_gui.py::TestMainWindowInitialisation \
           --timeout=90 -q --tb=short --no-cov
