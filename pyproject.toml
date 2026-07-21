@@ -148,6 +148,9 @@ addopts = "-v --tb=short"
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
+markers = [
+    "hidpi: layout-sensitive Qt/pyqtgraph regression checks run with high-DPI scaling",
+]
 
 [tool.black]
 line-length = 120

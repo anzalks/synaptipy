@@ -8,6 +8,8 @@ from synaptipy.application.gui.analysis_tabs.base import BaseAnalysisTab
 from synaptipy.core.data_model import Channel, Recording
 from synaptipy.infrastructure.file_readers import NeoAdapter
 
+pytestmark = pytest.mark.hidpi
+
 # Concrete implementation for testing abstract base class
 
 

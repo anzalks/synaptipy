@@ -5,6 +5,8 @@ from PySide6 import QtCore, QtWidgets  # noqa: F401
 
 from synaptipy.application.gui.widgets.plot_canvas import SynaptipyPlotCanvas
 
+pytestmark = pytest.mark.hidpi
+
 
 @pytest.fixture(scope="session")
 def plot_canvas(qapp):

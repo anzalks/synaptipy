@@ -19,6 +19,8 @@ import pytest
 
 from synaptipy.application.gui.widgets.plot_canvas import SynaptipyPlotCanvas
 
+pytestmark = pytest.mark.hidpi
+
 # ---------------------------------------------------------------------------
 # Shared synthetic data
 # ---------------------------------------------------------------------------
