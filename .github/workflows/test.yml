@@ -49,7 +49,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        pip install flake8 'black~=26.1' 'isort~=8.0' pytest pytest-qt pytest-mock pytest-cov nbval matplotlib
+        pip install flake8 'black~=26.1' 'isort~=8.0' pytest pytest-qt pytest-mock pytest-cov pytest-timeout nbval matplotlib
         pip install -e .
 
     - name: Check formatting with black and isort
@@ -242,20 +242,23 @@ jobs:
           "pyqtgraph==0.13.3" \
           "pyside6==6.7.3" \
           "pandas==2.3.0"
-        pip install flake8 pytest pytest-qt pytest-mock pytest-cov
+        pip install flake8 pytest pytest-qt pytest-mock pytest-cov pytest-timeout
         pip install -e .
 
     - name: Lint (syntax + undefined names only)
       run: |
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 
-    - name: Run core and GUI tests
+    - name: Run dependency-compatibility suite
       env:
         QT_QPA_PLATFORM: offscreen
       run: |
-        # --no-cov overrides pyproject.toml addopts so the coverage threshold
-        # does not apply to this subset-only run (would be ~80 % without infra tests).
-        xvfb-run python -m pytest -p faulthandler tests/core/ tests/gui/ -q --tb=short --no-cov
+        # Full E2E coverage runs in the golden 3x3 matrix. This job keeps the
+        # dependency check bounded while still exercising core and ordinary GUI paths.
+        xvfb-run python -m pytest -p faulthandler tests/core/ tests/gui/ -m "not e2e" -q --tb=short --no-cov
+        # Retain a bounded real MainWindow startup check for this dependency set.
+        xvfb-run python -m pytest -p faulthandler tests/gui/test_e2e_gui.py::TestMainWindowInitialisation \
+          --timeout=90 -q --tb=short --no-cov
 
   # ---------------------------------------------------------------------------
   # Security: Bandit static analysis for HIGH-severity vulnerabilities.
@@ -328,7 +331,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         pip install --upgrade numpy scipy neo pyqtgraph pandas
-        pip install flake8 pytest pytest-qt pytest-mock pytest-cov
+        pip install flake8 pytest pytest-qt pytest-mock pytest-cov pytest-timeout
         pip install -e .
 
     - name: Report installed versions
@@ -344,13 +347,16 @@ jobs:
       run: |
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 
-    - name: Run core and GUI tests
+    - name: Run dependency-compatibility suite
       env:
         QT_QPA_PLATFORM: offscreen
       run: |
-        # --no-cov overrides pyproject.toml addopts so the coverage threshold
-        # does not apply to this subset-only run (would be ~80 % without infra tests).
-        xvfb-run python -m pytest -p faulthandler tests/core/ tests/gui/ -q --tb=short --no-cov
+        # Full E2E coverage runs in the golden 3x3 matrix. This job keeps the
+        # dependency check bounded while still exercising core and ordinary GUI paths.
+        xvfb-run python -m pytest -p faulthandler tests/core/ tests/gui/ -m "not e2e" -q --tb=short --no-cov
+        # Retain a bounded real MainWindow startup check for this dependency set.
+        xvfb-run python -m pytest -p faulthandler tests/gui/test_e2e_gui.py::TestMainWindowInitialisation \
+          --timeout=90 -q --tb=short --no-cov
 
   # ---------------------------------------------------------------------------
   # Auto-tag: create a release tag on main when all required CI passes.

@@ -33,6 +33,8 @@ import numpy as np
 import pytest
 from PySide6 import QtWidgets
 
+pytestmark = [pytest.mark.e2e, pytest.mark.timeout(90)]
+
 # ---------------------------------------------------------------------------
 # Helpers: synthetic Recording
 # ---------------------------------------------------------------------------
