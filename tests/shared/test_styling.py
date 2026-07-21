@@ -109,6 +109,16 @@ class TestWidgetStyling(unittest.TestCase):
         button.setDefault.assert_called_once_with(True)
         self.assertEqual(result, button)  # Should return the same button
 
+    def test_style_button_defaults_to_neutral_secondary_role(self):
+        """Ordinary controls must not accidentally become accent/default buttons."""
+        button = MagicMock()
+        button.setDefault = MagicMock()
+
+        result = style_button(button)
+
+        button.setDefault.assert_called_once_with(False)
+        self.assertEqual(result, button)
+
     def test_style_label_mock(self):
         """Test that style_label applies heading styling (using mocks)."""
         # Use mock instead of real QLabel to avoid crashes

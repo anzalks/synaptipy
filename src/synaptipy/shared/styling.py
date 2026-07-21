@@ -247,13 +247,22 @@ def get_grid_pen():
 # ==============================================================================
 
 
-def style_button(button, style="primary"):
-    """Apply simple styling to a QPushButton using Qt's native theming."""
-    # With native Qt theming, we rely on the palette for most styling
-    # Only apply minimal custom styling if needed
+def style_button(button, style="secondary"):
+    """Apply a semantic button role while preserving the active Qt theme.
+
+    ``secondary`` is intentionally the default: navigation, reset, save, and
+    utility controls must retain the neutral palette colour.  Only the single
+    explicit ``primary`` action in a workflow becomes Qt's default/accented
+    button.  The helper deliberately contains no fixed colours, so light,
+    dark, and system themes remain the source of truth.
+    """
     if style == "primary":
-        # Make primary buttons slightly more prominent
         button.setDefault(True)
+    else:
+        # An analysis panel can be rebuilt after a primary button existed;
+        # explicitly clear the default state so ordinary controls never inherit
+        # the platform accent colour.
+        button.setDefault(False)
     return button
 
 

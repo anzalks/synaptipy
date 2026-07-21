@@ -26,6 +26,7 @@ from PySide6 import QtCore, QtWidgets
 from synaptipy.application.gui.analysis_tabs.base import BaseAnalysisTab
 from synaptipy.core.analysis.registry import AnalysisRegistry
 from synaptipy.shared.plot_customization import get_hv_line_pen, get_scatter_pen_and_brush
+from synaptipy.shared.styling import style_button
 
 log = logging.getLogger(__name__)
 
@@ -308,6 +309,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             analyze_btn = QtWidgets.QPushButton("Run Analysis")
             analyze_btn.setToolTip("Run the analysis with current parameters")
             analyze_btn.clicked.connect(self._trigger_analysis)
+            style_button(analyze_btn, "primary")
             layout.addRow("", analyze_btn)
 
         elif self.metadata.get("run_button"):
@@ -318,6 +320,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             analyze_btn = QtWidgets.QPushButton("Run Analysis")
             analyze_btn.setToolTip("Run the analysis with current parameters")
             analyze_btn.clicked.connect(self._trigger_analysis)
+            style_button(analyze_btn, "primary")
             layout.addRow("", analyze_btn)
 
         # --- Secondary channel selector (e.g. TTL channel for optogenetics) ---
