@@ -218,6 +218,10 @@ Synaptipy prioritizes visual accessibility. By default, multi-trial plotting use
 When writing custom plugins or extending the core UI:
 - **Do not** hardcode overlapping red/green traces.
 - Rely on the application's predefined palette generators for consistent visual appearance across themes.
+- Use `style_button(button)` for ordinary controls. Use
+  `style_button(button, "primary")` for at most one main action in a visible
+  panel; do not hard-code button colours. The full button-role convention is in
+  the [Styling Guide](development/styling_guide.md).
 
 ## Development Workflow
 

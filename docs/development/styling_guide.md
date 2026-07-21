@@ -44,7 +44,7 @@ Specialized functions for plot appearance:
 
 Minimal styling helpers that work with Qt's native theming:
 
-- `style_button(button, style='primary')`: Apply simple button styling
+- `style_button(button, style='secondary')`: Apply a semantic, theme-aware button role
 - `style_label(label, style='normal')`: Apply label styling (heading, subheading)
 - `style_info_label(label)`: Style informational labels
 - `style_error_message(widget)`: Style error messages
@@ -67,10 +67,27 @@ from synaptipy.shared.styling import style_button, style_label
 button = QtWidgets.QPushButton("Save")
 info_label = QtWidgets.QLabel("Select a file to analyze")
 
-# Apply minimal styling (mostly relies on Qt's native theming)
-style_button(button, 'primary') # Makes button slightly more prominent
+# Ordinary controls remain neutral and inherit the active theme palette.
+style_button(button)
 style_label(info_label, 'heading') # Makes label bold and larger
 ```
+
+### Button roles
+
+All button colours are controlled by the active Qt theme; do not hard-code
+button colours or per-widget stylesheets. Assign a semantic role with
+`style_button` instead:
+
+| Role | Use | Appearance |
+|---|---|---|
+| `secondary` (default) | Navigation and supporting actions: Previous/Next, Reset View, Save Plot, Browse, Refresh, Undo, and View Session | Neutral palette button |
+| `primary` | The one action that advances the current workflow: Run Analysis, Run Batch Analysis, or the panel's main export/add action | Theme accent/default button |
+| `danger` | Potentially unwanted removal or reset actions: Clear Analysis Set, Remove Files, Reset Preprocessing | Neutral by default; pair material data loss with a confirmation dialog rather than relying on colour alone |
+
+Use at most one visible primary button in a panel or dialog. If several actions
+look primary, users cannot tell which action is the intended next step. Disabled
+controls must remain disabled and use the palette's muted state; never simulate
+disabled state with a custom colour.
 
 ### For PyQtGraph Elements
 
@@ -111,6 +128,8 @@ apply_stylesheet(app)
 3. **Let Qt handle most styling** - The palette system automatically handles colors for most widgets
 4. **Test both themes** - Always verify your UI works well in both light and dark modes
 5. **Keep styling minimal** - Add custom styling only when necessary for functionality
+6. **Use semantic button roles** - Call `style_button(button)` for ordinary controls and
+   `style_button(button, "primary")` only for the single main action in that context
 
 ## Architecture Benefits
 
