@@ -7,15 +7,18 @@ Usage
     python scripts/bump_version.py 1.0.0
     python scripts/bump_version.py 0.1.2b3 --dry-run   # preview only, no writes
 
-Files updated
--------------
-- pyproject.toml          — version = "X.Y.Z"
-- src/synaptipy/__init__.py — __version__ = "X.Y.Z"
-- CITATION.cff            — version: "X.Y.Z" and date-released → today
+Required update targets
+-----------------------
+- pyproject.toml             — version = "X.Y.Z"
+- src/synaptipy/__init__.py  — __version__ = "X.Y.Z"
+- CITATION.cff               — version: "X.Y.Z" and date-released → today
 - installer/windows_setup.iss — installer version string
 - installer/linux/synaptipy.desktop — X-AppVersion field
-- README.md               — installer filename strings vX.Y.Z
-- CHANGELOG.md            — prepends a new [X.Y.Z] section under [Unreleased]
+- CHANGELOG.md               — prepends a new [X.Y.Z] section under [Unreleased]
+
+The script also updates matching release references in ``docs/references.md``,
+``paper/envs/*.txt``, and ``README.md`` when they exist.  Those legacy or
+derived references are optional and cause a warning, not a failed bump.
 
 What this script NEVER touches
 --------------------------------

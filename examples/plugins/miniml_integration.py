@@ -17,7 +17,7 @@ Setup (3 steps):
 
     2. Install miniML Python dependencies into your Synaptipy environment:
            conda activate synaptipy
-           pip install "tensorflow>=2.12,<2.16" h5py scikit-learn ruptures==1.1.10
+           pip install "tensorflow>=2.17" tf_keras h5py scikit-learn ruptures==1.1.10
 
     3. In the Analyser "miniML Events" tab:
        - Paste the full path to the miniML core/ directory into "miniML core/ Path"

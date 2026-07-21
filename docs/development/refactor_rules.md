@@ -109,8 +109,8 @@ Shared is for cross-cutting helpers.
 - Paper smoke check:
 
 ```bash
-python paper/scripts/paper_figures/generate_paper_figures.py --check-only
-python paper/scripts/generate_paper_tables.py --check-only
+conda run -n synaptipy python paper/scripts/paper_figures/generate_paper_figures.py --check-only
+conda run -n synaptipy python paper/scripts/generate_paper_tables.py --check-only
 ```
 
 - Reproduction evidence: attach or commit updated provenance JSON when paper

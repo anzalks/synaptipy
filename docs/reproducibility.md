@@ -42,14 +42,14 @@ cohort is listed in `paper/data_manifest.json`; NWB files are downloaded into
 Run lightweight checks before downloading data:
 
 ```bash
-python paper/scripts/paper_figures/generate_paper_figures.py --check-only
-python paper/scripts/generate_paper_tables.py --check-only
+conda run -n synaptipy python paper/scripts/paper_figures/generate_paper_figures.py --check-only
+conda run -n synaptipy python paper/scripts/generate_paper_tables.py --check-only
 ```
 
 Regenerate tables and figures:
 
 ```bash
-python paper/scripts/paper_figures/generate_paper_figures.py --run-analysis --force
+conda run -n synaptipy python paper/scripts/paper_figures/generate_paper_figures.py --run-analysis --force
 ```
 
 Generated tables include companion provenance JSON files containing the manifest,
@@ -74,7 +74,7 @@ parameter estimates are derived deterministically from the input data
 After installing, verify your environment produces correct results:
 
 ```bash
-python validation/validate_algorithms.py
+conda run -n synaptipy python validation/validate_algorithms.py
 ```
 
 All checks should pass with tolerances specified in the validation

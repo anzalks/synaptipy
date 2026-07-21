@@ -234,7 +234,7 @@ When writing custom plugins or extending the core UI:
 
 4. **Run tests**: Ensure all tests pass:
  ```bash
- python scripts/run_tests.py
+ conda run -n synaptipy python scripts/run_tests.py
  ```
 
 5. **Submit a pull request**: Push your branch and create a pull request
@@ -255,19 +255,19 @@ All contributions go through code review. Maintainers will review your code for:
 Run the full test suite:
 
 ```bash
-python scripts/run_tests.py
+conda run -n synaptipy python scripts/run_tests.py
 ```
 
 Run specific tests:
 
 ```bash
-python scripts/run_tests.py --test test_main_window
+conda run -n synaptipy python scripts/run_tests.py --test test_main_window
 ```
 
 Run with coverage reporting:
 
 ```bash
-python scripts/run_tests.py --coverage
+conda run -n synaptipy python scripts/run_tests.py --coverage
 ```
 
 ### CI Test Matrix

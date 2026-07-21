@@ -137,6 +137,19 @@ def _find_qhelpgenerator() -> Optional[Path]:  # noqa: C901
 # ---------------------------------------------------------------------------
 
 
+def step_clean_build_outputs() -> None:
+    """Remove prior generated Sphinx output before rebuilding offline help.
+
+    Sphinx leaves pages that have since been excluded in an incremental output
+    directory.  A clean rebuild is required so removed internal documentation
+    cannot be copied into the packaged HTML fallback or Qt Help archive.
+    """
+    for output_dir in (HTML_BUILD, QTHELP_BUILD):
+        if output_dir.exists():
+            shutil.rmtree(output_dir)
+            print(f"[build_offline_help] Removed stale build output -> {output_dir}")
+
+
 def step_sphinx_html() -> None:
     """Step 1: run sphinx-build with the HTML builder (tier-2 fallback docs).
 
@@ -241,6 +254,8 @@ def step_copy_artefacts() -> None:
 def main() -> None:
     """Run the full build pipeline."""
     print("[build_offline_help] Starting offline Help build pipeline...")
+
+    step_clean_build_outputs()
 
     # Step 1: HTML docs (always succeeds; needed for pip-install tier-2 fallback)
     step_sphinx_html()

@@ -65,7 +65,7 @@ The exact location does not matter; you will browse to it in the GUI.
 
 ```bash
 conda activate synaptipy
-pip install "tensorflow>=2.17" tf_keras scikit-learn ruptures==1.1.10
+pip install "tensorflow>=2.17" tf_keras h5py scikit-learn ruptures==1.1.10
 ```
 
 > **TensorFlow version note:** Synaptipy requires numpy >= 2.0.
