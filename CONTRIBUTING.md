@@ -34,7 +34,7 @@ pip install -e ".[dev]"
 ### Verifying the Setup
 
 ```bash
-python -m pytest
+conda run -n synaptipy python -m pytest
 ```
 
 All tests should pass. On macOS, ignore the `Abort trap: 6` exit code -
@@ -74,19 +74,19 @@ flake8 src/ tests/
 Alternatively, use the convenience script:
 
 ```bash
-python scripts/fix_style.py
+conda run -n synaptipy python scripts/fix_style.py
 ```
 
 ### 4. Run Tests
 
 ```bash
-python scripts/run_tests.py
+conda run -n synaptipy python scripts/run_tests.py
 ```
 
 Or directly with pytest:
 
 ```bash
-python -m pytest
+conda run -n synaptipy python -m pytest
 ```
 
 Every new analysis function needs a test in `tests/core/`. Every new GUI
@@ -139,11 +139,16 @@ licensed under the [AGPL-3.0](LICENSE) license.
 
 ## Releasing a new version
 
-Use the bump script — never edit version strings by hand:
+Release instructions are maintained in the [developer release guide](docs/development/release_process.md).
+Use the version-bump script — never edit required version strings by hand:
 
 ```bash
-python scripts/bump_version.py 0.1.6b1   # for a beta
-python scripts/bump_version.py 1.0.0     # for a stable release
+conda run -n synaptipy python scripts/bump_version.py 0.1.6b1 --dry-run
+conda run -n synaptipy python scripts/bump_version.py 0.1.6b1
 ```
 
-The script updates `pyproject.toml`, `src/synaptipy/__init__.py`, `CITATION.cff` (version + date-released), `docs/conf.py`, installer files, installer filename references in `README.md`, and prepends a CHANGELOG header. It **never** touches dependency version constraints. After the file edits, it offers to create a local `git tag vX.Y.Z` — pushing to the remote is always a manual step.
+For a real bump, the repository must be clean and the new version must be a
+forward PEP 440 version. The script performs its update, makes one local
+commit, and creates one local annotated `vX.Y.Z` tag. It never pushes or starts
+GitHub workflows; run local verification, review the commit, then push the
+commit and tag deliberately.

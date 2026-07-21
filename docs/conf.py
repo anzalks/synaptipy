@@ -153,6 +153,8 @@ exclude_patterns = [
     ".DS_Store",
     ".agent/*",
     ".github/*",
+    "development/decisions/_INTERNAL_*",
+    "development_logs/**",
 ]
 
 # Pygments syntax highlighting style

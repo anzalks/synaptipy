@@ -28,7 +28,7 @@ isort src/ tests/
 flake8 src/ tests/
 
 # Test
-python scripts/run_tests.py
+conda run -n synaptipy python scripts/run_tests.py
 ```
 
 - **black** - line-length 120, target Python 3.10
@@ -59,6 +59,7 @@ without modifying core code.
 
 refactor_rules
 styling_guide
+release_process
 decisions/index
 manuals/index
 ```

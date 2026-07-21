@@ -1282,12 +1282,16 @@ any Synaptipy source files and without adding those dependencies to
 2. **Install miniML's Python dependencies** into the Synaptipy environment:
    ```bash
    conda activate synaptipy
-   pip install "tensorflow>=2.12,<2.16" scikit-learn ruptures==1.1.10
+   pip install "tensorflow>=2.17" tf_keras h5py scikit-learn ruptures==1.1.10
    ```
    > **Do NOT run `pip install -r ~/miniML/requirements.txt`.**
    > That file pins `numpy==1.23.5` and `pandas==1.5.3`, which are
    > incompatible with Synaptipy's `numpy>=2.0` requirement and will
    > break `np.trapezoid` calls throughout the application.
+
+   TensorFlow 2.16 and later use Keras 3 by default, while the bundled miniML
+   models use the Keras 2 format. `tf_keras` supplies that compatibility layer;
+   the bundled plugin enables it before importing TensorFlow.
 
 3. **Copy the plugin** to your personal plugin directory:
    ```bash
