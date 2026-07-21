@@ -253,14 +253,18 @@ screen. The default widths are 320 px (left), 800 px (centre), and 360 px
   item count and file count (e.g. **"3 items (2 files)"**) so you always know
   exactly how many trials are included.
 
-  **Shape-mismatch handling:** Because recordings from different files may have
-  different durations, the accumulator uses
-  `sum[:min_len] += trial[:min_len]` where
-  `min_len = min(len(accumulator), len(trial))`. This silently truncates every
-  trial to the shortest array in the selection before summing, so recordings
-  with different lengths never cause a NumPy broadcast error. The resulting
-  average is plotted against the time vector of the first trial added to the
-  set.
+  **Compatibility and alignment:** The Analyser selects channels by their
+  channel ID, not their display position. It averages only sources with that
+  channel, a recognised compatible physical dimension, and the same relative
+  acquisition-time origin. Voltage inputs are converted to mV and current
+  inputs to pA before pooling. Compatible recordings with different sample
+  counts are interpolated to a common physical time axis; samples outside a
+  recording's acquisition interval do not contribute. A compatibility dialog
+  lists every excluded source and its reason, while the included sources remain
+  available for analysis. Cross-file averaging is currently aligned to relative
+  acquisition time; stimulus-onset and manual-marker alignment are not applied
+  automatically, so align recordings externally when their stimulus timing
+  differs.
 - **Channel Selection**: Choose which channel to view from the dropdown
 - **Channel Visibility**: Use the per-channel show/hide checkboxes to hide channels
   you are not interested in. When a channel is hidden its plot row collapses

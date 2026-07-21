@@ -14,8 +14,10 @@ from unittest.mock import MagicMock
 import numpy as np
 
 from synaptipy.core.analysis.cross_file_utils import (
+    canonical_unit_and_scale,
     extract_per_file_trace,
     get_cross_file_average,
+    get_cross_file_average_with_report,
 )
 
 # ---------------------------------------------------------------------------
@@ -84,8 +86,8 @@ class TestExtractPerFileTrace:
 
         np.testing.assert_allclose(avg_out, 2.0)
 
-    def test_mismatched_trial_lengths_truncated(self):
-        """Trials of different lengths are truncated to the shortest."""
+    def test_mismatched_trial_sample_counts_are_time_aligned(self):
+        """Equal-duration trials are interpolated, never index-truncated."""
         t_long = np.linspace(0, 1, 100)
         t_short = np.linspace(0, 1, 60)
         ch = _make_channel(
@@ -97,7 +99,7 @@ class TestExtractPerFileTrace:
         item = {"path": Path("mismatch.abf")}
         time_out, avg_out = extract_per_file_trace(item, [0, 1], 0, adapter)
 
-        assert len(avg_out) == 60
+        assert len(avg_out) == 100
         np.testing.assert_allclose(avg_out, 3.0)  # mean(2, 4)
 
     def test_no_path_returns_none(self):
@@ -144,6 +146,14 @@ class TestExtractPerFileTrace:
         adapter = _make_adapter(_make_recording({0: ch0, 1: ch1}))
         _, avg_out = extract_per_file_trace({"path": Path("two_ch.abf")}, [0], 1, adapter)
         np.testing.assert_allclose(avg_out, 7.0)
+
+    def test_channel_id_never_falls_back_to_channel_position(self):
+        """A reordered/missing selected channel is excluded instead of mis-pooled."""
+        t = np.linspace(0, 1, 20)
+        ch = _make_channel({0: np.ones(20)}, {0: t})
+        adapter = _make_adapter(_make_recording({"other": ch}))
+
+        assert extract_per_file_trace({"path": Path("reordered.abf")}, [0], 0, adapter, channel_id="target") is None
 
 
 # ---------------------------------------------------------------------------
@@ -294,6 +304,40 @@ class TestGetCrossFileAverage:
 
         assert n_files == 1
         np.testing.assert_allclose(average, 1.0)
+
+    def test_units_are_converted_and_unknown_units_are_reported(self):
+        """Compatible scale prefixes convert; unknown dimensions cannot enter an average."""
+        t = np.linspace(0, 1, 20)
+        ch_mv = _make_channel({0: np.ones(20)}, {0: t})
+        ch_v = _make_channel({0: np.full(20, 0.003)}, {0: t})
+        ch_unknown = _make_channel({0: np.full(20, 100)}, {0: t})
+        ch_v.units = "V"
+        ch_unknown.units = "arb. units"
+        adapter = _make_adapter(
+            _make_recording({"0": ch_mv}),
+            _make_recording({"0": ch_v}),
+            _make_recording({"0": ch_unknown}),
+        )
+
+        _, average, n_files, _, report = get_cross_file_average_with_report(
+            [{"path": Path("mv.abf")}, {"path": Path("v.abf")}, {"path": Path("unknown.abf")}],
+            [0],
+            0,
+            adapter,
+            channel_id="0",
+        )
+
+        assert n_files == 2
+        np.testing.assert_allclose(average, 2.0)
+        assert report.canonical_units == "mV"
+        assert report.excluded_entries[0].source == "unknown.abf"
+        assert "unknown" in report.excluded_entries[0].reason
+
+
+def test_canonical_unit_and_scale():
+    assert canonical_unit_and_scale("V") == ("mV", 1000.0)
+    assert canonical_unit_and_scale("nA") == ("pA", 1000.0)
+    assert canonical_unit_and_scale("arbitrary") == (None, None)
 
 
 # ---------------------------------------------------------------------------

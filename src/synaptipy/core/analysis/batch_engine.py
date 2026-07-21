@@ -33,7 +33,12 @@ import pandas as pd
 
 # Import analysis package to trigger all registrations
 import synaptipy.core.analysis  # noqa: F401 - Import triggers all registrations
-from synaptipy.core.analysis.cross_file_utils import average_time_aligned_trials, time_bases_compatible
+from synaptipy.core.analysis.cross_file_utils import (
+    average_time_aligned_trials,
+    canonical_unit_and_scale,
+    sampling_rate_from_timebase,
+    time_bases_compatible,
+)
 from synaptipy.core.analysis.registry import AnalysisRegistry
 from synaptipy.core.data_model import Recording
 from synaptipy.infrastructure.file_readers import NeoAdapter
@@ -642,15 +647,34 @@ class BatchAnalysisEngine:
                 for channel_key, channel in channels_to_process:
                     native_name = getattr(channel, "name", None)
                     channel_name = native_name if native_name else channel_key
+                    canonical_units, unit_scale = canonical_unit_and_scale(getattr(channel, "units", ""))
+                    if canonical_units is None or unit_scale is None:
+                        log.warning(
+                            "Cross-file avg: excluding %s / %s because its physical units are unknown or unsupported.",
+                            file_name,
+                            channel_name,
+                        )
+                        continue
 
                     if channel_name not in channel_data:
                         channel_data[channel_name] = {
                             "trials": [],
                             "times": [],
                             "sampling_rate": channel.sampling_rate,
-                            "units": getattr(channel, "units", "unknown"),
+                            "units": canonical_units,
                             "timebase_exclusions": 0,
+                            "unit_exclusions": 0,
                         }
+                    elif canonical_units != channel_data[channel_name]["units"]:
+                        channel_data[channel_name]["unit_exclusions"] += channel.num_trials
+                        log.warning(
+                            "Cross-file avg: excluding %s / %s because units %s do not match %s.",
+                            file_name,
+                            channel_name,
+                            getattr(channel, "units", "unknown"),
+                            channel_data[channel_name]["units"],
+                        )
+                        continue
 
                     for trial_idx in range(channel.num_trials):
                         trial_data = channel.get_data(trial_idx)
@@ -666,7 +690,9 @@ class BatchAnalysisEngine:
                                     trial_idx,
                                 )
                                 continue
-                            channel_data[channel_name]["trials"].append(trial_data)
+                            channel_data[channel_name]["trials"].append(
+                                np.asarray(trial_data, dtype=float) * unit_scale
+                            )
                             channel_data[channel_name]["times"].append(trial_time)
 
             except Exception as exc:  # noqa: BLE001
@@ -692,7 +718,7 @@ class BatchAnalysisEngine:
                 log.warning("Cross-file avg: no valid trials for channel %s", channel_name)
                 continue
 
-            sampling_rate = ch_data["sampling_rate"]
+            sampling_rate = sampling_rate_from_timebase(master_time) or ch_data["sampling_rate"]
             trial_count = len(master_trial_list)
 
             ch_meta: Dict[str, Any] = {
@@ -708,6 +734,10 @@ class BatchAnalysisEngine:
                     f"Excluded {exclusions} trial(s) with an incompatible time base; "
                     "resample inputs before cross-file averaging."
                 )
+            if ch_data["unit_exclusions"]:
+                ch_meta["warning"] = (
+                    ch_meta.get("warning", "") + " "
+                ).strip() + f"Excluded {ch_data['unit_exclusions']} trial(s) with incompatible units."
 
             for task in pipeline_config:
                 if self._cancelled:

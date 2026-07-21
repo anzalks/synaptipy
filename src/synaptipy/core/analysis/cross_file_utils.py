@@ -10,11 +10,98 @@ and reused from non-GUI code paths (e.g. batch engine, CLI).
 """
 
 import logging
+from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
 log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class CompatibilityEntry:
+    """One source's inclusion decision for a cross-file average."""
+
+    source: str
+    included: bool
+    reason: str
+    channel_id: str
+    source_units: str = ""
+    canonical_units: str = ""
+
+
+@dataclass
+class CrossFileCompatibilityReport:
+    """Machine-readable provenance for a cross-file average."""
+
+    channel_id: str
+    canonical_units: str = ""
+    alignment: str = "relative acquisition time"
+    entries: List[CompatibilityEntry] = None
+
+    def __post_init__(self) -> None:
+        if self.entries is None:
+            self.entries = []
+
+    @property
+    def excluded_entries(self) -> List[CompatibilityEntry]:
+        return [entry for entry in self.entries if not entry.included]
+
+    def as_dict(self) -> Dict[str, Any]:
+        return {
+            "channel_id": self.channel_id,
+            "canonical_units": self.canonical_units,
+            "alignment": self.alignment,
+            "included_sources": sum(entry.included for entry in self.entries),
+            "excluded_sources": len(self.excluded_entries),
+            "entries": [asdict(entry) for entry in self.entries],
+        }
+
+
+def canonical_unit_and_scale(units: Any) -> Tuple[Optional[str], Optional[float]]:
+    """Return a canonical electrophysiology unit and scale, or ``(None, None)``.
+
+    The scale converts the supplied unit to the canonical unit.  Unknown or
+    dimensionless channels are deliberately not pooled: treating them as a
+    voltage/current signal would make a numerical result look scientifically
+    meaningful when its physical dimension is unknown.
+    """
+    normalized = str(units or "").strip().lower().replace(" ", "")
+    aliases = {
+        "v": ("mV", 1_000.0),
+        "volt": ("mV", 1_000.0),
+        "volts": ("mV", 1_000.0),
+        "mv": ("mV", 1.0),
+        "millivolt": ("mV", 1.0),
+        "millivolts": ("mV", 1.0),
+        "uv": ("mV", 0.001),
+        "µv": ("mV", 0.001),
+        "a": ("pA", 1_000_000_000_000.0),
+        "amp": ("pA", 1_000_000_000_000.0),
+        "ampere": ("pA", 1_000_000_000_000.0),
+        "amperes": ("pA", 1_000_000_000_000.0),
+        "na": ("pA", 1_000.0),
+        "nanoampere": ("pA", 1_000.0),
+        "nanoamperes": ("pA", 1_000.0),
+        "pa": ("pA", 1.0),
+        "picoampere": ("pA", 1.0),
+        "picoamperes": ("pA", 1.0),
+    }
+    return aliases.get(normalized, (None, None))
+
+
+def _source_label(item: Dict[str, Any]) -> str:
+    path = item.get("path", "<unknown>")
+    return Path(str(path)).name or str(path)
+
+
+def _channel_for_item(recording: Any, channel_idx: int, channel_id: Optional[str]) -> Optional[Any]:
+    if channel_id is not None:
+        # Qt comboboxes may round-trip an ID as an int while recordings use strings.
+        return recording.channels.get(channel_id) or recording.channels.get(str(channel_id))
+    channels_sorted = sorted(recording.channels.items())
+    return channels_sorted[channel_idx][1] if channel_idx < len(channels_sorted) else None
 
 
 def time_bases_compatible(reference_time: np.ndarray, candidate_time: np.ndarray) -> bool:
@@ -72,6 +159,15 @@ def average_time_aligned_trials(
     return target_time, np.nanmean(aligned, axis=0)
 
 
+def sampling_rate_from_timebase(time_vector: np.ndarray) -> Optional[float]:
+    """Derive the effective Hz rate from the actual analysis time axis."""
+    time = np.asarray(time_vector, dtype=float)
+    if time.size < 2 or not np.all(np.isfinite(time)):
+        return None
+    dt = float(np.median(np.diff(time)))
+    return 1.0 / dt if dt > 0 and np.isfinite(dt) else None
+
+
 def _resolve_effective_trials(item: Dict[str, Any], channel: Any, parsed_trials: List[int]) -> List[int]:
     """Return the list of trial indices to use for *item* within *channel*.
 
@@ -91,6 +187,9 @@ def extract_per_file_trace(
     parsed_trials: List[int],
     channel_idx: int,
     neo_adapter: Any,
+    channel_id: Optional[str] = None,
+    unit_scale: float = 1.0,
+    recording: Optional[Any] = None,
 ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
     """Load one analysis item and return its averaged trace for the requested trials.
 
@@ -117,21 +216,22 @@ def extract_per_file_trace(
         return None
 
     try:
-        recording = neo_adapter.read_recording(path)
+        recording = recording if recording is not None else neo_adapter.read_recording(path)
         if recording is None:
             log.debug("Cross-file avg: could not load %s", path)
             return None
 
-        channels_sorted = sorted(recording.channels.items())
-        if channel_idx >= len(channels_sorted):
-            log.debug(
-                "Cross-file avg: %s has fewer channels than index %d - skipping",
-                path,
-                channel_idx,
-            )
+        channel = _channel_for_item(recording, channel_idx, channel_id)
+        if channel is None:
+            if channel_id is not None:
+                log.debug("Cross-file avg: %s does not contain channel ID %s", path, channel_id)
+            else:
+                log.debug(
+                    "Cross-file avg: %s has fewer channels than index %d - skipping",
+                    path,
+                    channel_idx,
+                )
             return None
-
-        _, channel = channels_sorted[channel_idx]
 
         # Determine which trials to use for this item.
         effective_trials = _resolve_effective_trials(item, channel, parsed_trials)
@@ -143,15 +243,17 @@ def extract_per_file_trace(
             trial_time = channel.get_relative_time_vector(trial_idx)
             if trial_data is None or trial_time is None:
                 raise ValueError(f"Trial {trial_idx} returned None data in {getattr(path, 'name', path)}")
-            file_traces.append(trial_data)
+            file_traces.append(np.asarray(trial_data, dtype=float) * unit_scale)
             file_times.append(trial_time)
 
         if not file_traces:
             return None
 
-        min_file_len = min(len(t) for t in file_traces)
-        file_avg = np.mean(np.array([t[:min_file_len] for t in file_traces]), axis=0)
-        return file_times[0][:min_file_len], file_avg
+        if any(not time_bases_compatible(file_times[0], time) for time in file_times[1:]):
+            log.warning("Cross-file avg: trials in %s have incompatible time bases; excluding file.", path)
+            return None
+        file_time, file_avg = average_time_aligned_trials(file_traces, file_times)
+        return (file_time, file_avg) if file_time is not None and file_avg is not None else None
 
     except (IndexError, ValueError) as exc:
         log.debug("Cross-file avg: skipping %s: %s", path, exc)
@@ -163,15 +265,13 @@ def get_cross_file_average(
     parsed_trials: List[int],
     channel_idx: int,
     neo_adapter: Any,
+    channel_id: Optional[str] = None,
 ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], int, bool]:
     """Compute the grand average of specified trials across all loaded files.
 
-        Delegates per-file extraction to :func:`extract_per_file_trace`.  Files
-        that fail silently are excluded so the average denominator stays
-        scientifically correct.  Per-file averages of unequal length are
-        **padded with NaN** rather than truncated so the statistical *N*
-        decreases smoothly at the end of shorter recordings instead of producing
-        an artificial variance step.
+        This compatibility wrapper omits the detailed provenance report.  New
+        callers should use :func:`get_cross_file_average_with_report` so an
+        exclusion is visible to the user and exportable with the result.
 
         Algorithm
         ---------
@@ -209,11 +309,79 @@ def get_cross_file_average(
             Returns ``(None, None, 0, False)`` when no valid traces could be
             obtained.
     """
+    time, average, count, unequal, _ = get_cross_file_average_with_report(
+        items, parsed_trials, channel_idx, neo_adapter, channel_id=channel_id
+    )
+    return time, average, count, unequal
+
+
+def get_cross_file_average_with_report(
+    items: List[Dict[str, Any]],
+    parsed_trials: List[int],
+    channel_idx: int,
+    neo_adapter: Any,
+    channel_id: Optional[str] = None,
+) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], int, bool, CrossFileCompatibilityReport]:
+    """Compute an average and a complete per-source compatibility report.
+
+    Inputs are pooled only when they have the selected *channel ID*, a known
+    compatible physical unit (converted to mV or pA), and a compatible time
+    origin/grid.  Every rejection is retained in the returned report.
+    """
+    report = CrossFileCompatibilityReport(channel_id=str(channel_id if channel_id is not None else channel_idx))
     valid_traces: List[np.ndarray] = []
     valid_times: List[np.ndarray] = []
 
     for item in items:
-        result = extract_per_file_trace(item, parsed_trials, channel_idx, neo_adapter)
+        source = _source_label(item)
+        path = item.get("path")
+        try:
+            recording = neo_adapter.read_recording(path) if path else None
+        except Exception as exc:  # noqa: BLE001 - report a third-party reader failure
+            report.entries.append(
+                CompatibilityEntry(source, False, f"could not load recording: {exc}", report.channel_id)
+            )
+            continue
+        if recording is None:
+            report.entries.append(CompatibilityEntry(source, False, "could not load recording", report.channel_id))
+            continue
+        channel = _channel_for_item(recording, channel_idx, channel_id)
+        if channel is None:
+            report.entries.append(CompatibilityEntry(source, False, "selected channel is absent", report.channel_id))
+            continue
+        unit, scale = canonical_unit_and_scale(getattr(channel, "units", ""))
+        if unit is None or scale is None:
+            report.entries.append(
+                CompatibilityEntry(
+                    source,
+                    False,
+                    "channel has unknown or unsupported physical units",
+                    report.channel_id,
+                    str(getattr(channel, "units", "")),
+                )
+            )
+            continue
+        if report.canonical_units and report.canonical_units != unit:
+            report.entries.append(
+                CompatibilityEntry(
+                    source,
+                    False,
+                    "physical dimension differs from included channels",
+                    report.channel_id,
+                    str(channel.units),
+                    unit,
+                )
+            )
+            continue
+        result = extract_per_file_trace(
+            item,
+            parsed_trials,
+            channel_idx,
+            neo_adapter,
+            channel_id=channel_id,
+            unit_scale=scale,
+            recording=recording,
+        )
         if result is not None:
             file_time, file_avg = result
             if valid_times and not time_bases_compatible(valid_times[0], file_time):
@@ -222,12 +390,37 @@ def get_cross_file_average(
                     "Resample recordings to a common sampling rate/time origin before averaging.",
                     item.get("path", "<unknown>"),
                 )
+                report.entries.append(
+                    CompatibilityEntry(
+                        source,
+                        False,
+                        "time base is incompatible with included recordings",
+                        report.channel_id,
+                        str(channel.units),
+                        unit,
+                    )
+                )
                 continue
             valid_traces.append(file_avg)
             valid_times.append(file_time)
+            report.canonical_units = unit
+            report.entries.append(
+                CompatibilityEntry(source, True, "included", report.channel_id, str(channel.units), unit)
+            )
+        else:
+            report.entries.append(
+                CompatibilityEntry(
+                    source,
+                    False,
+                    "selected trials are unavailable or internally incompatible",
+                    report.channel_id,
+                    str(channel.units),
+                    unit,
+                )
+            )
 
     if not valid_traces:
-        return None, None, 0, False
+        return None, None, 0, False, report
 
     lengths = [len(t) for t in valid_traces]
     has_unequal_lengths = len(set(lengths)) > 1
@@ -247,9 +440,9 @@ def get_cross_file_average(
 
     reference_time, grand_average = average_time_aligned_trials(valid_traces, valid_times)
     if reference_time is None or grand_average is None:
-        return None, None, 0, False
+        return None, None, 0, False, report
 
-    return reference_time, grand_average, len(valid_traces), has_unequal_lengths
+    return reference_time, grand_average, len(valid_traces), has_unequal_lengths, report
 
 
 def build_averaged_recording(
@@ -311,7 +504,9 @@ def build_averaged_recording(
     averaged_channels: Dict[str, "Channel"] = {}
     for ch_idx in range(n_channels):
         ref_ch_id, ref_ch = channels_sorted[ch_idx]
-        time_arr, avg_arr, n_files, _ = get_cross_file_average(items, trial_indices, ch_idx, neo_adapter)
+        time_arr, avg_arr, n_files, _, report = get_cross_file_average_with_report(
+            items, trial_indices, ch_idx, neo_adapter, channel_id=ref_ch_id
+        )
         if time_arr is None or avg_arr is None:
             log.debug(
                 "build_averaged_recording: channel %d produced no average - skipping.",
@@ -323,12 +518,13 @@ def build_averaged_recording(
             id=ref_ch_id,
             name=ref_ch.name,
             units=ref_ch.units,
-            sampling_rate=ref_ch.sampling_rate,
+            sampling_rate=sampling_rate_from_timebase(time_arr) or ref_ch.sampling_rate,
             data_trials=[avg_arr],
         )
         ch.t_start = float(time_arr[0]) if len(time_arr) > 0 else 0.0
         ch.metadata["n_files_averaged"] = n_files
         ch.metadata["trial_indices"] = trial_indices
+        ch.metadata["cross_file_compatibility"] = report.as_dict()
         averaged_channels[ref_ch_id] = ch
 
     if not averaged_channels:
@@ -344,6 +540,7 @@ def build_averaged_recording(
     rec.metadata["is_multifile_average"] = True
     rec.metadata["source_items"] = [str(item.get("path", "")) for item in items]
     rec.metadata["trial_indices"] = trial_indices
+    rec.metadata["cross_file_alignment"] = "relative acquisition time"
     log.debug(
         "build_averaged_recording: built synthetic Recording '%s' with %d channel(s).",
         label,

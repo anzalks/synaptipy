@@ -28,6 +28,7 @@ from synaptipy.application.services.data_loader_service import DataLoaderService
 from synaptipy.core.analysis.cross_file_utils import (
     extract_per_file_trace,
     get_cross_file_average,
+    get_cross_file_average_with_report,
 )
 from synaptipy.core.data_model import Recording
 from synaptipy.core.processing_pipeline import SignalProcessingPipeline
@@ -2357,13 +2358,24 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             the number of files that contributed.  Returns ``(None, None, 0)``
             when no valid traces could be obtained.
         """
-        time_arr, grand_avg, n_files, has_unequal = get_cross_file_average(
-            self._analysis_items, parsed_trials, channel_idx, self.neo_adapter
+        channel_id = self.signal_channel_combobox.currentData() if self.signal_channel_combobox else None
+        time_arr, grand_avg, n_files, has_unequal, compatibility_report = get_cross_file_average_with_report(
+            self._analysis_items, parsed_trials, channel_idx, self.neo_adapter, channel_id=channel_id
         )
+        exclusions = compatibility_report.excluded_entries
+        if exclusions:
+            details = "\n".join(f"• {entry.source}: {entry.reason}" for entry in exclusions)
+            QtWidgets.QMessageBox.information(
+                self,
+                "Cross-File Average: Compatibility Report",
+                f"{n_files} source file(s) will contribute; {len(exclusions)} were excluded.\n\n"
+                "The average remains valid for the included sources.\n\n"
+                f"Excluded sources:\n{details}",
+            )
         if has_unequal and n_files > 0:
             log.warning(
                 "Cross-file average: files have unequal trace lengths. "
-                "Shorter traces are NaN-padded; N decreases toward the end of the average."
+                "Traces are time-aligned before averaging; verify the reported effective N."
             )
         return time_arr, grand_avg, n_files
 
@@ -2403,8 +2415,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             Non-empty warning string when lengths differ, empty string otherwise.
         """
         try:
+            channel_id = self.signal_channel_combobox.currentData() if self.signal_channel_combobox else None
             _, _, _, has_unequal = get_cross_file_average(
-                self._analysis_items, parsed_trials, channel_idx, self.neo_adapter
+                self._analysis_items, parsed_trials, channel_idx, self.neo_adapter, channel_id=channel_id
             )
             if has_unequal and n_files > 0:
                 return " [WARNING: traces of unequal length - N decreases toward end]"
@@ -2439,18 +2452,21 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             return
 
         channel_idx = self.signal_channel_combobox.currentIndex()
+        channel_id = self.signal_channel_combobox.currentData()
         parsed_trials = self._determine_cross_file_trials()
 
         QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.CursorShape.WaitCursor)
         try:
             per_file_traces = []
             for item in recording_items:
-                result = extract_per_file_trace(item, parsed_trials, channel_idx, self.neo_adapter)
+                result = extract_per_file_trace(
+                    item, parsed_trials, channel_idx, self.neo_adapter, channel_id=channel_id
+                )
                 if result is not None:
                     per_file_traces.append(result)
 
             time_arr, grand_avg, n_files, has_unequal = get_cross_file_average(
-                recording_items, parsed_trials, channel_idx, self.neo_adapter
+                recording_items, parsed_trials, channel_idx, self.neo_adapter, channel_id=channel_id
             )
         finally:
             QtWidgets.QApplication.restoreOverrideCursor()
@@ -2471,7 +2487,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         title = f"Cross-File Average - N={n_files} file(s)"
         if has_unequal:
-            title += " [unequal lengths - shorter traces NaN-padded]"
+            title += " [unequal lengths - time aligned]"
         self.plot_widget.setTitle(title)
 
         chan_name = self.signal_channel_combobox.currentText()
@@ -2485,11 +2501,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self.auto_range_plot()
 
         # Cache so _execute_cross_file_average_analysis gets the right sampling rate / units
-        fs = 1.0
-        if self._selected_item_recording:
-            first_ch = next(iter(self._selected_item_recording.channels.values()), None)
-            if first_ch and getattr(first_ch, "sampling_rate", 0) > 0:
-                fs = first_ch.sampling_rate
+        from synaptipy.core.analysis.cross_file_utils import sampling_rate_from_timebase
+
+        fs = sampling_rate_from_timebase(time_arr) or 1.0
         self._current_plot_data = {
             "data": grand_avg,
             "time": time_arr,
@@ -2517,32 +2531,30 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             return
 
         channel_idx = self.signal_channel_combobox.currentIndex()
+        channel_id = self.signal_channel_combobox.currentData()
 
         # Determine which trials to extract; fall back to trial 0
         parsed_trials = self._determine_cross_file_trials()
 
         time_arr, grand_avg, n_files, has_unequal = get_cross_file_average(
-            self._analysis_items, parsed_trials, channel_idx, self.neo_adapter
+            self._analysis_items, parsed_trials, channel_idx, self.neo_adapter, channel_id=channel_id
         )
         if has_unequal and n_files > 0:
             log.warning(
                 "Cross-file average: unequal trace lengths across %d files. "
-                "Shorter traces NaN-padded; effective N decreases toward end of average.",
+                "Traces are time-aligned; effective N may decrease outside shorter recordings.",
                 n_files,
             )
             QtWidgets.QMessageBox.warning(
                 self,
                 "Cross-File Average: Unequal Trace Lengths",
                 f"The {n_files} contributing files have traces of different lengths.\n\n"
-                "Shorter traces are padded with NaN so the grand average N "
-                "decreases smoothly at the end of shorter recordings rather than "
-                "producing an artificial variance step at a hard truncation point.\n\n"
+                "Traces are aligned by physical time before averaging. Samples outside "
+                "a recording's acquisition interval do not contribute.\n\n"
                 "Verify that all loaded files use the same protocol and recording "
                 "duration if this is unexpected.",
             )
-        _unequal_warn_msg = (
-            " [WARNING: traces of unequal length - N decreases toward end]" if (has_unequal and n_files > 0) else ""
-        )
+        _unequal_warn_msg = " [WARNING: traces were time-aligned]" if (has_unequal and n_files > 0) else ""
 
         if time_arr is None or grand_avg is None or n_files == 0:
             QtWidgets.QMessageBox.warning(
@@ -2585,7 +2597,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 item for item in self._analysis_items if item.get("target_type") in ("Recording", "Current Trial")
             ]
             for item in recording_items:
-                per_result = extract_per_file_trace(item, parsed_trials, channel_idx, self.neo_adapter)
+                per_result = extract_per_file_trace(
+                    item, parsed_trials, channel_idx, self.neo_adapter, channel_id=channel_id
+                )
                 if per_result is not None:
                     self.plot_widget.plot(per_result[0], per_result[1], pen=trial_pen)
             self.plot_widget.plot(time_arr, processed, pen=avg_pen, name="Cross-File Average")

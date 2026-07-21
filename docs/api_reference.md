@@ -69,6 +69,16 @@ Synaptipy organises its 17 built-in analysis routines into five core modules.
 Each module corresponds to a tab in the GUI Analyser and is also available as a
 composable unit in the batch processing pipeline.
 
+#### Cross-file averaging safety
+
+`synaptipy.core.analysis.cross_file_utils.get_cross_file_average_with_report`
+returns the time axis, average, contributor count, unequal-length indicator,
+and a `CrossFileCompatibilityReport`. Use this variant for new integrations:
+the report records each included or excluded source, channel ID, original units,
+canonical units, and reason. The legacy `get_cross_file_average` returns the
+first four values only for compatibility. Averaging uses relative acquisition
+time; it does not infer stimulus onset or manually placed markers.
+
 #### Module 1 - Passive Membrane Properties
 
 Baseline (RMP), Input Resistance, Membrane Time Constant (Tau), Sag Ratio,
