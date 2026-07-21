@@ -13,10 +13,10 @@ import pytest
 from synaptipy.shared.plot_customization import (
     PlotCustomizationManager,
     get_average_pen,
+    get_force_opaque_trials,
     get_grid_pen,
     get_plot_customization_manager,
     get_single_trial_pen,
-    get_force_opaque_trials,
     save_plot_preferences,
     set_force_opaque_trials,
     update_plot_preference,

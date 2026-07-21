@@ -795,6 +795,7 @@ def get_trace_overlay_pen():
     mgr = get_plot_customization_manager()
     prefs = mgr.defaults.get("trace_overlay", {})
     import pyqtgraph as pg
+
     color = mgr._make_qcolor(prefs.get("color", "#00cfff"), prefs.get("opacity", 60), fallback="#00cfff")
     return pg.mkPen(color=color, width=mgr._safe_width(prefs.get("width", 3), default=3.0))
 
@@ -804,6 +805,7 @@ def get_event_fit_overlay_pen():
     mgr = get_plot_customization_manager()
     prefs = mgr.defaults.get("event_fit_overlay", {})
     import pyqtgraph as pg
+
     color = mgr._make_qcolor(prefs.get("color", "#ff9900"), prefs.get("opacity", 80), fallback="#ff9900")
     return pg.mkPen(color=color, width=mgr._safe_width(prefs.get("width", 2), default=2.0))
 

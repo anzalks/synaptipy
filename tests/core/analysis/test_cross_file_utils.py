@@ -172,8 +172,8 @@ class TestGetCrossFileAverage:
         assert len(grand_avg) == 100
         np.testing.assert_allclose(grand_avg, 3.0)  # mean(2, 4)
 
-    def test_two_files_different_lengths_nan_padded(self):
-        """Grand average is NaN-padded to longest per-file series."""
+    def test_two_files_different_sampling_rates_are_time_aligned(self):
+        """Equal-duration traces are interpolated before their grand average."""
         t_long = np.linspace(0, 1, 100)
         t_short = np.linspace(0, 1, 80)
         ch_a = _make_channel({0: np.ones(100)}, {0: t_long})
@@ -190,10 +190,7 @@ class TestGetCrossFileAverage:
         assert has_unequal
         # Result length equals the longest trace
         assert len(grand_avg) == 100
-        # First 80 samples: both files contribute, mean(1, 3) == 2
-        np.testing.assert_allclose(grand_avg[:80], 2.0)
-        # Remaining 20 samples: only long file contributes, nanmean == 1
-        np.testing.assert_allclose(grand_avg[80:], 1.0)
+        np.testing.assert_allclose(grand_avg, 2.0)
 
     def test_missing_trial_skipped(self):
         """File missing the requested trial is silently excluded."""

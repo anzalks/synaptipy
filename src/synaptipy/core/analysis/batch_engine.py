@@ -33,7 +33,7 @@ import pandas as pd
 
 # Import analysis package to trigger all registrations
 import synaptipy.core.analysis  # noqa: F401 - Import triggers all registrations
-from synaptipy.core.analysis.cross_file_utils import average_padded_trials, time_bases_compatible
+from synaptipy.core.analysis.cross_file_utils import average_time_aligned_trials, time_bases_compatible
 from synaptipy.core.analysis.registry import AnalysisRegistry
 from synaptipy.core.data_model import Recording
 from synaptipy.infrastructure.file_readers import NeoAdapter
@@ -687,15 +687,10 @@ class BatchAnalysisEngine:
             if not master_trial_list:
                 continue
 
-            master_array = average_padded_trials(master_trial_list)
-            if master_array is None:
+            master_time, master_array = average_time_aligned_trials(master_trial_list, ch_data["times"])
+            if master_array is None or master_time is None:
                 log.warning("Cross-file avg: no valid trials for channel %s", channel_name)
                 continue
-
-            # Derive a reference time vector from the longest contributing trial
-            lengths = [len(t) for t in ch_data["times"]]
-            longest_idx = int(np.argmax(lengths))
-            master_time = ch_data["times"][longest_idx][: len(master_array)]
 
             sampling_rate = ch_data["sampling_rate"]
             trial_count = len(master_trial_list)

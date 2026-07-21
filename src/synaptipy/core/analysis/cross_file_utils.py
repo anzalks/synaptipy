@@ -27,10 +27,49 @@ def time_bases_compatible(reference_time: np.ndarray, candidate_time: np.ndarray
     reference = np.asarray(reference_time, dtype=float)
     candidate = np.asarray(candidate_time, dtype=float)
     overlap = min(reference.size, candidate.size)
-    if overlap == 0:
+    if overlap == 0 or not (np.all(np.isfinite(reference)) and np.all(np.isfinite(candidate))):
         return False
-    scale = max(float(np.max(np.abs(reference[:overlap]))), float(np.max(np.abs(candidate[:overlap]))), 1.0)
-    return bool(np.allclose(reference[:overlap], candidate[:overlap], rtol=1e-7, atol=scale * 1e-10))
+    if reference.size > 1 and np.any(np.diff(reference) <= 0):
+        return False
+    if candidate.size > 1 and np.any(np.diff(candidate) <= 0):
+        return False
+
+    scale = max(float(np.max(np.abs(reference))), float(np.max(np.abs(candidate))), 1.0)
+    atol = scale * 1e-10
+    same_start = np.isclose(reference[0], candidate[0], rtol=1e-7, atol=atol)
+    same_end = np.isclose(reference[-1], candidate[-1], rtol=1e-7, atol=atol)
+    if same_start and same_end:
+        # Different sampling rates are safe when the recordings span the same
+        # physical interval; callers interpolate before averaging.
+        return True
+    if reference.size < 2 or candidate.size < 2:
+        return False
+    reference_step = float(np.median(np.diff(reference)))
+    candidate_step = float(np.median(np.diff(candidate)))
+    return bool(same_start and np.isclose(reference_step, candidate_step, rtol=1e-6, atol=atol))
+
+
+def average_time_aligned_trials(
+    trial_list: List[np.ndarray], time_list: List[np.ndarray]
+) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+    """Interpolate compatible traces to one physical time axis before averaging."""
+    if not trial_list or len(trial_list) != len(time_list):
+        return None, None
+
+    target_index = int(np.argmax([len(time) for time in time_list]))
+    target_time = np.asarray(time_list[target_index], dtype=float)
+    aligned = np.full((len(trial_list), target_time.size), np.nan, dtype=float)
+    for index, (trial, time) in enumerate(zip(trial_list, time_list)):
+        trace = np.asarray(trial, dtype=float)
+        trace_time = np.asarray(time, dtype=float)
+        usable = min(trace.size, trace_time.size)
+        if usable == 0:
+            continue
+        trace = trace[:usable]
+        trace_time = trace_time[:usable]
+        in_range = (target_time >= trace_time[0]) & (target_time <= trace_time[-1])
+        aligned[index, in_range] = np.interp(target_time[in_range], trace_time, trace)
+    return target_time, np.nanmean(aligned, axis=0)
 
 
 def _resolve_effective_trials(item: Dict[str, Any], channel: Any, parsed_trials: List[int]) -> List[int]:
@@ -127,49 +166,48 @@ def get_cross_file_average(
 ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], int, bool]:
     """Compute the grand average of specified trials across all loaded files.
 
-    Delegates per-file extraction to :func:`extract_per_file_trace`.  Files
-    that fail silently are excluded so the average denominator stays
-    scientifically correct.  Per-file averages of unequal length are
-    **padded with NaN** rather than truncated so the statistical *N*
-    decreases smoothly at the end of shorter recordings instead of producing
-    an artificial variance step.
+        Delegates per-file extraction to :func:`extract_per_file_trace`.  Files
+        that fail silently are excluded so the average denominator stays
+        scientifically correct.  Per-file averages of unequal length are
+        **padded with NaN** rather than truncated so the statistical *N*
+        decreases smoothly at the end of shorter recordings instead of producing
+        an artificial variance step.
 
-    Algorithm
-    ---------
-    1. Call :func:`extract_per_file_trace` for every item; collect the
-       ``(time, averaged_data)`` pairs from files that succeed.
-    2. If all traces share the same length, compute a plain
-       :func:`numpy.mean` across the file axis.
-    3. When lengths differ, allocate a ``(n_files, max_len)`` matrix filled
-       with ``NaN`` and copy each trace into the corresponding row up to its
-       own length.  :func:`numpy.nanmean` then produces a grand average
-       whose effective *N* equals the number of files that contributed a
-       non-NaN sample at each time point.
-    4. The reference time vector is taken from the longest contributing file
-       so the full axis is available for downstream plotting.
+        Algorithm
+        ---------
+        1. Call :func:`extract_per_file_trace` for every item; collect the
+           ``(time, averaged_data)`` pairs from files that succeed.
+        2. If all traces share the same length, compute a plain
+           :func:`numpy.mean` across the file axis.
+    3. Compatible traces with different sample counts or rates are interpolated
+       to the longest trace's physical time axis.  Values outside a trace's
+       acquisition interval remain ``NaN``, so :func:`numpy.nanmean` preserves
+       the correct effective *N*.
+        4. The reference time vector is taken from the longest contributing file
+           so the full axis is available for downstream plotting.
 
-    Parameters
-    ----------
-    items : list of dict
-        Analysis-item dicts, each containing at least a ``"path"`` key.
-    parsed_trials : list of int
-        Ordered 0-based trial indices to extract from every file.
-    channel_idx : int
-        0-based position of the target channel (sorted by channel-id),
-        shared across all files.
-    neo_adapter : object
-        Adapter with a ``read_recording(path)`` method that returns a
-        :class:`~synaptipy.core.data_model.Recording` or ``None``.
+        Parameters
+        ----------
+        items : list of dict
+            Analysis-item dicts, each containing at least a ``"path"`` key.
+        parsed_trials : list of int
+            Ordered 0-based trial indices to extract from every file.
+        channel_idx : int
+            0-based position of the target channel (sorted by channel-id),
+            shared across all files.
+        neo_adapter : object
+            Adapter with a ``read_recording(path)`` method that returns a
+            :class:`~synaptipy.core.data_model.Recording` or ``None``.
 
-    Returns
-    -------
-    tuple
-        ``(time_array, grand_average, n_files, has_unequal_lengths)``
-        where *n_files* is the number of files that contributed and
-        *has_unequal_lengths* is ``True`` when the contributing traces had
-        different sample counts (the GUI layer should warn the user).
-        Returns ``(None, None, 0, False)`` when no valid traces could be
-        obtained.
+        Returns
+        -------
+        tuple
+            ``(time_array, grand_average, n_files, has_unequal_lengths)``
+            where *n_files* is the number of files that contributed and
+            *has_unequal_lengths* is ``True`` when the contributing traces had
+            different sample counts (the GUI layer should warn the user).
+            Returns ``(None, None, 0, False)`` when no valid traces could be
+            obtained.
     """
     valid_traces: List[np.ndarray] = []
     valid_times: List[np.ndarray] = []
@@ -200,28 +238,16 @@ def get_cross_file_average(
         log.warning(
             "Cross-file average: unequal trace lengths detected across %d files. "
             "min=%d samples, max=%d samples. "
-            "Traces shorter than max_len (%d samples) are NaN-padded; "
-            "effective N decreases after sample %d.",
+            "Traces are aligned by physical time; effective N decreases "
+            "outside the shorter recordings' acquisition interval.",
             len(valid_traces),
             min_len,
             max_len,
-            max_len,
-            min_len,
         )
 
-    # Pad shorter arrays with NaN so that nanmean produces a smoothly
-    # decreasing N rather than an artificial variance step at the truncation
-    # point.
-    padded = np.full((len(valid_traces), max_len), np.nan)
-    for i, trace in enumerate(valid_traces):
-        padded[i, : len(trace)] = trace
-
-    grand_average = np.nanmean(padded, axis=0)
-
-    # Reference time vector: longest available (NaN-padded region has no
-    # valid data anyway, but callers need the full axis for plotting).
-    longest_idx = int(np.argmax(lengths))
-    reference_time = valid_times[longest_idx]
+    reference_time, grand_average = average_time_aligned_trials(valid_traces, valid_times)
+    if reference_time is None or grand_average is None:
+        return None, None, 0, False
 
     return reference_time, grand_average, len(valid_traces), has_unequal_lengths
 
