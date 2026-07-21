@@ -113,6 +113,39 @@ def test_build_stim_from_abf_epochs():
     assert NWBExporter._build_stim_from_abf_epochs([{"invalid": "data"}], 0, 10) is None
 
 
+def test_build_stim_from_abf_epochs_handles_bounds_and_malformed_values():
+    """Epoch reconstruction must be bounded and fail safely on corrupt headers."""
+    bounded = NWBExporter._build_stim_from_abf_epochs(
+        [{"nEpochType": 1, "fEpochInitLevel": 12.0, "lEpochInitDuration": 50}],
+        trial_idx=0,
+        n_samples=3,
+    )
+    assert np.array_equal(bounded, np.array([12.0, 12.0, 12.0]))
+
+    assert NWBExporter._build_stim_from_abf_epochs([{"nEpochType": "not-an-integer"}], trial_idx=0, n_samples=3) is None
+    assert (
+        NWBExporter._build_stim_from_abf_epochs(
+            [{"nEpochType": 1, "fEpochInitLevel": 0.0, "lEpochInitDuration": 3}], trial_idx=0, n_samples=3
+        )
+        is None
+    )
+
+
+def test_make_stim_series_converts_picoamps_and_uses_default_rate():
+    """Command waveforms are written in SI units even when a rate is unavailable."""
+    from pynwb import NWBFile
+
+    nwbfile = NWBFile("desc", "id-pa", datetime.now(timezone.utc))
+    device = nwbfile.create_device("dev")
+    electrode = nwbfile.create_icephys_electrode(name="elec-pa", description="desc", device=device)
+    stim = NWBExporter._make_stim_series(np.array([100.0]), "pA", "stim-pa", "desc", electrode, 0.0, 0.0, 2, nwbfile)
+
+    assert stim is not None
+    assert stim.unit == "amperes"
+    assert float(stim.data[0]) == pytest.approx(100e-12)
+    assert stim.rate == pytest.approx(1000.0)
+
+
 def test_resolve_stimulus_series(base_recording):
     from synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
 
@@ -190,6 +223,25 @@ def test_export_invalid_session_metadata(base_recording, base_metadata, tmp_path
         exporter.export(base_recording, tmp_path / "bad2.nwb", base_metadata)
 
 
+def test_export_analysis_results_ignores_incomplete_rows(base_recording, base_metadata, tmp_path):
+    """Incomplete analysis rows are skipped without losing valid event tables."""
+    analysis_rows = [
+        "not-a-result-row",
+        {"_raw_arrays": {}},
+        {"channel": "Vm", "analysis": "events", "_raw_arrays": {"event_times": [0.1, 0.3]}},
+    ]
+
+    out_file = tmp_path / "analysis_incomplete_rows.nwb"
+    NWBExporter().export(base_recording, out_file, base_metadata, analysis_results=analysis_rows)
+    assert out_file.exists()
+
+    from pynwb import NWBHDF5IO
+
+    with NWBHDF5IO(str(out_file), "r") as io:
+        nwbfile = io.read()
+        assert "Vm_events" in nwbfile.processing["analysis"].data_interfaces
+
+
 def test_export_channel_units(base_recording, base_metadata, tmp_path):
     exporter = NWBExporter()
     base_recording.channels["0"].units = "v"
@@ -201,6 +253,12 @@ def test_export_channel_units(base_recording, base_metadata, tmp_path):
     ch3 = Channel("2", "unknown", "arb", 10000.0, [np.array([1.0])])
     base_recording.channels["2"] = ch3
 
+    ch4 = Channel("3", "Im-pA", "pA", 10000.0, [np.array([1.0])])
+    base_recording.channels["3"] = ch4
+
+    ch5 = Channel("4", "Im-nA", "nA", 10000.0, [np.array([1.0])])
+    base_recording.channels["4"] = ch5
+
     try:
         import pynwb  # noqa: F401
     except ImportError:
@@ -209,6 +267,64 @@ def test_export_channel_units(base_recording, base_metadata, tmp_path):
     out_file = tmp_path / "units.nwb"
     exporter.export(base_recording, out_file, base_metadata)
     assert out_file.exists()
+
+
+def test_export_skips_invalid_channels_and_empty_trials(base_recording, base_metadata, tmp_path):
+    """A malformed channel must not prevent the recording metadata from exporting."""
+    base_recording.channels = {
+        "not_a_channel": object(),
+        "empty": Channel("empty", "empty", "mV", 10000.0, []),
+        "zero_samples": Channel("zero", "zero", "mV", 10000.0, [np.array([])]),
+    }
+
+    out_file = tmp_path / "empty_channels.nwb"
+    NWBExporter().export(base_recording, out_file, base_metadata)
+
+    assert out_file.exists()
+
+
+def test_export_empty_recording_writes_a_valid_nwb_file(base_recording, base_metadata, tmp_path):
+    """An empty recording is exported as a valid metadata-only NWB file."""
+    base_recording.channels = {}
+    out_file = tmp_path / "no_channels.nwb"
+
+    NWBExporter().export(base_recording, out_file, base_metadata)
+
+    assert out_file.exists()
+
+
+def test_export_supplies_optional_metadata_defaults_without_mutating_input(base_recording, tmp_path):
+    """Missing optional DANDI metadata receives export defaults, not caller mutation."""
+    metadata = {
+        "session_description": "defaults",
+        "identifier": "defaults-id",
+        "session_start_time": datetime.now(timezone.utc),
+        "subject_id": "S-defaults",
+        "device_description": "Amplifier",
+    }
+
+    out_file = tmp_path / "defaults.nwb"
+    NWBExporter().export(base_recording, out_file, metadata)
+
+    assert out_file.exists()
+    assert "species" not in metadata
+    assert "device_name" not in metadata
+
+
+def test_export_records_protocol_and_safely_defaults_invalid_temperature(base_recording, base_metadata, tmp_path):
+    """Export metadata remains valid when optional acquisition metadata is malformed."""
+    base_recording.protocol_name = "current-step"
+    base_recording.metadata["recording_temperature"] = "not-a-temperature"
+
+    out_file = tmp_path / "protocol_temperature.nwb"
+    NWBExporter().export(base_recording, out_file, base_metadata)
+
+    from pynwb import NWBHDF5IO
+
+    with NWBHDF5IO(str(out_file), "r") as io:
+        nwbfile = io.read()
+        assert "Protocol: current-step" in nwbfile.notes
+        assert "Recording temperature: 22.0 degC" in nwbfile.notes
 
 
 def test_subject_creation_failure(base_recording, base_metadata, tmp_path):
