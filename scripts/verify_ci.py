@@ -258,7 +258,7 @@ def check_screenshots() -> bool:
             env=env,
             capture_output=True,
             text=True,
-            timeout=60,
+            timeout=180,
         )
         if result.returncode == 0:
             print("[PASS] Screenshot Capture Passed")
@@ -269,7 +269,7 @@ def check_screenshots() -> bool:
             print(result.stderr[-1000:] if len(result.stderr) > 1000 else result.stderr)
             return False
     except subprocess.TimeoutExpired:
-        print("[FAIL] Screenshot Capture timed out after 60 seconds")
+        print("[FAIL] Screenshot Capture timed out after 180 seconds")
         return False
     except Exception as exc:
         print(f"[FAIL] Screenshot Capture raised: {exc}")

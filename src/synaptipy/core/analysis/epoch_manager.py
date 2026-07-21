@@ -14,7 +14,7 @@ Once epochs are defined, per-epoch data slices can be extracted from any
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
 
@@ -45,6 +45,13 @@ class Epoch:
     end_time: float
     epoch_type: str = "manual"
     metadata: Dict[str, Any] = field(default_factory=dict)
+    # ``None`` means all trials (the historical behaviour).  Explicit trial
+    # ownership makes epochs usable as annotations in mixed-protocol files.
+    trial_indices: Optional[Tuple[int, ...]] = None
+
+    def __post_init__(self) -> None:
+        if self.trial_indices is not None:
+            self.trial_indices = tuple(sorted({int(index) for index in self.trial_indices}))
 
     @property
     def duration(self) -> float:
@@ -54,6 +61,9 @@ class Epoch:
     def contains(self, t: float) -> bool:
         """Return ``True`` if time *t* falls within ``[start_time, end_time]``."""
         return self.start_time <= t <= self.end_time
+
+    def applies_to_trial(self, trial_index: int) -> bool:
+        return self.trial_indices is None or int(trial_index) in self.trial_indices
 
     def __repr__(self) -> str:
         return (
@@ -118,7 +128,14 @@ class EpochManager:
     # Epoch creation
     # ------------------------------------------------------------------
 
-    def add_manual_epoch(self, name: str, start_time: float, end_time: float, **metadata: Any) -> Epoch:
+    def add_manual_epoch(
+        self,
+        name: str,
+        start_time: float,
+        end_time: float,
+        trial_indices: Optional[Iterable[int]] = None,
+        **metadata: Any,
+    ) -> Epoch:
         """Add a manually defined epoch.
 
         Args:
@@ -141,6 +158,7 @@ class EpochManager:
             end_time=float(end_time),
             epoch_type="manual",
             metadata=dict(metadata),
+            trial_indices=tuple(trial_indices) if trial_indices is not None else None,
         )
         self._epochs.append(epoch)
         log.debug("Manual epoch added: %r", epoch)
@@ -157,6 +175,7 @@ class EpochManager:
         stim_name: str = "Stim",
         baseline_name: str = "Baseline",
         washout_name: str = "Washout",
+        trial_indices: Optional[Iterable[int]] = None,
     ) -> List[Epoch]:
         """Auto-generate epochs from a TTL / Digital-Input channel.
 
@@ -177,6 +196,8 @@ class EpochManager:
             log.warning("from_ttl: empty TTL data provided; no epochs created.")
             return []
 
+        trial_indices = tuple(trial_indices) if trial_indices is not None else None
+
         onsets, offsets = extract_ttl_epochs(ttl_data, time, threshold=ttl_threshold)
 
         if onsets.size == 0:
@@ -196,20 +217,26 @@ class EpochManager:
 
         # Baseline (only if there is meaningful pre-stim time)
         if stim_start - t_start >= min_inter_epoch_s:
-            created.append(self.add_manual_epoch(baseline_name, t_start, stim_start, source="ttl_auto"))
+            created.append(
+                self.add_manual_epoch(
+                    baseline_name, t_start, stim_start, trial_indices=trial_indices, source="ttl_auto"
+                )
+            )
             # Override epoch_type to reflect TTL origin
             created[-1].epoch_type = "ttl"
 
         # Stim
         stim_epoch = self.add_manual_epoch(
-            stim_name, stim_start, stim_end, n_pulses=int(onsets.size), source="ttl_auto"
+            stim_name, stim_start, stim_end, trial_indices=trial_indices, n_pulses=int(onsets.size), source="ttl_auto"
         )
         stim_epoch.epoch_type = "ttl"
         created.append(stim_epoch)
 
         # Washout (only if there is meaningful post-stim time)
         if t_end - stim_end >= min_inter_epoch_s:
-            washout_epoch = self.add_manual_epoch(washout_name, stim_end, t_end, source="ttl_auto")
+            washout_epoch = self.add_manual_epoch(
+                washout_name, stim_end, t_end, trial_indices=trial_indices, source="ttl_auto"
+            )
             washout_epoch.epoch_type = "ttl"
             created.append(washout_epoch)
 
@@ -259,10 +286,14 @@ class EpochManager:
         if data is None or time is None or data.size == 0:
             log.warning("get_epoch_slices: no data for channel '%s' trial %d.", channel.name, trial_index)
             for epoch in self.epochs:
+                if not epoch.applies_to_trial(trial_index):
+                    continue
                 result[epoch.name] = (np.array([]), np.array([]))
             return result
 
         for epoch in self.epochs:
+            if not epoch.applies_to_trial(trial_index):
+                continue
             mask = (time >= epoch.start_time) & (time <= epoch.end_time)
             result[epoch.name] = (data[mask], time[mask])
 

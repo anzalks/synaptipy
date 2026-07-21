@@ -1320,6 +1320,19 @@ integrate heavy ML frameworks like `miniML` without bloating Synaptipy's
 core dependencies. We provide a template at
 `examples/plugins/miniml_integration.py`.
 
+![miniML plugin before selecting model paths](tutorial/screenshots/plugin_miniml_empty.png)
+
+The plugin is visible even when miniML itself is not installed. Select the
+miniML `core/` folder and a compatible model file with the Browse controls;
+the capture below shows the expected pre-run configuration state.
+
+![miniML plugin with paths configured](tutorial/screenshots/plugin_miniml_paths_filled.png)
+
+When the optional miniML dependencies and model are available, **Run Analysis**
+adds detected events to the trace and reports the plugin metrics.
+
+![miniML plugin with detected events](tutorial/screenshots/plugin_miniml_detected.png)
+
 #### Installation warning
 
 Do NOT use `pip install miniML` (it targets an unrelated database package

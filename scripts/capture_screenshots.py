@@ -37,6 +37,7 @@ import argparse
 import os
 import subprocess
 import sys
+import tempfile
 import time
 import traceback
 from pathlib import Path
@@ -69,51 +70,6 @@ _WCP03 = _EXAMPLES_DATA / "240326_003.wcp"  # voltage-clamp, intrinsic propertie
 #   ABF21: '0' = IN0 (mV)
 #   ABF22: '0' = IN0 (mV), '1' = FrameTTL (mV), '2' = Photodiode (mV), '3' = Field (mV)
 #   WCP03: '0' = Im0 (pA)
-
-
-# ---------------------------------------------------------------------------
-# Theme detection (must happen before Qt palette is initialised)
-# ---------------------------------------------------------------------------
-
-
-def _os_is_dark() -> bool:
-    """Return True when the host OS is configured for a dark colour scheme."""
-    if sys.platform == "darwin":
-        try:
-            out = subprocess.check_output(
-                ["defaults", "read", "-g", "AppleInterfaceStyle"],
-                stderr=subprocess.DEVNULL,
-                text=True,
-            ).strip()
-            return out.lower() == "dark"
-        except subprocess.CalledProcessError:
-            return False
-        except Exception:
-            return False
-
-    if sys.platform == "win32":
-        try:
-            import winreg  # noqa: PLC0415
-
-            key = winreg.OpenKey(
-                winreg.HKEY_CURRENT_USER,
-                r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
-            )
-            value, _ = winreg.QueryValueEx(key, "AppsUseLightTheme")
-            winreg.CloseKey(key)
-            return value == 0
-        except Exception:
-            return False
-
-    try:
-        out = subprocess.check_output(
-            ["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"],
-            stderr=subprocess.DEVNULL,
-            text=True,
-        ).strip()
-        return "dark" in out.lower()
-    except Exception:
-        return False
 
 
 # ---------------------------------------------------------------------------
@@ -499,6 +455,82 @@ def _capture_explorer_screenshots(window: Any, output_dir: Path) -> List[str]:
     if _WCP03.exists():
         captured.extend(_setup_and_capture_voltage_clamp(window, output_dir))
     return captured
+
+
+def _capture_protocol_map(window: Any, output_dir: Path) -> List[str]:
+    """Capture the Protocol Map dialog with a reviewed manual assignment.
+
+    The capture deliberately uses the real bundled current-clamp recording.
+    Manual provenance is displayed rather than claiming an imported command
+    trace, which keeps the tutorial example scientifically honest.
+    """
+    from synaptipy.application.gui.dialogs.protocol_map_dialog import ProtocolMapDialog  # noqa: PLC0415
+    from synaptipy.core.protocols import ProtocolAssignment, ProtocolSource  # noqa: PLC0415
+
+    if not _ABF21.exists():
+        print("  [warn] ABF21 not found - skipping Protocol Map screenshot", file=sys.stderr)
+        return []
+
+    window.tab_widget.setCurrentIndex(0)
+    _load_explorer(window, _ABF21, [_ABF21], 0)
+    recording = window.explorer_tab.current_recording
+    if recording is None:
+        print("  [warn] Protocol Map screenshot has no loaded recording", file=sys.stderr)
+        return []
+
+    recording.protocol_map.add(
+        ProtocolAssignment(
+            protocol_family="current_step",
+            trial_indices=(0, 1, 2),
+            start_time=0.05,
+            end_time=0.45,
+            label="Current-step series",
+            source=ProtocolSource.MANUAL,
+            parameters={"current_steps": "manual"},
+            verified=True,
+        )
+    )
+    recording.protocol_map.add(
+        ProtocolAssignment(
+            protocol_family="custom",
+            trial_indices=(0,),
+            start_time=0.1,
+            end_time=0.15,
+            label="Acquisition note",
+            source=ProtocolSource.MANUAL,
+            is_analysis_segment=False,
+        )
+    )
+
+    dialog = ProtocolMapDialog(recording, current_trial=0, parent=window)
+    dialog.show()
+    _pump(15)
+    _grab(dialog, output_dir / "explorer_protocol_map.png")
+    dialog.close()
+    _pump(3)
+    return ["explorer_protocol_map.png"]
+
+
+def _capture_batch_compatible_average(window: Any, output_dir: Path) -> List[str]:
+    """Capture the batch option that keeps incompatible protocols separate."""
+    from synaptipy.application.gui.batch_dialog import BatchAnalysisDialog  # noqa: PLC0415
+
+    if not _ABF21.exists():
+        print("  [warn] ABF21 not found - skipping batch-compatible-average screenshot", file=sys.stderr)
+        return []
+
+    dialog = BatchAnalysisDialog(
+        files=[_ABF21],
+        pipeline_config=[{"analysis": "rmp_analysis", "scope": "all_trials", "params": {}}],
+        parent=window,
+    )
+    dialog.cross_file_avg_checkbox.setChecked(True)
+    dialog.show()
+    _pump(15)
+    _grab(dialog, output_dir / "batch_compatible_cross_file_average.png")
+    dialog.close()
+    _pump(3)
+    return ["batch_compatible_cross_file_average.png"]
 
 
 # ---------------------------------------------------------------------------
@@ -1143,11 +1175,55 @@ def _capture_cross_file_average(window: Any, analyser: Any, sm: Any, output_dir:
 
 
 def _remove_stale(output_dir: Path, captured: List[str]) -> None:
-    """Delete PNGs in *output_dir* that were not produced in this run."""
+    """Delete stale capture-managed PNGs without touching authored figures."""
+    managed = {
+        "analyser_evoked_responses.png",
+        "analyser_evoked_responses_evoked_sync.png",
+        "analyser_evoked_responses_paired-pulse_ratio.png",
+        "analyser_evoked_responses_stimulus_train_stp.png",
+        "analyser_evoked_responses_stimulus_train_stp_popup.png",
+        "analyser_excitability.png",
+        "analyser_excitability_burst_analysis.png",
+        "analyser_excitability_excitability.png",
+        "analyser_excitability_excitability_popup.png",
+        "analyser_excitability_spike_train_dynamics.png",
+        "analyser_excitability_spike_train_dynamics_popup.png",
+        "analyser_intrinsic_properties.png",
+        "analyser_intrinsic_properties_baseline_rmp.png",
+        "analyser_intrinsic_properties_baseline_rmp_popup.png",
+        "analyser_intrinsic_properties_capacitance.png",
+        "analyser_intrinsic_properties_i-v_curve.png",
+        "analyser_intrinsic_properties_i-v_curve_popup.png",
+        "analyser_intrinsic_properties_input_resistance.png",
+        "analyser_intrinsic_properties_sag_ratio_ih.png",
+        "analyser_intrinsic_properties_tau_time_constant.png",
+        "analyser_spike_analysis.png",
+        "analyser_spike_analysis_phase_plane.png",
+        "analyser_spike_analysis_phase_plane_popup.png",
+        "analyser_spike_analysis_spike_detection.png",
+        "analyser_synaptic_events.png",
+        "analyser_synaptic_events_baseline_peak_kinetics.png",
+        "analyser_synaptic_events_deconvolution_custom.png",
+        "analyser_synaptic_events_threshold_based.png",
+        "analyser_tab.png",
+        "batch_compatible_cross_file_average.png",
+        "explorer_protocol_map.png",
+        "explorer_tab.png",
+        "explorer_tab_cursors.png",
+        "explorer_tab_mark_trials.png",
+        "explorer_tab_multichannel.png",
+        "explorer_tab_voltageclamp.png",
+        "exporter_tab.png",
+        "plugin_miniml_detected.png",
+        "plugin_miniml_empty.png",
+        "plugin_miniml_paths_filled.png",
+        "plugin_spike_interface_detected.png",
+        "plugin_spike_interface_empty.png",
+    }
     captured_set = set(captured)
     removed: List[str] = []
     for png in output_dir.glob("*.png"):
-        if png.name not in captured_set:
+        if png.name in managed and png.name not in captured_set:
             png.unlink()
             removed.append(png.name)
 
@@ -1162,7 +1238,7 @@ def _remove_stale(output_dir: Path, captured: List[str]) -> None:
 # ---------------------------------------------------------------------------
 
 
-def run(output_dir: Path) -> bool:  # noqa: C901
+def _run_legacy_capture(output_dir: Path) -> bool:  # noqa: C901
     """Execute the full capture pipeline. Return *True* on success."""
     from PySide6.QtCore import Qt, QTimer  # noqa: PLC0415
     from PySide6.QtWidgets import QApplication  # noqa: PLC0415
@@ -1177,19 +1253,26 @@ def run(output_dir: Path) -> bool:  # noqa: C901
     QApplication.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps)
     app = QApplication.instance() or QApplication(sys.argv)
 
-    # Apply the theme according to user configuration so screenshots look identical to
-    # what users see on their own system.
-    mode = ThemeMode.DARK if _os_is_dark() else ThemeMode.LIGHT
-    apply_theme(mode)
-    print(f"[theme] using configured theme: {mode.value}")
+    # Published docs must look the same on every maintainer and CI host.
+    apply_theme(ThemeMode.DARK)
+    print("[theme] using deterministic dark theme")
 
     try:
-        # Register all built-in analyses and load example plugins before the
-        # MainWindow is constructed so every analysis tab is present.
+        # Register all built-in analyses and bundled example plugins before the
+        # MainWindow is constructed so every documented analysis tab is present.
         import synaptipy.core.analysis  # noqa: F401 — registers built-in analyses
-        from synaptipy.application.plugin_manager import PluginManager  # noqa: PLC0415
+        from synaptipy.application import plugin_manager  # noqa: PLC0415
 
-        PluginManager.load_plugins()
+        # User plugins are deliberately allowed to shadow bundled plugins in
+        # normal interactive use. That is not appropriate for documentation:
+        # a capture must be independent of the maintainer's home directory.
+        original_plugin_dir = plugin_manager.PLUGIN_DIR
+        try:
+            with tempfile.TemporaryDirectory(prefix="synaptipy-docs-plugins-") as sandbox:
+                plugin_manager.PLUGIN_DIR = Path(sandbox)
+                plugin_manager.PluginManager.load_plugins()
+        finally:
+            plugin_manager.PLUGIN_DIR = original_plugin_dir
 
         # Suppress the session-restore dialog which blocks in headless mode.
         MainWindow._offer_session_restore = lambda self: None
@@ -1210,6 +1293,8 @@ def run(output_dir: Path) -> bool:  # noqa: C901
         # --- Explorer screenshots ---
         print("[explorer]")
         captured.extend(_capture_explorer_screenshots(window, output_dir))
+        captured.extend(_capture_protocol_map(window, output_dir))
+        captured.extend(_capture_batch_compatible_average(window, output_dir))
 
         # Return focus to Analyser tab before starting analysis captures.
         window.tab_widget.setCurrentIndex(1)
@@ -1271,6 +1356,181 @@ def run(output_dir: Path) -> bool:  # noqa: C901
     return success
 
 
+def capture_protocol_map_only(output_dir: Path) -> bool:
+    """Write just the Protocol Map tutorial image without pruning other images.
+
+    This is useful when a documentation change needs one new screenshot. The
+    default full capture remains the release-refresh command and still removes
+    stale generated screenshots.
+    """
+    from PySide6.QtCore import Qt, QTimer  # noqa: PLC0415
+    from PySide6.QtWidgets import QApplication  # noqa: PLC0415
+
+    from synaptipy.application.gui.main_window import MainWindow  # noqa: PLC0415
+    from synaptipy.shared.theme_manager import ThemeMode, apply_theme  # noqa: PLC0415
+
+    QApplication.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps)
+    app = QApplication.instance() or QApplication(sys.argv)
+    apply_theme(ThemeMode.DARK)
+
+    try:
+        import synaptipy.core.analysis  # noqa: F401 - register built-in analyses
+
+        MainWindow._offer_session_restore = lambda self: None
+        window = MainWindow()
+        window.resize(_WINDOW_W, _WINDOW_H)
+        window.show()
+        _pump(10)
+        captured = _capture_protocol_map(window, output_dir)
+        window.close()
+        _pump(3)
+    except Exception:
+        print("[ERROR] Protocol Map screenshot capture raised an exception:", file=sys.stderr)
+        traceback.print_exc()
+        captured = []
+
+    QTimer.singleShot(0, app.quit)
+    app.exec()
+    return bool(captured)
+
+
+def capture_batch_compatible_average_only(output_dir: Path) -> bool:
+    """Write just the batch-compatible-average image without pruning images."""
+    from PySide6.QtCore import Qt, QTimer  # noqa: PLC0415
+    from PySide6.QtWidgets import QApplication  # noqa: PLC0415
+
+    from synaptipy.application.gui.main_window import MainWindow  # noqa: PLC0415
+    from synaptipy.shared.theme_manager import ThemeMode, apply_theme  # noqa: PLC0415
+
+    QApplication.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps)
+    app = QApplication.instance() or QApplication(sys.argv)
+    apply_theme(ThemeMode.DARK)
+
+    try:
+        import synaptipy.core.analysis  # noqa: F401 - register built-in analyses
+
+        MainWindow._offer_session_restore = lambda self: None
+        window = MainWindow()
+        window.resize(_WINDOW_W, _WINDOW_H)
+        window.show()
+        _pump(10)
+        captured = _capture_batch_compatible_average(window, output_dir)
+        window.close()
+        _pump(3)
+    except Exception:
+        print("[ERROR] Batch screenshot capture raised an exception:", file=sys.stderr)
+        traceback.print_exc()
+        captured = []
+
+    QTimer.singleShot(0, app.quit)
+    app.exec()
+    return bool(captured)
+
+
+def _load_bundled_plugins_only() -> None:
+    """Load example plugins while excluding the user's plugin directory."""
+    from synaptipy.application import plugin_manager  # noqa: PLC0415
+
+    original_plugin_dir = plugin_manager.PLUGIN_DIR
+    try:
+        with tempfile.TemporaryDirectory(prefix="synaptipy-docs-plugins-") as sandbox:
+            plugin_manager.PLUGIN_DIR = Path(sandbox)
+            plugin_manager.PluginManager.load_plugins()
+    finally:
+        plugin_manager.PLUGIN_DIR = original_plugin_dir
+
+
+def capture_group_only(output_dir: Path, group: str) -> bool:
+    """Capture one isolated documentation group without pruning other assets."""
+    from PySide6.QtCore import Qt, QTimer  # noqa: PLC0415
+    from PySide6.QtWidgets import QApplication  # noqa: PLC0415
+
+    from synaptipy.application.gui.main_window import MainWindow  # noqa: PLC0415
+    from synaptipy.application.session_manager import SessionManager  # noqa: PLC0415
+    from synaptipy.shared.theme_manager import ThemeMode, apply_theme  # noqa: PLC0415
+
+    QApplication.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps)
+    app = QApplication.instance() or QApplication(sys.argv)
+    apply_theme(ThemeMode.DARK)
+
+    try:
+        import synaptipy.core.analysis  # noqa: F401 - register built-in analyses
+
+        if group in {"miniml", "spikeinterface"}:
+            _load_bundled_plugins_only()
+
+        MainWindow._offer_session_restore = lambda self: None
+        window = MainWindow()
+        window.resize(_WINDOW_W, _WINDOW_H)
+        if hasattr(window.explorer_tab, "config_panel"):
+            window.explorer_tab.config_panel.downsample_cb.setChecked(False)
+        window.show()
+        _pump(10)
+
+        analyser = window.analyser_tab
+        session_manager = SessionManager()
+        if group == "core":
+            captured = _capture_explorer_screenshots(window, output_dir)
+            captured.extend(_capture_protocol_map(window, output_dir))
+            captured.extend(_capture_batch_compatible_average(window, output_dir))
+            window.tab_widget.setCurrentIndex(1)
+            _pump(5)
+            _grab(window, output_dir / "analyser_tab.png")
+            captured.append("analyser_tab.png")
+            captured.extend(_capture_intrinsic_properties(window, analyser, session_manager, output_dir))
+            captured.extend(_capture_spike_analysis(window, analyser, session_manager, output_dir))
+            captured.extend(_capture_excitability(window, analyser, session_manager, output_dir))
+            captured.extend(_capture_synaptic_events(window, analyser, session_manager, output_dir))
+            captured.extend(_capture_evoked_responses(window, analyser, session_manager, output_dir))
+        elif group == "exporter":
+            window.tab_widget.setCurrentIndex(2)
+            _pump(5)
+            _grab(window, output_dir / "exporter_tab.png")
+            captured = ["exporter_tab.png"]
+        elif group == "miniml":
+            captured = _capture_miniml_plugin(window, analyser, session_manager, output_dir)
+        elif group == "spikeinterface":
+            captured = _capture_spike_interface_plugin(window, analyser, session_manager, output_dir)
+        else:
+            raise ValueError(f"Unknown screenshot group: {group}")
+
+        window.close()
+        _pump(3)
+    except Exception:
+        print(f"[ERROR] {group} screenshot capture raised an exception:", file=sys.stderr)
+        traceback.print_exc()
+        captured = []
+
+    QTimer.singleShot(0, app.quit)
+    app.exec()
+    return bool(captured)
+
+
+def run(output_dir: Path) -> bool:
+    """Refresh every screenshot in isolated subprocesses.
+
+    Some Qt/pyqtgraph workflows leave state behind after a complex capture.
+    Isolating groups prevents one workflow from silently truncating the rest of
+    the generated documentation set.
+    """
+    groups = ("core", "exporter", "miniml", "spikeinterface")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for group in groups:
+        result = subprocess.run(
+            [sys.executable, str(Path(__file__).resolve()), "--output-dir", str(output_dir), "--only", group],
+            env=os.environ.copy(),
+            text=True,
+        )
+        if result.returncode != 0:
+            print(f"[ERROR] Screenshot group failed: {group}", file=sys.stderr)
+            return False
+
+    captured = [path.name for path in output_dir.glob("*.png")]
+    _remove_stale(output_dir, captured)
+    print(f"\n[done] {len(captured)} screenshot(s) written to: {output_dir}")
+    return bool(captured)
+
+
 def main() -> int:
     """CLI entry point."""
     parser = argparse.ArgumentParser(description="Capture Synaptipy docs screenshots headlessly.")
@@ -1281,9 +1541,37 @@ def main() -> int:
         metavar="PATH",
         help="Destination directory for PNG files " "(default: docs/tutorial/screenshots/).",
     )
+    parser.add_argument(
+        "--only",
+        choices=(
+            "protocol-map",
+            "batch-compatible-average",
+            "core",
+            "exporter",
+            "miniml",
+            "spikeinterface",
+        ),
+        help="Capture one documentation image without pruning the existing screenshot set.",
+    )
     args = parser.parse_args()
-    return 0 if run(args.output_dir) else 1
+    if args.only == "protocol-map":
+        success = capture_protocol_map_only(args.output_dir)
+    elif args.only == "batch-compatible-average":
+        success = capture_batch_compatible_average_only(args.output_dir)
+    elif args.only:
+        success = capture_group_only(args.output_dir, args.only)
+    else:
+        success = run(args.output_dir)
+    return 0 if success else 1
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # Offscreen PySide6 can crash during normal interpreter shutdown after Qt
+    # widgets have been rendered successfully. Flush first, then bypass Qt's
+    # teardown just as the project's offscreen pytest harness does.
+    exit_code = main()
+    sys.stdout.flush()
+    sys.stderr.flush()
+    if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
+        os._exit(exit_code)
+    sys.exit(exit_code)

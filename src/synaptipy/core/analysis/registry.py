@@ -152,7 +152,41 @@ class AnalysisRegistry:
         Returns:
             Dictionary of metadata, or empty dict if not found
         """
-        return cls._metadata.get(name, {})
+        metadata = cls._metadata.get(name, {})
+        # Tests and plugin reloads can rebuild the registry after the core
+        # package's import-time contract pass.  Restore the supplied-analysis
+        # protocol declaration lazily so a factory reset/reload never drops a
+        # scientific execution requirement.
+        if metadata and "protocol_requirements" not in metadata:
+            try:
+                from synaptipy.core.protocols import BUILTIN_ANALYSIS_REQUIREMENTS
+
+                requirement = BUILTIN_ANALYSIS_REQUIREMENTS.get(name)
+                if requirement is not None:
+                    declaration = requirement.as_dict()
+                    metadata["protocol_requirements"] = declaration
+                    if name in cls._original_metadata:
+                        cls._original_metadata[name]["protocol_requirements"] = declaration.copy()
+            except ImportError:
+                # The registry is importable before all optional core modules;
+                # returning normal metadata remains preferable to failing a
+                # plugin import in that narrow bootstrap window.
+                pass
+        return metadata
+
+    @classmethod
+    def set_metadata(cls, name: str, **metadata: Any) -> bool:
+        """Update non-parameter registry metadata for a registered analysis.
+
+        This is used by shared runtime layers (for example protocol
+        requirements) without coupling those layers to individual decorators.
+        """
+        if name not in cls._metadata:
+            return False
+        cls._metadata[name].update(metadata)
+        if name in cls._original_metadata:
+            cls._original_metadata[name].update(metadata)
+        return True
 
     @classmethod
     def list_registered(cls) -> list:

@@ -41,6 +41,7 @@ from synaptipy.core.analysis.cross_file_utils import (
 )
 from synaptipy.core.analysis.registry import AnalysisRegistry
 from synaptipy.core.data_model import Recording
+from synaptipy.core.protocols import ProtocolMap, ResolvedProtocol, resolve_protocols, slice_segment
 from synaptipy.infrastructure.file_readers import NeoAdapter
 
 log = logging.getLogger(__name__)
@@ -54,6 +55,13 @@ _METADATA_COLUMNS_ORDER = [
     "file_name",
     "file_path",
     "protocol",
+    "protocol_family",
+    "protocol_fingerprint",
+    "protocol_source",
+    "protocol_status",
+    "protocol_assignment_id",
+    "segment_start_s",
+    "segment_end_s",
     "recording_duration_s",
     "channel",
     "channel_units",
@@ -599,6 +607,27 @@ class BatchAnalysisEngine:
         progress_callback: Optional[Callable[[int, int, str], None]],
         channel_filter: Optional[List[str]],
     ) -> pd.DataFrame:
+        """Build protocol-compatible, file-balanced cross-file averages.
+
+        The historical flat pool is retained below as a private compatibility
+        implementation, but all normal callers now go through the planner.  It
+        honours selected-trial scopes, keeps protocol groups separate, and first
+        averages technical repeats within each file so a file with many sweeps
+        does not dominate the cross-file result.
+        """
+        return self._run_protocol_aware_cross_file_average(files, pipeline_config, progress_callback, channel_filter)
+
+    def _run_cross_file_average_legacy(  # noqa: C901
+        self,
+        files: List[Union[Path, "Recording"]],
+        pipeline_config: List[Dict[str, Any]],
+        progress_callback: Optional[Callable[[int, int, str], None]],
+        channel_filter: Optional[List[str]],
+    ) -> pd.DataFrame:
+        """Legacy all-trials pooling implementation kept for historical debugging.
+
+        New code must use :meth:`_run_cross_file_average`.
+        """
         """Aggregate all trials from all files per channel, compute the grand average,
         then execute the pipeline ONCE per channel on that master trace.
 
@@ -799,6 +828,187 @@ class BatchAnalysisEngine:
             df = self._order_columns(df)
         return df
 
+    def _run_protocol_aware_cross_file_average(  # noqa: C901
+        self,
+        files: List[Union[Path, "Recording"]],
+        pipeline_config: List[Dict[str, Any]],
+        progress_callback: Optional[Callable[[int, int, str], None]],
+        channel_filter: Optional[List[str]],
+    ) -> pd.DataFrame:
+        """Plan, validate, and execute one average per compatible protocol group."""
+        batch_start_time = datetime.now()
+        loaded: List[Tuple[str, str, str, Recording]] = []
+        total_files = len(files)
+
+        for index, item in enumerate(files):
+            if self._cancelled:
+                break
+            try:
+                if isinstance(item, (str, Path)):
+                    path = Path(item)
+                    if progress_callback:
+                        progress_callback(index, total_files, f"Loading {path.name}...")
+                    recording = self.neo_adapter.read_recording(path, channel_whitelist=channel_filter)
+                    if recording is None:
+                        continue
+                    loaded.append((path.name, str(path), f"{path}::{index}", recording))
+                else:
+                    source = getattr(item, "source_file", None)
+                    name = source.name if source else f"InMemory_{index}"
+                    loaded.append((name, str(source or name), f"{source or name}::{index}", item))
+            except Exception as exc:  # noqa: BLE001
+                log.warning("Cross-file planner could not load %r: %s", item, exc)
+
+        results: List[Dict[str, Any]] = []
+        for task in pipeline_config:
+            if self._cancelled:
+                break
+            analysis_name = task.get("analysis")
+            analysis_func = AnalysisRegistry.get_function(analysis_name)
+            scope = task.get("scope", "average")
+            params = dict(task.get("params", {}))
+            if analysis_func is None:
+                results.append({"analysis": analysis_name, "scope": scope, "error": "Analysis is not registered"})
+                continue
+
+            # Key: (channel display name, canonical unit, protocol fingerprint).
+            # Value: file path -> file-level technical repeats for that group.
+            groups: Dict[Tuple[str, str, str], Dict[str, Dict[str, Any]]] = {}
+            excluded: Dict[Tuple[str, str, str], List[str]] = {}
+
+            for file_name, file_path, source_key, recording in loaded:
+                for channel_key, channel in recording.channels.items():
+                    if channel_filter and channel_key not in channel_filter and str(channel_key) not in channel_filter:
+                        continue
+                    channel_name = getattr(channel, "name", None) or str(channel_key)
+                    units, scale = canonical_unit_and_scale(getattr(channel, "units", ""))
+                    if units is None or scale is None:
+                        continue
+                    try:
+                        if scope == "specific_trial":
+                            indices = [int(params.get("trial_index", 0))]
+                        elif scope in ("selected_trials", "selected_trials_average") and params.get("trial_indices"):
+                            from synaptipy.shared.utils import parse_trial_selection_string
+
+                            indices = sorted(
+                                parse_trial_selection_string(params["trial_indices"], channel.num_trials, strict=True)
+                            )
+                        elif scope == "first_trial":
+                            indices = [0]
+                        else:
+                            indices = list(range(channel.num_trials))
+                    except ValueError as exc:
+                        results.append(
+                            {
+                                "file_name": file_name,
+                                "file_path": file_path,
+                                "channel": channel_name,
+                                "analysis": analysis_name,
+                                "scope": scope,
+                                "error": str(exc),
+                            }
+                        )
+                        continue
+
+                    for trial_index in indices:
+                        data = channel.get_data(trial_index)
+                        time = channel.get_relative_time_vector(trial_index)
+                        if data is None or time is None:
+                            continue
+                        duration = float(time[-1]) if len(time) else None
+                        for protocol in resolve_protocols(recording, trial_index, duration, analysis_name):
+                            key = (channel_name, units, protocol.protocol_fingerprint)
+                            if protocol.status == "incompatible":
+                                excluded.setdefault(key, []).append(
+                                    f"{file_name}: trial {trial_index} ({'; '.join(protocol.missing)})"
+                                )
+                                continue
+                            segment_data, segment_time = slice_segment(data, time, protocol)
+                            if len(segment_data) == 0:
+                                excluded.setdefault(key, []).append(
+                                    f"{file_name}: trial {trial_index} has no segment samples"
+                                )
+                                continue
+                            bucket = groups.setdefault(key, {}).setdefault(
+                                source_key,
+                                {
+                                    "file_name": file_name,
+                                    "file_path": file_path,
+                                    "traces": [],
+                                    "times": [],
+                                    "protocol": protocol,
+                                },
+                            )
+                            bucket["traces"].append(np.asarray(segment_data, dtype=float) * scale)
+                            bucket["times"].append(np.asarray(segment_time, dtype=float))
+
+            for (channel_name, units, fingerprint), contributors in groups.items():
+                per_file_traces: List[np.ndarray] = []
+                per_file_times: List[np.ndarray] = []
+                used_protocol: Optional[ResolvedProtocol] = None
+                contributor_rows: List[Dict[str, Any]] = []
+                for _source_key, bucket in contributors.items():
+                    time, trace = average_time_aligned_trials(bucket["traces"], bucket["times"])
+                    if time is None or trace is None:
+                        continue
+                    if per_file_times and not time_bases_compatible(per_file_times[0], time):
+                        excluded.setdefault((channel_name, units, fingerprint), []).append(
+                            f"{bucket['file_name']}: incompatible segment time base"
+                        )
+                        continue
+                    per_file_times.append(time)
+                    per_file_traces.append(trace)
+                    used_protocol = bucket["protocol"]
+                    contributor_rows.append(
+                        {
+                            "file_name": bucket["file_name"],
+                            "file_path": bucket["file_path"],
+                            "n_segments": len(bucket["traces"]),
+                        }
+                    )
+                master_time, master_trace = average_time_aligned_trials(per_file_traces, per_file_times)
+                if master_time is None or master_trace is None or used_protocol is None:
+                    continue
+                sampling_rate = sampling_rate_from_timebase(master_time)
+                clean_params = {
+                    key: value for key, value in params.items() if key not in {"trial_index", "trial_indices"}
+                }
+                meta = {
+                    "file_name": "CROSS_FILE_MASTER_AVERAGE",
+                    "file_path": f"CROSS_FILE_PROTOCOL_AVERAGE ({len(per_file_traces)} files)",
+                    "channel": channel_name,
+                    "channel_units": units,
+                    "analysis": analysis_name,
+                    "scope": scope,
+                    "sampling_rate": sampling_rate,
+                    "trial_count": sum(row["n_segments"] for row in contributor_rows),
+                    "contributing_file_count": len(per_file_traces),
+                    "cross_file_weighting": "equal file weight",
+                    "cross_file_contributors": contributor_rows,
+                    "cross_file_exclusions": excluded.get((channel_name, units, fingerprint), []),
+                    **used_protocol.as_result_metadata(),
+                }
+                try:
+                    result = analysis_func(master_trace, master_time, sampling_rate, **clean_params)
+                    if isinstance(result, dict) and isinstance(result.get("metrics"), dict):
+                        metrics = result.pop("metrics")
+                        result.update(metrics)
+                    if not isinstance(result, dict):
+                        result = {"result": result}
+                    result.update(meta)
+                    self._sanitise_result_for_export(result)
+                    results.append(result)
+                except Exception as exc:  # noqa: BLE001
+                    results.append({**meta, "error": str(exc), "debug_trace": traceback.format_exc()})
+
+        if progress_callback:
+            progress_callback(total_files, total_files, "Cross-file average complete.")
+        df = pd.DataFrame(results)
+        if not df.empty:
+            df["batch_timestamp"] = batch_start_time.isoformat()
+            df = self._order_columns(df)
+        return df
+
     def _run_batch_sequential(  # noqa: C901
         self,
         files: List[Union[Path, "Recording"]],
@@ -927,6 +1137,7 @@ class BatchAnalysisEngine:
                             # Pass the context to allow tasks to use/modify it
                             task_results, updated_context = self._process_task(
                                 task=task,
+                                recording=recording,
                                 channel=channel,
                                 channel_name=channel_name,
                                 file_path=file_path,
@@ -1064,7 +1275,13 @@ class BatchAnalysisEngine:
         return df
 
     def _process_task(  # noqa: C901
-        self, task: Dict[str, Any], channel, channel_name: str, file_path: Path, context: Dict[str, Any]
+        self,
+        task: Dict[str, Any],
+        channel,
+        channel_name: str,
+        file_path: Path,
+        context: Dict[str, Any],
+        recording: Optional[Recording] = None,
     ) -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
         """
         Process a single analysis task on a channel, supporting preprocessing.
@@ -1121,6 +1338,18 @@ class BatchAnalysisEngine:
 
         results = []
         sampling_rate = channel.sampling_rate
+        protocol_enabled = isinstance(getattr(recording, "protocol_map", None), ProtocolMap)
+
+        def protocols_for_trial(trial_idx: int, trial_time: Any) -> List[ResolvedProtocol]:
+            """Resolve protocol context without making legacy runs disappear."""
+            if not protocol_enabled:
+                return []
+            try:
+                duration = float(np.asarray(trial_time)[-1]) if trial_time is not None and len(trial_time) else None
+                return resolve_protocols(recording, trial_idx, duration, analysis_name)
+            except Exception as exc:  # noqa: BLE001 - a bad map must not crash a batch
+                log.warning("Could not resolve protocol for %s trial %d: %s", file_path.name, trial_idx, exc)
+                return []
 
         # --- Data Retrieval Strategy ---
         # 1. If context matches requested scope, use it.
@@ -1391,6 +1620,51 @@ class BatchAnalysisEngine:
                 }
             ], None
 
+        # Averages and list-based analyses cannot be scientifically interpreted
+        # when they combine explicit, incompatible protocol assignments.  Legacy
+        # recordings are allowed through as ``needs_review`` for compatibility.
+        if protocol_enabled and scope in ("average", "selected_trials_average", "channel_set"):
+            if scope == "selected_trials_average" and params.get("trial_indices"):
+                from synaptipy.shared.utils import parse_trial_selection_string
+
+                selected_for_check = sorted(
+                    parse_trial_selection_string(params["trial_indices"], channel.num_trials, strict=True)
+                )
+            elif scope == "channel_set":
+                selected_for_check = list(range(channel.num_trials))
+            else:
+                selected_for_check = list(range(channel.num_trials))
+            contexts = []
+            for index in selected_for_check:
+                trial_time = channel.get_relative_time_vector(index)
+                contexts.extend(protocols_for_trial(index, trial_time))
+            incompatible = [ctx for ctx in contexts if ctx.status == "incompatible"]
+            fingerprints = {ctx.protocol_fingerprint for ctx in contexts if ctx.status != "incompatible"}
+            if incompatible:
+                return [
+                    {
+                        "file_name": file_path.name,
+                        "file_path": str(file_path),
+                        "channel": channel_name,
+                        "analysis": analysis_name,
+                        "scope": scope,
+                        "error": "Selected data contain protocol segments incompatible with this analysis.",
+                        "protocol_status": "incompatible",
+                    }
+                ], None
+            if len(fingerprints) > 1:
+                return [
+                    {
+                        "file_name": file_path.name,
+                        "file_path": str(file_path),
+                        "channel": channel_name,
+                        "analysis": analysis_name,
+                        "scope": scope,
+                        "error": "Cannot combine explicit mixed-protocol segments; select one protocol group.",
+                        "protocol_status": "mixed_protocol",
+                    }
+                ], None
+
         # --- expects_list enforcement ---
         # Controls how multi-trial data is dispatched to the analysis function
         # when scope="all_trials":
@@ -1457,7 +1731,7 @@ class BatchAnalysisEngine:
                 # Helper to run analysis and format result
                 total_trials = getattr(channel, "num_trials", 0)
 
-                def run_single(d, t, trial_idx=None):
+                def run_single(d, t, trial_idx=None, protocol: Optional[ResolvedProtocol] = None):
                     # Remove trial_index from params if present
                     p = params.copy()
                     p.pop("trial_index", None)
@@ -1481,7 +1755,48 @@ class BatchAnalysisEngine:
                     )
                     if trial_idx is not None:
                         res["trial_index"] = trial_idx
+                    if protocol is not None:
+                        res.update(protocol.as_result_metadata())
                     return res
+
+                def run_segmented(d, t, trial_idx: int) -> List[Dict[str, Any]]:
+                    """Run a single-trace analysis once per compatible segment."""
+                    contexts = protocols_for_trial(trial_idx, t)
+                    if not contexts:
+                        return [run_single(d, t, trial_idx)]
+                    rows: List[Dict[str, Any]] = []
+                    for protocol in contexts:
+                        if protocol.status == "incompatible":
+                            rows.append(
+                                {
+                                    "file_name": file_path.name,
+                                    "file_path": str(file_path),
+                                    "channel": channel_name,
+                                    "analysis": analysis_name,
+                                    "scope": scope,
+                                    "trial_index": trial_idx,
+                                    "error": "Protocol segment is incompatible with this analysis.",
+                                    **protocol.as_result_metadata(),
+                                }
+                            )
+                            continue
+                        segment_data, segment_time = slice_segment(d, t, protocol)
+                        if len(segment_data) == 0:
+                            rows.append(
+                                {
+                                    "file_name": file_path.name,
+                                    "file_path": str(file_path),
+                                    "channel": channel_name,
+                                    "analysis": analysis_name,
+                                    "scope": scope,
+                                    "trial_index": trial_idx,
+                                    "error": "Protocol segment contains no samples.",
+                                    **protocol.as_result_metadata(),
+                                }
+                            )
+                            continue
+                        rows.append(run_single(segment_data, segment_time, trial_idx, protocol))
+                    return rows
 
                 if scope == "all_trials" or scope == "channel_set":
                     # For channel_set, some functions expect the list (e.g. F-I curve)
@@ -1542,14 +1857,20 @@ class BatchAnalysisEngine:
                         for i, (d, t) in enumerate(zip(data, time)):
                             # Ensure we output correct trial index
                             real_idx = indices_list[i] if i < len(indices_list) else i
-                            results.append(run_single(d, t, real_idx))
+                            results.extend(run_segmented(d, t, real_idx))
 
                 elif scope == "specific_trial":
                     idx = int(params.get("trial_index", 0))
-                    results.append(run_single(data, time, idx))
+                    results.extend(run_segmented(data, time, idx))
+                elif scope == "first_trial":
+                    results.extend(run_segmented(data, time, 0))
                 else:
                     # Single trace (average, first_trial)
-                    results.append(run_single(data, time))
+                    protocol = None
+                    if protocol_enabled:
+                        contexts = protocols_for_trial(0, time)
+                        protocol = contexts[0] if len(contexts) == 1 else None
+                    results.append(run_single(data, time, protocol=protocol))
 
                 return results, None  # No context update
 

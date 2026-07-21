@@ -162,6 +162,14 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         # Channel Selection & Data Source (Standard for all tabs)
         self._setup_data_selection_ui(control_layout)
 
+        self.protocol_readiness_label = QtWidgets.QLabel("Protocol: signal-only / not reviewed")
+        self.protocol_readiness_label.setWordWrap(True)
+        self.protocol_readiness_label.setToolTip(
+            "Protocol readiness is resolved from the Protocol Map in Explorer. "
+            "Signal-only analyses can run without recorded protocol data."
+        )
+        control_layout.addWidget(self.protocol_readiness_label)
+
         # --- Preprocessing Widget ---
         # Explicitly place it here (after Data Source, before Params)
         if self.preprocessing_widget:
@@ -912,6 +920,15 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         metadata = AnalysisRegistry.get_metadata(self.analysis_name)
         requires_multi_trial = metadata.get("requires_multi_trial", False)
 
+        protocol_contexts = self._update_protocol_readiness(data)
+        incompatible = [context for context in protocol_contexts if context.status == "incompatible"]
+        if incompatible:
+            detail = "; ".join(incompatible[0].missing)
+            raise ValueError(f"Protocol Map is incompatible with this analysis: {detail}")
+        fingerprints = {context.protocol_fingerprint for context in protocol_contexts}
+        if requires_multi_trial and len(fingerprints) > 1:
+            raise ValueError("Selected trials contain multiple protocol groups. Analyse one group at a time.")
+
         # --- Inject secondary channel data if configured ---
         self._inject_secondary_channel_data(params, data)
 
@@ -980,6 +997,31 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         except Exception as e:
             log.error(f"Analysis execution failed: {e}")
             raise
+
+    def _update_protocol_readiness(self, data: Dict[str, Any]):
+        """Show an auditable readiness state before a core analysis is called."""
+        if not self._selected_item_recording:
+            return []
+        from synaptipy.core.protocols import resolve_protocols
+
+        source = self.data_source_combobox.currentData() if self.data_source_combobox else 0
+        trial_index = source if isinstance(source, int) else 0
+        time = data.get("time") if isinstance(data, dict) else None
+        duration = float(time[-1]) if time is not None and len(time) else None
+        contexts = resolve_protocols(self._selected_item_recording, trial_index, duration, self.analysis_name)
+        if not contexts:
+            self.protocol_readiness_label.setText("Protocol: unavailable")
+            return []
+        statuses = {context.status for context in contexts}
+        families = ", ".join(sorted({context.assignment.protocol_family for context in contexts}))
+        if "incompatible" in statuses:
+            state = "incompatible — edit Protocol Map"
+        elif "ready" in statuses:
+            state = "ready"
+        else:
+            state = "needs review"
+        self.protocol_readiness_label.setText(f"Protocol: {families} ({state})")
+        return contexts
 
     def _display_analysis_results(self, results: Dict[str, Any]):  # noqa: C901
         """

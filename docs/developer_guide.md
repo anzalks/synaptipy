@@ -287,6 +287,30 @@ CI runs on all three platforms across Python 3.10, 3.11, and 3.12:
 CI enforces `black --check`, `isort --check`, and `flake8`. PRs that fail
 any of these checks are rejected.
 
+The repository's CI gate remains at 90% coverage for compatibility with the
+published Codecov status check. Engineering changes should nevertheless be
+measured against a 95% target before review. On macOS, run the complete GUI
+suite with `QT_QPA_PLATFORM=offscreen` and use focused non-offscreen coverage
+commands for modules touched by a GUI change, because the intentional
+offscreen force-exit prevents coverage.py from producing its final aggregate
+report locally. CI's Linux job produces the canonical `coverage.xml` upload.
+
+### Documentation Screenshot Refresh
+
+Published screenshots are generated UI artifacts, not hand-cropped mockups.
+Refresh them from the pinned environment before documentation releases:
+
+```bash
+conda run --no-capture-output -n synaptipy env QT_QPA_PLATFORM=offscreen \
+  python scripts/capture_screenshots.py
+```
+
+The capture runner uses a deterministic dark theme, isolates bundled example
+plugins from `~/.synaptipy/plugins/`, and refreshes independent groups in fresh
+Qt processes. It preserves hand-authored tutorial figures while replacing the
+capture-managed PNGs. `scripts/verify_ci.py --with-screenshots` allows up to
+180 seconds for this complete refresh.
+
 Additional release-safety jobs run automatically on every push and pull request:
 
 - **`minimum-viable`**: Python 3.10 with exact lower-bound versions

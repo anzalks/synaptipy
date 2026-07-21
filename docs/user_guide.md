@@ -19,6 +19,7 @@ This document describes installation, configuration, and operation of Synaptipy 
  - [Navigation Controls](#navigation-controls)
  - [Plot Options](#plot-options)
 - [Using the Analyser Tab](#using-the-analyser-tab)
+ - [Protocol Maps and Compatible Averaging](#protocol-maps-and-compatible-averaging)
  - [Input Resistance/Conductance Analysis](#input-resistanceconductance-analysis)
  - [Baseline/RMP Analysis](#baselinermp-analysis)
  - [Evoked Responses](#evoked-responses)
@@ -473,6 +474,42 @@ valid ranges, and conditional visibility based on clamp mode.
   the trace; events are detected on the pointwise maximum of the three z-scored
   outputs, providing automatic tolerance for dendritic cable filtering.
   Configurable parameters: rise tau, decay tau, threshold in SD, and direction.
+
+### Protocol Maps and Compatible Averaging
+
+Acquisition files do not always include reliable command or stimulus metadata.
+Before analysing a mixed recording, use **Protocol Map...** in the Explorer's
+Analysis Selection panel to describe the protocol actually used. This is
+optional: recordings without a map retain the existing whole-trial workflow and
+are labelled as needing review rather than silently being treated as verified.
+
+![Protocol Map dialog with reviewed manual provenance](tutorial/screenshots/explorer_protocol_map.png)
+
+1. Select one or more trials and open **Protocol Map...**.
+2. Add a protocol family, such as **current step**, **single stim**,
+   **paired pulse**, **stimulus train**, or **signal only**. Trial numbers in
+   this dialog are one-based; ranges such as `1, 3-5` are accepted.
+3. Optionally limit the assignment to a start/end time range. Analysis segments
+   cannot overlap within a trial; overlapping annotations are allowed as context.
+4. Choose how the assignment was obtained. **Recorded** is reserved for
+   importer-backed command/TTL evidence. A manual assignment can instead record
+   that a reviewed current-step table or stimulus-timing table was supplied.
+5. Mark the assignment **Reviewed** only after checking it against the
+   acquisition record. The readiness indicator in the Analyser reports whether
+   the selected analysis is compatible, needs review, or is incompatible.
+
+For batch work, enable **Build Compatible Cross-File Averages**. Synaptipy
+first averages selected technical repeats within each file, then averages the
+per-file traces equally. It keeps different protocol fingerprints separate and
+records contributors and exclusions in the result provenance. This prevents a
+current-step segment, paired-pulse segment, or mismatched protocol timeline from
+being pooled into the same master trace. Analyses that require a multi-trial
+command relationship (for example an I-V or F-I curve) are still run on their
+compatible trials rather than inferred from an unrelated pooled trace.
+
+The Protocol Map dialog is exercised in the headless GUI suite by rendering a
+real Qt dialog capture, so its controls are checked with the pinned PySide6
+version as well as documented here.
 
 ### Visual Validation Overlays
 

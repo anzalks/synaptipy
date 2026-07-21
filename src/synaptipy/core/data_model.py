@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple  # Added Any for metadata di
 
 import numpy as np
 
+from synaptipy.core.protocols import ProtocolMap
 from synaptipy.core.source_interfaces import SourceHandle
 
 # Configure logger for this module
@@ -534,6 +535,12 @@ class Recording:
         self.session_start_time_dt: Optional[datetime] = None
         self.protocol_name: Optional[str] = None
         self.injected_current: Optional[float] = None
+        # Protocol assignments are intentionally held below the recording level:
+        # a file may contain different protocols in different trials and/or
+        # several time segments within a trial.  ``protocol_name`` above is
+        # retained as legacy import metadata and is converted to a reviewable
+        # full-trial assignment on demand.
+        self.protocol_map: ProtocolMap = ProtocolMap()
         self.metadata: Dict[str, Any] = {}  # Use Any for metadata flexibility
 
         # --- Nested data hierarchy (n vs N) ---

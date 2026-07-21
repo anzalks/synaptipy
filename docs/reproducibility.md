@@ -80,6 +80,15 @@ conda run -n synaptipy python validation/validate_algorithms.py
 All checks should pass with tolerances specified in the validation
 scripts.
 
+### Empirical Comparison Example
+
+![Example empirical comparison with Clampfit](tutorial/screenshots/empirical_validation.png)
+
+`validation/benchmark_real_data.py` generates this comparison from its fixed
+benchmark inputs. It is an example validation artifact, not a claim that every
+recording or every analysis method will agree exactly with another package;
+inspect the script, inputs, and its recorded tolerances when reproducing it.
+
 ## Version Pinning Rationale
 
 | Dependency | Pin | Reason |

@@ -688,11 +688,14 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
         options_group = QtWidgets.QGroupBox("Aggregation Options")
         options_layout = QtWidgets.QVBoxLayout(options_group)
 
-        self.cross_file_avg_checkbox = QtWidgets.QCheckBox("Pool & Average All Files (Outputs 1 Master Row)")
+        self.cross_file_avg_checkbox = QtWidgets.QCheckBox(
+            "Build Compatible Cross-File Averages (Outputs 1 Master Row)"
+        )
         self.cross_file_avg_checkbox.setToolTip(
-            "Aggregate all trials from every file into a single grand-average trace, "
-            "then run the analysis pipeline exactly once per channel. "
-            "Produces one result row per channel instead of one per file."
+            "Average technical repeats within each file, then average files equally. "
+            "When Protocol Maps are present, only segments with the same compatible "
+            "protocol fingerprint are pooled. Produces one result row per compatible "
+            "channel/protocol group instead of one per file."
         )
         options_layout.addWidget(self.cross_file_avg_checkbox)
         main_layout.addWidget(options_group)

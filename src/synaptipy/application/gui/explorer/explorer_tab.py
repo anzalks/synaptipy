@@ -209,6 +209,12 @@ class ExplorerTab(QtWidgets.QWidget):
         avg_btn_layout.addWidget(self.add_marked_trials_btn)
         agl.addLayout(avg_btn_layout)
 
+        self.protocol_map_btn = QtWidgets.QPushButton("Protocol Map…")
+        self.protocol_map_btn.setToolTip("Review trial and time-segment protocol assignments before analysis.")
+        self.protocol_map_btn.clicked.connect(self._open_protocol_map)
+        self.protocol_map_btn.setEnabled(False)
+        agl.addWidget(self.protocol_map_btn)
+
         # Open File Button
         self.open_file_btn = QtWidgets.QPushButton("Open File...")
 
@@ -1503,6 +1509,7 @@ class ExplorerTab(QtWidgets.QWidget):
             n_project_files = len(self.sidebar.get_selected_project_files())
         self.avg_add_analysis_btn.setEnabled(n_project_files >= 2)
         self.add_marked_trials_btn.setEnabled(bool(self.global_manual_trials))
+        self.protocol_map_btn.setEnabled(self.current_recording is not None)
 
         # Preprocessing state
         # Can enable/disable based on recording presence
@@ -1621,6 +1628,17 @@ class ExplorerTab(QtWidgets.QWidget):
                 5000,
             )
         self._update_all_ui_state()
+
+    def _open_protocol_map(self):
+        """Open the recording-level protocol map without interrupting plotting."""
+        if not self.current_recording:
+            return
+        from synaptipy.application.gui.dialogs.protocol_map_dialog import ProtocolMapDialog
+
+        dialog = ProtocolMapDialog(self.current_recording, self.current_trial_index, self)
+        dialog.exec()
+        count = len(self.current_recording.protocol_map.assignments)
+        self.status_bar.showMessage(f"Protocol map: {count} assignment(s) saved for this recording.", 3000)
 
     def _add_cross_file_average_to_analysis_set(self):  # noqa: C901
         """Average selected trial(s) across project-tree files and add to the Analysis Set.
