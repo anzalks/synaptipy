@@ -6,6 +6,7 @@ import pytest
 # Assuming neo_adapter_instance fixture is in conftest.py
 # Assuming sample_abf_path fixture is in conftest.py providing a valid Path object
 from synaptipy.core.data_model import Channel, Recording
+from synaptipy.core.protocols import ProtocolSource
 from synaptipy.shared.error_handling import SynaptipyFileNotFoundError, UnsupportedFormatError
 
 # --- Test _get_neo_io_class ---
@@ -32,6 +33,97 @@ def test_get_io_class_not_found(neo_adapter_instance):
     non_existent_file = Path("./surely_this_does_not_exist.abf")
     with pytest.raises(SynaptipyFileNotFoundError):
         neo_adapter_instance._get_neo_io_class(non_existent_file)
+
+
+def test_imported_command_evidence_is_an_unverified_annotation(neo_adapter_instance):
+    """Neo command data is recorded provenance, not an inferred protocol family."""
+    recording = Recording(Path("commands.abf"))
+    voltage = Channel("0", "Vm", "mV", 10_000, [np.zeros(20), np.zeros(20)])
+
+    neo_adapter_instance._import_recorded_protocol_evidence(
+        recording,
+        [voltage],
+        [np.zeros(20), np.ones(20)],
+        ["0"],
+    )
+
+    assignment = recording.protocol_map.assignments[0]
+    assert assignment.protocol_family == "recorded_evidence"
+    assert assignment.is_analysis_segment is False
+    assert assignment.verified is False
+    assert assignment.source == ProtocolSource.RECORDED
+    assert assignment.parameters["command"] == "neo_read_raw_protocol"
+    assert assignment.parameters["command_channels"] == ["0"]
+    assert recording.metadata["recorded_protocol_evidence"]["evidence_count"] == 1
+
+
+def test_populate_command_signals_creates_protocol_evidence(neo_adapter_instance):
+    """The regular ABF command-loading path also creates the evidence annotation."""
+
+    class Reader:
+        _axon_info = {}
+
+        @staticmethod
+        def read_raw_protocol():
+            return [[np.array([0.0, 50.0, 50.0, 0.0])]]
+
+    recording = Recording(Path("commands.abf"))
+    voltage = Channel("0", "Vm", "mV", 10_000, [np.zeros(4)])
+
+    neo_adapter_instance._populate_command_signals(Reader(), [voltage], recording, lazy=False)
+
+    assert len(voltage.current_data_trials) == 1
+    evidence = recording.protocol_map.assignments[0]
+    assert evidence.parameters["command"] == "neo_read_raw_protocol"
+    assert evidence.is_analysis_segment is False
+
+
+def test_imported_ttl_evidence_records_trial_timing_without_guessing_family(neo_adapter_instance):
+    """Explicitly named TTL traces create one reviewable timing annotation per trial."""
+    recording = Recording(Path("ttl.nwb"))
+    ttl = Channel(
+        "ttl-1",
+        "Stim TTL",
+        "V",
+        1_000,
+        [np.array([0.0, 0.0, 5.0, 5.0, 0.0, 5.0, 0.0])],
+    )
+
+    neo_adapter_instance._import_recorded_protocol_evidence(recording, [ttl], [], [])
+
+    assignment = recording.protocol_map.assignments[0]
+    assert assignment.protocol_family == "recorded_evidence"
+    assert assignment.trial_indices == (0,)
+    assert assignment.parameters["ttl_channel"] == "ttl-1"
+    assert assignment.parameters["stimulus_times"] == [0.002, 0.005]
+    assert assignment.parameters["stimulus_count"] == 2
+    assert assignment.is_analysis_segment is False
+
+
+def test_populate_command_signals_detects_ttl_from_non_abf_neo_reader(neo_adapter_instance):
+    """TTL evidence is available even when a Neo reader has no ABF command API."""
+
+    class Reader:
+        _axon_info = {}
+
+    recording = Recording(Path("ttl.nwb"))
+    ttl = Channel("ttl", "TTL", "V", 1_000, [np.array([0.0, 5.0, 0.0])])
+
+    neo_adapter_instance._populate_command_signals(Reader(), [ttl], recording, lazy=False)
+
+    assignment = recording.protocol_map.assignments[0]
+    assert assignment.parameters["ttl_channel"] == "ttl"
+    assert assignment.parameters["stimulus_times"] == [0.001]
+
+
+def test_unlabelled_waveform_is_not_imported_as_ttl_evidence(neo_adapter_instance):
+    """Waveform shape alone cannot be used to claim stimulation timing."""
+    recording = Recording(Path("voltage.nwb"))
+    voltage = Channel("0", "Vm", "mV", 1_000, [np.array([0.0, 0.0, 5.0, 0.0])])
+
+    neo_adapter_instance._import_recorded_protocol_evidence(recording, [voltage], [], [])
+
+    assert recording.protocol_map.assignments == []
 
 
 # --- Test read_recording ---

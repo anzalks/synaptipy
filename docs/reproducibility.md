@@ -92,6 +92,15 @@ Stimulus-locked analyses require recorded timing evidence or verified manual
 stimulus times in the Protocol Map. A voltage trace is not treated as a TTL
 signal when timing data are absent.
 
+For Neo-loaded recordings, Synaptipy retains ABF command waveforms obtained
+from the reader and pulse onsets from channels whose native labels explicitly
+identify TTL or stimulation timing. These appear as unverified Protocol Map
+annotations. The import does not classify a waveform as a current-step,
+paired-pulse, train, or optogenetic experiment: that experimental context must
+be selected and reviewed by the scientist before it becomes an analysis
+segment. This preserves useful acquisition evidence without making a semantic
+claim that the file alone cannot support.
+
 Every figure export writes a JSON sidecar next to the figure. It records the
 export format, DPI, source recording metadata, and the analysis context passed
 by the application, including visible trial selection where available.

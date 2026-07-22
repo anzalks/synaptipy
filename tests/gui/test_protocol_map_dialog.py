@@ -8,6 +8,7 @@ from PySide6 import QtWidgets
 
 from synaptipy.application.gui.dialogs.protocol_map_dialog import ProtocolMapDialog
 from synaptipy.core.data_model import Channel, Recording
+from synaptipy.core.protocols import ProtocolAssignment, ProtocolSource
 
 
 def _recording():
@@ -50,6 +51,37 @@ def test_protocol_map_dialog_allows_overlapping_annotation(qapp):
 
     assert len(dialog.recording.protocol_map.assignments) == 2
     assert dialog.recording.protocol_map.assignments[1].is_analysis_segment is False
+
+
+def test_protocol_map_dialog_promotes_detected_evidence_into_reviewable_assignment(qapp):
+    recording = _recording()
+    evidence = recording.protocol_map.add(
+        ProtocolAssignment(
+            protocol_family="recorded_evidence",
+            trial_indices=(0,),
+            source=ProtocolSource.RECORDED,
+            parameters={
+                "auto_detected": True,
+                "ttl_channel": "ttl",
+                "stimulus_times": [0.02, 0.05],
+            },
+            label="Auto-detected TTL pulses: Stim TTL",
+            is_analysis_segment=False,
+        )
+    )
+    dialog = ProtocolMapDialog(recording, current_trial=0)
+
+    dialog.detected_evidence.setCurrentIndex(dialog.detected_evidence.findData(evidence.assignment_id))
+    dialog.family.setCurrentText("paired_pulse")
+    dialog.verified.setChecked(True)
+    dialog._add()
+
+    assignment = recording.protocol_map.assignments[-1]
+    assert assignment.is_analysis_segment is True
+    assert assignment.source == ProtocolSource.RECORDED
+    assert assignment.parameters["ttl_channel"] == "ttl"
+    assert assignment.parameters["stimulus_times"] == [0.02, 0.05]
+    assert assignment.verified is True
 
 
 def test_protocol_map_dialog_renders_to_screenshot(qapp):

@@ -144,10 +144,14 @@ electrophysiology data files. It supports all formats handled by the Neo library
 
 Use **Protocol Map...** in the Explorer's Analysis Selection panel when the
 acquisition file does not carry enough trustworthy command or stimulus metadata
-to identify the protocol automatically. The dialog maps one-based trial ranges
-and optional time windows to protocol families. It distinguishes an exclusive
-analysis segment from an overlapping contextual annotation, and records whether
-the provenance is manual, drawn, imported, or signal-only.
+to identify the protocol automatically. Neo-loaded ABF command waveforms and
+explicitly labelled TTL timing traces appear as unverified contextual evidence
+in this dialog. Select that evidence to carry its recorded details into a new
+assignment, then choose and review the experimental family. The dialog maps
+one-based trial ranges and optional time windows to protocol families. It
+distinguishes an exclusive analysis segment from an overlapping contextual
+annotation, and records whether the provenance is manual, drawn, imported,
+recorded, or signal-only.
 
 The tutorial capture above uses the bundled recording with a **reviewed manual
 current-step table**. It does not claim that the command waveform was imported.
@@ -155,9 +159,9 @@ Only mark an assignment reviewed after checking it against the acquisition
 record; this controls the compatibility/readiness checks used by analyses and
 compatible cross-file averaging.
 
-An imported filename or reader label is displayed as provenance only. It never
-chooses an analysis family or timing window; make or import a Protocol Map when
-that scientific context is needed.
+An imported filename or reader label is displayed as provenance only. Detected
+command and TTL evidence also never chooses an analysis family or timing
+window; review it in the Protocol Map when that scientific context is needed.
 
 ### 1.7 Adding Data to the Analyser
 

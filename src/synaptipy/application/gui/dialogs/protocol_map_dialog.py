@@ -39,7 +39,8 @@ class ProtocolMapDialog(QtWidgets.QDialog):
         layout = QtWidgets.QVBoxLayout(self)
         description = QtWidgets.QLabel(
             "Assign a protocol to individual trials or a time range. Analysis segments cannot overlap; "
-            "annotations may overlap and are retained as context."
+            "annotations may overlap and are retained as context. Select detected evidence to copy its "
+            "recorded command or timing details into a reviewed assignment."
         )
         description.setWordWrap(True)
         layout.addWidget(description)
@@ -58,6 +59,10 @@ class ProtocolMapDialog(QtWidgets.QDialog):
         self.trials.setToolTip("One-based trial numbers; use commas/ranges, e.g. 1, 3-5.")
         self.family = QtWidgets.QComboBox()
         self.family.addItems(self.FAMILIES)
+        self.detected_evidence = QtWidgets.QComboBox()
+        self.detected_evidence.addItem("No detected evidence selected", None)
+        self.detected_evidence.currentIndexChanged.connect(self._select_detected_evidence)
+        self._selected_evidence_id = None
         self.label = QtWidgets.QLineEdit()
         self.start = QtWidgets.QDoubleSpinBox()
         self.end = QtWidgets.QDoubleSpinBox()
@@ -77,12 +82,16 @@ class ProtocolMapDialog(QtWidgets.QDialog):
                 ProtocolSource.SIGNAL_ONLY.value,
             ]
         )
+        self.source.addItem(ProtocolSource.RECORDED.value)
+        recorded_index = self.source.findText(ProtocolSource.RECORDED.value)
+        self.source.model().item(recorded_index).setEnabled(False)
         self.verified = QtWidgets.QCheckBox("Reviewed")
         self.annotation = QtWidgets.QCheckBox("Annotation (may overlap)")
         self.manual_steps = QtWidgets.QCheckBox("Verified manual current-step table supplied")
         self.manual_timings = QtWidgets.QCheckBox("Verified manual stimulus timings supplied")
         form.addRow("Trials:", self.trials)
         form.addRow("Protocol family:", self.family)
+        form.addRow("Detected evidence:", self.detected_evidence)
         form.addRow("Label:", self.label)
         form.addRow("Start / end:", self._pair(self.start, self.end))
         form.addRow("Source:", self.source)
@@ -144,17 +153,23 @@ class ProtocolMapDialog(QtWidgets.QDialog):
             end = self.end.value() if self.end.value() > 0 else None
             if (start is None) != (end is None):
                 raise ValueError("Enter both start and end, or leave both at full trial.")
+            evidence = self._selected_evidence()
+            parameters = dict(evidence.parameters) if evidence is not None else {}
+            parameters.update(
+                {
+                    **({"current_steps": "manual"} if self.manual_steps.isChecked() else {}),
+                    **({"stimulus_times": "manual"} if self.manual_timings.isChecked() else {}),
+                }
+            )
+            source = ProtocolSource.RECORDED if evidence is not None else ProtocolSource(self.source.currentText())
             assignment = ProtocolAssignment(
                 protocol_family=self.family.currentText(),
                 trial_indices=indices,
                 start_time=start,
                 end_time=end,
                 label=self.label.text().strip(),
-                source=ProtocolSource(self.source.currentText()),
-                parameters={
-                    **({"current_steps": "manual"} if self.manual_steps.isChecked() else {}),
-                    **({"stimulus_times": "manual"} if self.manual_timings.isChecked() else {}),
-                },
+                source=source,
+                parameters=parameters,
                 verified=self.verified.isChecked(),
                 is_analysis_segment=not self.annotation.isChecked(),
             )
@@ -163,6 +178,50 @@ class ProtocolMapDialog(QtWidgets.QDialog):
             QtWidgets.QMessageBox.warning(self, "Cannot Add Protocol Assignment", str(exc))
             return
         self._refresh()
+
+    def _selected_evidence(self):
+        """Return the selected importer-created annotation, if it remains present."""
+        if not self._selected_evidence_id:
+            return None
+        return next(
+            (
+                assignment
+                for assignment in self.recording.protocol_map.assignments
+                if assignment.assignment_id == self._selected_evidence_id
+                and not assignment.is_analysis_segment
+                and assignment.source == ProtocolSource.RECORDED
+                and assignment.parameters.get("auto_detected") is True
+            ),
+            None,
+        )
+
+    def _select_detected_evidence(self, index: int) -> None:
+        assignment_id = self.detected_evidence.itemData(index)
+        self._selected_evidence_id = assignment_id or None
+        evidence = self._selected_evidence()
+        if evidence is None:
+            return
+        self.trials.setText(", ".join(str(trial_index + 1) for trial_index in evidence.trial_indices))
+        self.label.setText(evidence.label)
+        self.source.setCurrentText(ProtocolSource.RECORDED.value)
+
+    def _refresh_detected_evidence(self) -> None:
+        selected = self._selected_evidence_id
+        self.detected_evidence.blockSignals(True)
+        self.detected_evidence.clear()
+        self.detected_evidence.addItem("No detected evidence selected", None)
+        for assignment in self.recording.protocol_map.assignments:
+            if (
+                not assignment.is_analysis_segment
+                and assignment.source == ProtocolSource.RECORDED
+                and assignment.parameters.get("auto_detected") is True
+            ):
+                trial_label = ", ".join(str(index + 1) for index in assignment.trial_indices)
+                self.detected_evidence.addItem(f"{assignment.label} (trials {trial_label})", assignment.assignment_id)
+        index = self.detected_evidence.findData(selected)
+        self.detected_evidence.setCurrentIndex(index if index >= 0 else 0)
+        self.detected_evidence.blockSignals(False)
+        self._selected_evidence_id = self.detected_evidence.currentData() or None
 
     def _remove(self) -> None:
         row = self.table.currentRow()
@@ -173,6 +232,7 @@ class ProtocolMapDialog(QtWidgets.QDialog):
         self._refresh()
 
     def _refresh(self) -> None:
+        self._refresh_detected_evidence()
         assignments = self.recording.protocol_map.assignments
         self.table.setRowCount(len(assignments))
         for row, assignment in enumerate(assignments):

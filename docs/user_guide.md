@@ -482,8 +482,10 @@ Before analysing a mixed recording, use **Protocol Map...** in the Explorer's
 Analysis Selection panel to describe the protocol actually used. This is
 optional: recordings without a map retain the existing whole-trial workflow and
 are labelled as needing review rather than silently being treated as verified.
-Any imported protocol label is descriptive provenance only; it cannot route an
-analysis or make a recording protocol-compatible.
+Neo imports retain ABF command waveforms and pulse onsets from explicitly
+labelled TTL or stimulation channels as unverified evidence annotations. Any
+other imported protocol label is descriptive provenance only; it cannot route
+an analysis or make a recording protocol-compatible.
 
 ![Protocol Map dialog with reviewed manual provenance](tutorial/screenshots/explorer_protocol_map.png)
 
@@ -493,9 +495,12 @@ analysis or make a recording protocol-compatible.
    this dialog are one-based; ranges such as `1, 3-5` are accepted.
 3. Optionally limit the assignment to a start/end time range. Analysis segments
    cannot overlap within a trial; overlapping annotations are allowed as context.
-4. Choose how the assignment was obtained. **Recorded** is reserved for
-   importer-backed command/TTL evidence. A manual assignment can instead record
-   that a reviewed current-step table or stimulus-timing table was supplied.
+4. If a **Detected evidence** item is present, select it to copy the recorded
+   command or TTL timing into the new assignment. Then choose the experimental
+   family. Synaptipy never infers that family from waveform shape alone.
+   **Recorded** is reserved for this importer-backed evidence. A manual
+   assignment can instead record that a reviewed current-step table or
+   stimulus-timing table was supplied.
 5. Mark the assignment **Reviewed** only after checking it against the
    acquisition record. The readiness indicator in the Analyser reports whether
    the selected analysis is compatible, needs review, or is incompatible.

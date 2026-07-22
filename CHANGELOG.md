@@ -13,11 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   exportable trial-quality decisions.
 - Figure provenance sidecars for PNG, JPG, SVG, and PDF exports.
 - Explicit validated and experimental file-format support tiers.
+- Neo imports now retain detected ABF command waveforms and explicitly labelled
+  TTL pulse timings as unverified Protocol Map evidence annotations.
 
 ### Changed
 
 - Stimulus-locked analyses now require recorded timing evidence or verified
   manual timing. Voltage traces are not used as an implicit TTL fallback.
+- Protocol Map can promote detected recorded evidence into a scientist-reviewed
+  protocol assignment without guessing an experimental family.
 
 ## [0.1.6.1] - 2026-06-24
 

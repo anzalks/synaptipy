@@ -24,6 +24,7 @@ __maintainer__ = "Anzal K Shahul"
 __email__ = "anzalks@ncbs.res.in"
 
 import logging
+import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Type
@@ -33,6 +34,7 @@ import neo.io as nIO  # Keep original import style
 import numpy as np
 
 from synaptipy.core.data_model import Channel, Recording
+from synaptipy.core.protocols import ProtocolAssignment, ProtocolSource
 from synaptipy.core.signal_processor import validate_sampling_rate
 from synaptipy.infrastructure.file_readers.format_support import FormatSupport, format_support
 
@@ -311,6 +313,120 @@ class NeoAdapter:
         except Exception as exc:
             log.debug("ABF epoch extraction failed (non-fatal): %s", exc)
 
+    @staticmethod
+    def _looks_like_ttl_channel(channel: Channel) -> bool:
+        """Return whether a native channel label explicitly identifies timing data.
+
+        A voltage waveform is never promoted to a TTL trace from its shape alone.
+        Only names carrying a conventional acquisition-system timing label are
+        considered, and edges must still be present in the recorded values.
+        """
+        label = f"{channel.id} {channel.name}".lower()
+        return bool(re.search(r"(?:^|[^a-z0-9])(?:ttl|trigger|digital|stim|sync|laser|led|opto)(?:[^a-z0-9]|$)", label))
+
+    @staticmethod
+    def _ttl_onsets(data: np.ndarray, time: np.ndarray) -> Tuple[List[float], Optional[float]]:
+        """Extract pulse onsets from an explicitly labelled TTL-like trace.
+
+        The threshold is the midpoint of the finite recorded range.  The method
+        deliberately requires a state transition, so a static high or low
+        channel is not represented as stimulus evidence.
+        """
+        values = np.asarray(data, dtype=np.float64).ravel()
+        times = np.asarray(time, dtype=np.float64).ravel()
+        if values.size < 2 or values.size != times.size:
+            return [], None
+        finite = np.isfinite(values) & np.isfinite(times)
+        if np.count_nonzero(finite) < 2:
+            return [], None
+        values = values[finite]
+        times = times[finite]
+        data_min = float(np.min(values))
+        data_max = float(np.max(values))
+        if data_max - data_min <= 0.3:
+            return [], None
+        threshold = data_min + (data_max - data_min) * 0.5
+        high = values > threshold
+        if not np.any(np.diff(high.astype(np.int8))):
+            return [], None
+        rising = np.flatnonzero(high & np.concatenate(([True], ~high[:-1])))
+        return [round(float(value), 9) for value in times[rising]], threshold
+
+    def _import_recorded_protocol_evidence(
+        self,
+        recording: Recording,
+        created_channels: List[Channel],
+        command_trials: List[np.ndarray],
+        command_channel_ids: List[str],
+    ) -> None:
+        """Add reviewable Protocol Map annotations for Neo-backed evidence.
+
+        This intentionally does not infer an experimental family.  A command
+        waveform and a TTL pulse train establish that recorded evidence exists,
+        but cannot reliably distinguish, for example, a single pulse from an
+        optogenetic protocol without the experimenter's review.
+        """
+        assignments: List[ProtocolAssignment] = []
+        if command_trials:
+            assignments.append(
+                ProtocolAssignment(
+                    protocol_family="recorded_evidence",
+                    trial_indices=tuple(range(len(command_trials))),
+                    source=ProtocolSource.RECORDED,
+                    label="Auto-detected command waveform",
+                    parameters={
+                        "auto_detected": True,
+                        "evidence_type": "command_waveform",
+                        "command": "neo_read_raw_protocol",
+                        "command_channels": list(command_channel_ids),
+                        "command_trial_count": len(command_trials),
+                        "command_sample_counts": [int(trial.size) for trial in command_trials],
+                    },
+                    is_analysis_segment=False,
+                    verified=False,
+                )
+            )
+
+        for channel in created_channels:
+            if not self._looks_like_ttl_channel(channel):
+                continue
+            for trial_index in range(channel.num_trials):
+                data = channel.get_data(trial_index)
+                time = channel.get_relative_time_vector(trial_index)
+                if data is None or time is None:
+                    continue
+                onsets, threshold = self._ttl_onsets(data, time)
+                if not onsets:
+                    continue
+                assignments.append(
+                    ProtocolAssignment(
+                        protocol_family="recorded_evidence",
+                        trial_indices=(trial_index,),
+                        source=ProtocolSource.RECORDED,
+                        label=f"Auto-detected TTL pulses: {channel.name}",
+                        parameters={
+                            "auto_detected": True,
+                            "evidence_type": "ttl_pulses",
+                            "ttl_channel": channel.id,
+                            "stimulus_times": onsets,
+                            "stimulus_count": len(onsets),
+                            "ttl_threshold": round(float(threshold), 9),
+                        },
+                        is_analysis_segment=False,
+                        verified=False,
+                    )
+                )
+
+        for assignment in assignments:
+            recording.protocol_map.add(assignment)
+        if assignments:
+            recording.metadata["recorded_protocol_evidence"] = {
+                "schema_version": 1,
+                "auto_detected": True,
+                "assignment_ids": [assignment.assignment_id for assignment in assignments],
+                "evidence_count": len(assignments),
+            }
+
     def _populate_command_signals(
         self,
         reader: object,
@@ -329,7 +445,7 @@ class NeoAdapter:
         ``recording.metadata["abf_epochs"]`` for the NWB Attempt-2 synthetic
         stimulus fallback.
         """
-        if lazy or not hasattr(reader, "read_raw_protocol"):
+        if lazy:
             return
 
         voltage_chs = [ch for ch in created_channels if ch.units.lower() in ("mv", "v", "millivolts", "volts")]
@@ -337,24 +453,34 @@ class NeoAdapter:
         if not target_chs:
             return
 
-        try:
-            protocol_raw_list = reader.read_raw_protocol()  # type: ignore[attr-defined]
-            if not isinstance(protocol_raw_list, list) or not protocol_raw_list:
-                return
-            command_trials = self._extract_protocol_trials(protocol_raw_list)
-            if command_trials:
-                for ch in target_chs:
-                    ch.current_data_trials = command_trials
-                    ch.current_units = "pA"
-                log.debug(
-                    "_populate_command_signals: stored %d trial(s) on %d channel(s).",
-                    len(command_trials),
-                    len(target_chs),
-                )
-        except Exception as exc:
-            log.debug("read_raw_protocol() failed (non-fatal): %s", exc)
+        command_trials: List[np.ndarray] = []
+        command_channel_ids: List[str] = []
+        if hasattr(reader, "read_raw_protocol"):
+            try:
+                protocol_raw_list = reader.read_raw_protocol()  # type: ignore[attr-defined]
+                if not isinstance(protocol_raw_list, list) or not protocol_raw_list:
+                    protocol_raw_list = []
+                command_trials = self._extract_protocol_trials(protocol_raw_list)
+                if command_trials:
+                    for ch in target_chs:
+                        ch.current_data_trials = command_trials
+                        ch.current_units = "pA"
+                    command_channel_ids = [channel.id for channel in target_chs]
+                    log.debug(
+                        "_populate_command_signals: stored %d trial(s) on %d channel(s).",
+                        len(command_trials),
+                        len(target_chs),
+                    )
+            except Exception as exc:
+                log.debug("read_raw_protocol() failed (non-fatal): %s", exc)
 
         self._cache_abf_epochs(reader, recording)
+        self._import_recorded_protocol_evidence(
+            recording,
+            created_channels,
+            command_trials,
+            command_channel_ids,
+        )
 
     def _pyabf_to_neo_block(self, filepath: Path) -> Tuple[neo.Block, object]:
         """Convert a pyabf ABF file to a neo Block for downstream processing.

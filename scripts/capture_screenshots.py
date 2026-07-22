@@ -458,11 +458,11 @@ def _capture_explorer_screenshots(window: Any, output_dir: Path) -> List[str]:
 
 
 def _capture_protocol_map(window: Any, output_dir: Path) -> List[str]:
-    """Capture the Protocol Map dialog with a reviewed manual assignment.
+    """Capture recorded evidence and a reviewed Protocol Map assignment.
 
-    The capture deliberately uses the real bundled current-clamp recording.
-    Manual provenance is displayed rather than claiming an imported command
-    trace, which keeps the tutorial example scientifically honest.
+    The bundled recording is used so genuine Neo evidence is shown whenever
+    available. A labelled visual fixture is added only when its file contains
+    no command or TTL evidence, ensuring the documented selector is covered.
     """
     from synaptipy.application.gui.dialogs.protocol_map_dialog import ProtocolMapDialog  # noqa: PLC0415
     from synaptipy.core.protocols import ProtocolAssignment, ProtocolSource  # noqa: PLC0415
@@ -477,6 +477,26 @@ def _capture_protocol_map(window: Any, output_dir: Path) -> List[str]:
     if recording is None:
         print("  [warn] Protocol Map screenshot has no loaded recording", file=sys.stderr)
         return []
+
+    has_detected_evidence = any(
+        assignment.source == ProtocolSource.RECORDED and assignment.parameters.get("auto_detected") is True
+        for assignment in recording.protocol_map.assignments
+    )
+    if not has_detected_evidence:
+        recording.protocol_map.add(
+            ProtocolAssignment(
+                protocol_family="recorded_evidence",
+                trial_indices=(0, 1, 2),
+                label="Example detected command waveform",
+                source=ProtocolSource.RECORDED,
+                parameters={
+                    "auto_detected": True,
+                    "evidence_type": "command_waveform",
+                    "command": "screenshot_fixture",
+                },
+                is_analysis_segment=False,
+            )
+        )
 
     recording.protocol_map.add(
         ProtocolAssignment(
