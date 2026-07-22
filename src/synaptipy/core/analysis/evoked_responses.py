@@ -1079,8 +1079,12 @@ def run_opto_sync_wrapper(  # noqa: C901
 
     ttl_data = kwargs.get("ttl_data", None)
     if ttl_data is None:
-        log.debug("No TTL data provided; using voltage trace as fallback for TTL edge detection.")
-        ttl_data = data
+        return {
+            "module_used": "evoked_responses",
+            "metrics": {
+                "error": "Optogenetic synchronization requires a recorded TTL channel or verified protocol timing."
+            },
+        }
 
     result = calculate_optogenetic_sync(
         ttl_data=ttl_data,

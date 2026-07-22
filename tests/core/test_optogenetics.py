@@ -75,6 +75,17 @@ class TestExtractTTLEpochs:
 
 # ---------------------------------------------------------------------------
 # run_opto_sync_wrapper – Spikes mode (default)
+
+
+def test_opto_sync_requires_explicit_ttl_evidence():
+    """Voltage data must never be silently reinterpreted as a TTL channel."""
+    sampling_rate = 10_000.0
+    time = np.arange(0.0, 0.1, 1.0 / sampling_rate)
+    result = run_opto_sync_wrapper(np.zeros_like(time), time, sampling_rate, ttl_data=None)
+
+    assert "requires a recorded TTL channel" in result["metrics"]["error"]
+
+
 # ---------------------------------------------------------------------------
 
 

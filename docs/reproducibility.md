@@ -80,6 +80,30 @@ conda run -n synaptipy python validation/validate_algorithms.py
 All checks should pass with tolerances specified in the validation
 scripts.
 
+## Analysis Provenance and Eligibility
+
+Synaptipy records the selected trials for batch analyses. Time-aware averages
+interpolate eligible trials on a shared relative time axis and retain the
+number of contributors at each sample. Empty traces, non-finite samples,
+invalid time axes, and explicitly excluded trials are retained as quality
+control decisions rather than silently contributing to an average.
+
+Stimulus-locked analyses require recorded timing evidence or verified manual
+stimulus times in the Protocol Map. A voltage trace is not treated as a TTL
+signal when timing data are absent.
+
+Every figure export writes a JSON sidecar next to the figure. It records the
+export format, DPI, source recording metadata, and the analysis context passed
+by the application, including visible trial selection where available.
+
+## File-format Validation Tiers
+
+ABF and NWB are validated Synaptipy acquisition formats. Their reader,
+analysis, batch, and export paths have dedicated test coverage. Other formats
+discoverable through Neo are experimental until they receive equivalent
+end-to-end fixtures and validation tests. The extension list therefore
+describes reader discovery, not equal validation status for every format.
+
 ### Empirical Comparison Example
 
 ![Example empirical comparison with Clampfit](tutorial/screenshots/empirical_validation.png)

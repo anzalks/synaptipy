@@ -31,6 +31,9 @@ def test_plot_exporter_writes_every_supported_format(plot_widget, tmp_path, file
     assert success is True
     assert output_path.is_file()
     assert output_path.stat().st_size > 0
+    sidecar = output_path.with_suffix(output_path.suffix + ".provenance.json")
+    assert sidecar.is_file()
+    assert '"figure_file": "plot.' in sidecar.read_text(encoding="utf-8")
 
 
 def test_svg_export_keeps_labels_as_text_elements(plot_widget, tmp_path):

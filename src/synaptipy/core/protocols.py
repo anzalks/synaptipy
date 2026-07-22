@@ -321,14 +321,19 @@ def resolve_protocols(
             or "current_steps" in assignment.parameters
         ):
             missing.append("requires command waveform or verified manual step table")
-        if requirement.requires_stimulus_timing and not (
-            assignment.source == ProtocolSource.RECORDED
+        recorded_timing = assignment.source == ProtocolSource.RECORDED and bool(
+            assignment.parameters.get("ttl_channel")
             or assignment.parameters.get("stimulus_times")
-            or "stimulus_times" in assignment.parameters
-            or assignment.parameters.get("ttl_channel")
-        ):
+            or assignment.parameters.get("command")
+        )
+        verified_manual_timing = (
+            assignment.source in (ProtocolSource.MANUAL, ProtocolSource.DRAWN, ProtocolSource.IMPORTED)
+            and assignment.verified
+            and bool(assignment.parameters.get("stimulus_times"))
+        )
+        if requirement.requires_stimulus_timing and not (recorded_timing or verified_manual_timing):
             missing.append("requires stimulus timing")
-        if missing and explicit:
+        if missing and (explicit or requirement.requires_stimulus_timing):
             status = "incompatible"
         elif missing:
             status = "needs_review"

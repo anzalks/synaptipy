@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple  # Added Any for metadata di
 
 import numpy as np
 
+from synaptipy.core.averaging import TimeAlignedAverage, compute_time_aligned_average
 from synaptipy.core.protocols import ProtocolMap
 from synaptipy.core.source_interfaces import SourceHandle
 
@@ -325,79 +326,32 @@ class Channel:
         return None
 
     def get_averaged_data(self, trial_indices: Optional[List[int]] = None) -> Optional[np.ndarray]:
-        # Returns the averaged data across all (or specified) trials.
+        """Return the canonical time-aware average for selected trials."""
+        average = self.get_time_aligned_average(trial_indices)
+        return average.data
 
-        # Ensure trials are loaded (lazy loading support)
-        indices_to_load = trial_indices if trial_indices is not None else list(range(self.num_trials))
-        for idx in indices_to_load:
-            # get_data handles the lock and lazy load internally
-            self.get_data(idx)
+    def get_time_aligned_average(self, trial_indices: Optional[List[int]] = None) -> TimeAlignedAverage:
+        """Return an average with QC decisions and per-sample contributor counts."""
+        requested = trial_indices if trial_indices else list(range(self.num_trials))
+        valid_indices = [index for index in requested if 0 <= index < self.num_trials]
+        invalid_indices = [index for index in requested if index not in valid_indices]
+        if invalid_indices:
+            log.warning("Channel %s: ignored invalid trial indices %s", self.id, invalid_indices)
+        traces = [self.get_data(index) for index in valid_indices]
+        times = [self.get_relative_time_vector(index) for index in valid_indices]
+        average = compute_time_aligned_average(traces, times, valid_indices)
+        if average.is_empty:
+            log.warning("Channel %s: no eligible trials available for averaging", self.id)
+        return average
 
-        if self.data_trials:
-            try:
-                # Determine which trials to use
-                if trial_indices is not None and len(trial_indices) > 0:
-                    # Validate indices and warn about out-of-range values
-                    invalid_indices = [i for i in trial_indices if i < 0 or i >= len(self.data_trials)]
-                    if invalid_indices:
-                        log.warning(
-                            f"Channel {self.id}: Trial indices {invalid_indices} are out of range "
-                            f"(valid range: 0-{len(self.data_trials) - 1}). These will be ignored."
-                        )
+    def get_averaged_time_vector(self, trial_indices: Optional[List[int]] = None) -> Optional[np.ndarray]:
+        """Return the physical relative grid used by the canonical average."""
+        average = self.get_time_aligned_average(trial_indices)
+        return average.time + self.t_start if average.time is not None else None
 
-                    valid_indices = [i for i in trial_indices if 0 <= i < len(self.data_trials)]
-                    trials_to_avg = [self.data_trials[i] for i in valid_indices if self.data_trials[i] is not None]
-                else:
-                    trials_to_avg = [t for t in self.data_trials if t is not None]
-
-                if not trials_to_avg:
-                    return None
-
-                # Ensure all trials have the same length for simple averaging
-                first_len = len(trials_to_avg[0])
-                if all(len(trial) == first_len for trial in trials_to_avg):
-                    return np.mean(np.array(trials_to_avg), axis=0)
-                else:
-                    # Handle differing lengths by padding with NaNs and using nanmean
-                    max_len = max(len(t) for t in trials_to_avg)
-                    padded_trials = []
-                    for t in trials_to_avg:
-                        if len(t) < max_len:
-                            # Use np.nan so nanmean ignores the padded region
-                            padded = np.full(max_len, np.nan, dtype=float)
-                            padded[: len(t)] = t
-                            padded_trials.append(padded)
-                        else:
-                            padded_trials.append(t)
-                    log.info(f"Channel {self.id}: Trials have different lengths. Used NaN padding for averaging.")
-                    # Using nanmean ignores the nan pads.
-                    import warnings
-
-                    with warnings.catch_warnings():
-                        warnings.simplefilter("ignore", category=RuntimeWarning)
-                        return np.nanmean(np.array(padded_trials), axis=0)
-            except (TypeError, ValueError, IndexError) as e:
-                log.error(f"Channel {self.id}: Error averaging trials: {e}")
-                return None
-        return None
-
-    def get_averaged_time_vector(self) -> Optional[np.ndarray]:
-        # Returns the absolute time vector for the averaged data (assumes first trial time base).
-        avg_data = self.get_averaged_data()
-        if avg_data is not None and self.sampling_rate and self.sampling_rate > 0:
-            num_samples = len(avg_data)
-            duration = num_samples / self.sampling_rate
-            return np.linspace(self.t_start, self.t_start + duration, num_samples, endpoint=False)
-        return None
-
-    def get_relative_averaged_time_vector(self) -> Optional[np.ndarray]:
-        # Returns the time vector relative to the start of the averaged data (starts at 0).
-        avg_data = self.get_averaged_data()
-        if avg_data is not None and self.sampling_rate and self.sampling_rate > 0:
-            num_samples = len(avg_data)
-            duration = num_samples / self.sampling_rate
-            return np.linspace(0, duration, num_samples, endpoint=False)
-        return None
+    def get_relative_averaged_time_vector(self, trial_indices: Optional[List[int]] = None) -> Optional[np.ndarray]:
+        """Return the relative grid used by the canonical average."""
+        return self.get_time_aligned_average(trial_indices).time
 
     def get_current_data(self, trial_index: int) -> Optional[np.ndarray]:
         # Returns the current data for a specific trial, if available.

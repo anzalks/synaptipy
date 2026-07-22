@@ -40,8 +40,9 @@ from synaptipy.core.analysis.cross_file_utils import (
     time_bases_compatible,
 )
 from synaptipy.core.analysis.registry import AnalysisRegistry
-from synaptipy.core.data_model import Recording
+from synaptipy.core.data_model import Channel, Recording
 from synaptipy.core.protocols import ProtocolMap, ResolvedProtocol, resolve_protocols, slice_segment
+from synaptipy.core.trial_qc import summarise_trial_qc
 from synaptipy.infrastructure.file_readers import NeoAdapter
 
 log = logging.getLogger(__name__)
@@ -1143,6 +1144,7 @@ class BatchAnalysisEngine:
         data = None
         time = None
         selected_trial_indices: Optional[List[int]] = None
+        average_qc_metadata: Dict[str, Any] = {}
 
         # Check if we can use context
         if context["data"] is not None:
@@ -1330,8 +1332,15 @@ class BatchAnalysisEngine:
                 ], None
 
             if scope == "average":
-                data = channel.get_averaged_data()
-                time = channel.get_relative_averaged_time_vector()
+                if isinstance(channel, Channel):
+                    average = channel.get_time_aligned_average()
+                    data = average.data
+                    time = average.time
+                    average_qc_metadata = summarise_trial_qc(average.decisions)
+                    average_qc_metadata["average_alignment_method"] = average.alignment_method
+                else:
+                    data = channel.get_averaged_data()
+                    time = channel.get_relative_averaged_time_vector()
             elif scope == "all_trials":
                 data = []
                 time = []
@@ -1404,8 +1413,15 @@ class BatchAnalysisEngine:
                 else:
                     selected_indices = None
 
-                data = channel.get_averaged_data(trial_indices=selected_indices)
-                time = channel.get_relative_averaged_time_vector()
+                if isinstance(channel, Channel):
+                    average = channel.get_time_aligned_average(selected_indices)
+                    data = average.data
+                    time = average.time
+                    average_qc_metadata = summarise_trial_qc(average.decisions)
+                    average_qc_metadata["average_alignment_method"] = average.alignment_method
+                else:
+                    data = channel.get_averaged_data(trial_indices=selected_indices)
+                    time = channel.get_relative_averaged_time_vector(trial_indices=selected_indices)
                 selected_trial_indices = (
                     selected_indices if selected_indices is not None else list(range(channel.num_trials))
                 )
@@ -1575,6 +1591,7 @@ class BatchAnalysisEngine:
                     if selected_trial_indices is not None:
                         res["selected_trial_indices"] = ",".join(str(index) for index in selected_trial_indices)
                         res["selected_trial_count"] = len(selected_trial_indices)
+                    res.update(average_qc_metadata)
                     if trial_idx is not None:
                         res["trial_index"] = trial_idx
                     if protocol is not None:

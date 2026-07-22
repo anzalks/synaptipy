@@ -16,6 +16,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+from synaptipy.core.averaging import compute_time_aligned_average
+
 log = logging.getLogger(__name__)
 
 
@@ -155,23 +157,8 @@ def average_time_aligned_trials(
     trial_list: List[np.ndarray], time_list: List[np.ndarray]
 ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
     """Interpolate compatible traces to one physical time axis before averaging."""
-    if not trial_list or len(trial_list) != len(time_list):
-        return None, None
-
-    target_index = int(np.argmax([len(time) for time in time_list]))
-    target_time = np.asarray(time_list[target_index], dtype=float)
-    aligned = np.full((len(trial_list), target_time.size), np.nan, dtype=float)
-    for index, (trial, time) in enumerate(zip(trial_list, time_list)):
-        trace = np.asarray(trial, dtype=float)
-        trace_time = np.asarray(time, dtype=float)
-        usable = min(trace.size, trace_time.size)
-        if usable == 0:
-            continue
-        trace = trace[:usable]
-        trace_time = trace_time[:usable]
-        in_range = (target_time >= trace_time[0]) & (target_time <= trace_time[-1])
-        aligned[index, in_range] = np.interp(target_time[in_range], trace_time, trace)
-    return target_time, np.nanmean(aligned, axis=0)
+    average = compute_time_aligned_average(trial_list, time_list)
+    return average.time, average.data
 
 
 def sampling_rate_from_timebase(time_vector: np.ndarray) -> Optional[float]:

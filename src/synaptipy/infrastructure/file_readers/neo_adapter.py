@@ -34,6 +34,7 @@ import numpy as np
 
 from synaptipy.core.data_model import Channel, Recording
 from synaptipy.core.signal_processor import validate_sampling_rate
+from synaptipy.infrastructure.file_readers.format_support import FormatSupport, format_support
 
 # Import from our package structure
 from synaptipy.infrastructure.file_readers.neo_source_handle import NeoSourceHandle
@@ -206,6 +207,10 @@ class NeoAdapter:
                 if ext and isinstance(ext, str):
                     all_exts.add(ext.lower())
         return sorted(list(all_exts))
+
+    def get_format_support(self, extension: str) -> FormatSupport:
+        """Return the explicit validation tier for a file extension."""
+        return format_support(extension)
 
     def _extract_axon_metadata(self, reader: nIO.AxonIO) -> Tuple[Optional[str], Optional[float]]:  # noqa: C901
         """Extracts protocol name and estimated injected current range specifically for AxonIO."""

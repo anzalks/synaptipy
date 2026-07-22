@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Canonical time-aware trial averaging with per-sample contributor counts and
+  exportable trial-quality decisions.
+- Figure provenance sidecars for PNG, JPG, SVG, and PDF exports.
+- Explicit validated and experimental file-format support tiers.
+
+### Changed
+
+- Stimulus-locked analyses now require recorded timing evidence or verified
+  manual timing. Voltage traces are not used as an implicit TTL fallback.
+
 ## [0.1.6.1] - 2026-06-24
 
 ### Fixed

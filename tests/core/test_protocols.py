@@ -257,6 +257,7 @@ def test_resolve_protocols_covers_implicit_ready_and_missing_context_states():
             "current_step",
             (0,),
             source=ProtocolSource.RECORDED,
+            parameters={"command": "recorded"},
             verified=True,
         )
     )

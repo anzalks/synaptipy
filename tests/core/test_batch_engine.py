@@ -17,6 +17,7 @@ import pytest
 from synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
 from synaptipy.core.analysis.registry import AnalysisRegistry
 from synaptipy.core.data_model import Channel, Recording
+from synaptipy.core.protocols import ProtocolAssignment, ProtocolSource
 
 # ---------------------------------------------------------------------------
 # Synthetic signal generators — shared by tests
@@ -874,6 +875,16 @@ class TestBatchAllAnalysisTypes:
             data_trials=data_trials,
         )
         rec.channels["Vm_prime"] = channel
+        if analysis_name == "optogenetic_sync":
+            rec.protocol_map.add(
+                ProtocolAssignment(
+                    "optogenetic",
+                    tuple(range(len(data_trials))),
+                    source=ProtocolSource.RECORDED,
+                    parameters={"ttl_channel": "TTL"},
+                    verified=True,
+                )
+            )
         engine.neo_adapter.read_recording = MagicMock(return_value=rec)
 
         pipeline = [{"analysis": analysis_name, "scope": scope, "params": params}]

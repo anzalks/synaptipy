@@ -6,7 +6,10 @@ Handles export of plots to various formats (SVG, PDF, PNG, JPG) using
 Matplotlib (for vector quality) or PyQtGraph (for raster WYSIWYG).
 """
 
+import json
 import logging
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict
 
 import pyqtgraph as pg
@@ -56,12 +59,33 @@ class PlotExporter:
         """
         try:
             if fmt in ["pdf"]:
-                return self._save_via_matplotlib(filename, fmt, dpi)
+                exported = self._save_via_matplotlib(filename, fmt, dpi)
             else:
-                return self._save_via_pyqtgraph(filename, fmt, dpi)
+                exported = self._save_via_pyqtgraph(filename, fmt, dpi)
+            if exported:
+                self._write_provenance_sidecar(filename, fmt, dpi)
+            return exported
         except Exception as e:
             log.error(f"Export failed: {e}")
             raise e
+
+    def _write_provenance_sidecar(self, filename: str, fmt: str, dpi: int) -> None:
+        """Write machine-readable context beside every exported figure."""
+        output = Path(filename)
+        source_file = getattr(self.recording, "source_file", None) if self.recording is not None else None
+        recording_metadata = getattr(self.recording, "metadata", {}) if self.recording is not None else {}
+        provenance = {
+            "schema_version": 1,
+            "created_utc": datetime.now(timezone.utc).isoformat(),
+            "figure_file": output.name,
+            "format": fmt.lower(),
+            "dpi": int(dpi),
+            "source_file": str(source_file) if source_file is not None else None,
+            "recording_metadata": recording_metadata,
+            "analysis_context": self.config,
+        }
+        sidecar = output.with_suffix(output.suffix + ".provenance.json")
+        sidecar.write_text(json.dumps(provenance, indent=2, default=str), encoding="utf-8")
 
     def _save_via_pyqtgraph(self, filename: str, fmt: str, dpi: int) -> bool:
         """Save raster images using pyqtgraph (WYSIWYG).
