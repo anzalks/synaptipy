@@ -71,13 +71,21 @@ composable unit in the batch processing pipeline.
 
 #### Cross-file averaging safety
 
-`synaptipy.core.analysis.cross_file_utils.get_cross_file_average_with_report`
-returns the time axis, average, contributor count, unequal-length indicator,
-and a `CrossFileCompatibilityReport`. Use this variant for new integrations:
-the report records each included or excluded source, channel ID, original units,
-canonical units, and reason. The legacy `get_cross_file_average` returns the
-first four values only for compatibility. Averaging uses relative acquisition
-time; it does not infer stimulus onset or manually placed markers.
+`synaptipy.core.analysis.cross_file_utils.compute_cross_file_average` returns
+a `CrossFileAverageResult`: time axis, average, contributor count,
+unequal-length indicator, and a `CrossFileCompatibilityReport`. The report
+records each included or excluded source, channel ID, original units, canonical
+units, and reason. Averaging uses relative acquisition time; it does not infer
+stimulus onset or manually placed markers.
+
+#### Analysis result contract
+
+All registered analyses execute through `AnalysisRegistry.execute`, which emits
+`AnalysisResult` schema version 1. The object separates scalar `metrics`,
+`warnings`, `plot_payload`, and `provenance`; batch and tidy export flatten only
+metrics while retaining schema/version and provenance columns. Analysis
+implementations and third-party plugins may return a plain metrics dictionary,
+which is normalised at this single registry boundary.
 
 #### Module 1 - Passive Membrane Properties
 

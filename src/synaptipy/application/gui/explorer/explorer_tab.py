@@ -1421,7 +1421,7 @@ class ExplorerTab(QtWidgets.QWidget):
     def _on_recording_changed_from_session(self, recording):
         if recording and recording != self.current_recording:
             # Reconstruct the virtual path for the loaded recording to fix analysis set additions on startup
-            protocol = getattr(recording, "protocol_name", None)
+            protocol = getattr(recording, "imported_protocol_label", None)
             if protocol:
                 self.current_loaded_path = Path(f"{recording.source_file}::{protocol}")
             else:
@@ -2187,9 +2187,6 @@ class ExplorerTab(QtWidgets.QWidget):
                 for method in sorted(self._active_preprocessing_settings["filters"].keys()):
                     self.pipeline.add_step(self._active_preprocessing_settings["filters"][method])
 
-    def _on_preprocessing_complete_legacy(self, result_data):
-        pass  # Removed legacy worker method
-
     def _handle_preprocessing_reset(self):
         """Reset all preprocessing and revert to raw data."""
         self._processed_cache.clear()
@@ -2613,9 +2610,6 @@ class ExplorerTab(QtWidgets.QWidget):
 
         self._update_plot()
         self._update_all_ui_state()
-
-    def _apply_manual_limits_from_dict(self, limits):
-        pass  # Deprecated
 
     def _toggle_select_current_trial(self):
         if not self.current_recording:

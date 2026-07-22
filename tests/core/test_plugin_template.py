@@ -118,8 +118,6 @@ class TestPluginTemplateLogic:
 
         assert isinstance(result, dict)
         assert "Mean_Value" in result
-        assert "module_used" in result
-        assert "metrics" in result
         assert "error" not in result
 
     def test_logic_empty_data(self):
@@ -155,7 +153,7 @@ class TestPluginTemplateLogic:
         assert abs(result["Mean_Value"] - 3.0) < 1e-6
 
     def test_public_keys_convention(self, synthetic_trace):
-        """Result dict has at least one public key and the nested 'metrics' schema."""
+        """Result dict has at least one public metric for registry normalisation."""
         data, time, fs = synthetic_trace
         spec = importlib.util.spec_from_file_location(
             "plugin_template_keys",
@@ -167,7 +165,7 @@ class TestPluginTemplateLogic:
         result = mod.calculate_my_metric(data=data, time=time, sampling_rate=fs)
         public_keys = [k for k in result if not k.startswith("_")]
         assert len(public_keys) >= 1, "Expected at least one public key"
-        assert isinstance(result.get("metrics"), dict), "Expected nested 'metrics' dict"
+        assert "Mean_Value" in result
 
 
 # ---------------------------------------------------------------------------

@@ -67,12 +67,12 @@ def calculate_my_metric(
         Keys starting with ``_`` are hidden from the table (use for plot data).
         A key named ``"error"`` triggers an error message in the GUI.
 
-        Recommended output schema (matching PluginResult)::
+        Return plain metrics.  ``AnalysisRegistry.execute`` converts this once
+        into the versioned ``AnalysisResult`` schema for the GUI, batch engine,
+        and exporter::
 
             {
-                "module_used": "my_custom_metric",   # module identifier
-                "metrics": {"My_Value": 42.0},       # nested metrics dict
-                "My_Value": 42.0,                    # flat key for table
+                "My_Value": 42.0,
                 "_plot_x": [...],                    # hidden: plot data
                 "_plot_y": [...],                    # hidden: plot data
             }
@@ -82,10 +82,6 @@ def calculate_my_metric(
         return {"error": "Empty data array"}
 
     return {
-        "module_used": "my_custom_metric",
-        "metrics": {
-            "Mean_Value": float(round(float(np.mean(data)), 4)),
-        },
         "Mean_Value": float(round(float(np.mean(data)), 4)),
     }
 

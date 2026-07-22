@@ -6,7 +6,7 @@ These tests focus on:
 - update_performance_settings()
 - _append_batch_error_log()
 - _sanitise_long_list exception path
-- _recording_metadata with subject_id, cell_id, protocol_name
+- _recording_metadata with subject_id, cell_id, imported protocol label
 - _order_columns with empty DataFrame
 - get_analysis_info for non-existent name
 - error-row path in sequential batch
@@ -49,7 +49,7 @@ def _make_recording(n_channels=1, **ch_kwargs):
     ch = _make_channel(**ch_kwargs)
     rec.channels = {"Channel1": ch}
     rec.source_file = Path("test_recording.abf")
-    rec.protocol_name = None
+    rec.imported_protocol_label = None
     rec.duration = 0.5
     rec.subject_id = None
     rec.cell_id = None
@@ -210,18 +210,18 @@ class TestRecordingMetadata:
         result = BatchAnalysisEngine._recording_metadata(None)
         assert result == {}
 
-    def test_protocol_name_included(self):
+    def test_imported_protocol_label_included(self):
         rec = MagicMock()
-        rec.protocol_name = "current_step"
+        rec.imported_protocol_label = "current_step"
         rec.duration = 1.0
         rec.subject_id = None
         rec.cell_id = None
         meta = BatchAnalysisEngine._recording_metadata(rec)
-        assert meta["protocol"] == "current_step"
+        assert meta["imported_protocol_label"] == "current_step"
 
     def test_subject_id_and_cell_id_included(self):
         rec = MagicMock()
-        rec.protocol_name = None
+        rec.imported_protocol_label = None
         rec.duration = 0.5
         rec.subject_id = "mouse_01"
         rec.cell_id = "cell_03"
@@ -231,12 +231,12 @@ class TestRecordingMetadata:
 
     def test_no_protocol_skipped(self):
         rec = MagicMock()
-        rec.protocol_name = None
+        rec.imported_protocol_label = None
         rec.duration = 0.5
         rec.subject_id = None
         rec.cell_id = None
         meta = BatchAnalysisEngine._recording_metadata(rec)
-        assert "protocol" not in meta
+        assert "imported_protocol_label" not in meta
 
 
 # ---------------------------------------------------------------------------

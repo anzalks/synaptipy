@@ -872,16 +872,9 @@ class MainWindow(QtWidgets.QMainWindow):
             #     except Exception as e_analyse_update:
             #         log.error(f"Error updating analyser tab state: {e_analyse_update}", exc_info=True)
 
-    def _on_data_error(self, payload):
+    def _on_data_error(self, file_path, error_message):
         """Handle data loading errors."""
-        request = None
-        if isinstance(payload, tuple) and len(payload) == 2:
-            file_path, error_message = payload
-            request = self._take_pending_load(Path(file_path))
-        else:
-            # Retain compatibility with legacy emitters while still reporting
-            # the error rather than allowing a failed request to crash the UI.
-            error_message = str(payload)
+        request = self._take_pending_load(Path(file_path))
         if request is not None and request["id"] != self._latest_load_request:
             log.info("Ignoring stale load failure: %s", error_message)
             return

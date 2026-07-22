@@ -148,7 +148,7 @@ class TestExtractAxonMetadata:
         mock_reader._axon_info = None
         # Make hasattr('_axon_info') return True but accessing it raise TypeError
         type(mock_reader)._axon_info = property(lambda self: (_ for _ in ()).throw(TypeError("bad")))
-        # Call the method – TypeError is caught; protocol_name set to "Extraction Error"
+        # Call the method – TypeError is caught; imported label becomes "Extraction Error"
         proto, _ = neo_adapter_instance._extract_axon_metadata(mock_reader)
         assert proto == "Extraction Error"
 

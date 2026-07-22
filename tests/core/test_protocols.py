@@ -152,10 +152,10 @@ def test_every_supplied_analysis_declares_protocol_requirements():
     supplied = set(AnalysisRegistry.list_analysis())
     assert set(BUILTIN_ANALYSIS_REQUIREMENTS).issubset(supplied)
     for name in BUILTIN_ANALYSIS_REQUIREMENTS:
-        assert (
-            AnalysisRegistry.get_metadata(name)["protocol_requirements"]
-            == BUILTIN_ANALYSIS_REQUIREMENTS[name].as_dict()
-        )
+        metadata = AnalysisRegistry.get_metadata(name)
+        assert metadata["protocol_requirements"] == BUILTIN_ANALYSIS_REQUIREMENTS[name].as_dict()
+        assert metadata["api_version"] == 1
+        assert metadata["result_schema_version"] == 1
 
 
 @pytest.mark.parametrize(
@@ -198,7 +198,7 @@ def test_assignment_overlap_respects_trials_and_time_windows():
     assert base.overlaps(ProtocolAssignment("signal_only", (0, 1)))
 
 
-def test_protocol_map_filters_sorts_removes_and_uses_legacy_fallback():
+def test_protocol_map_filters_sorts_removes_and_uses_signal_only_fallback():
     first = ProtocolAssignment("signal_only", (0,), 0.4, 0.5)
     second = ProtocolAssignment("signal_only", (0,), 0.1, 0.2)
     note = ProtocolAssignment("drug", (0,), is_analysis_segment=False)
@@ -209,9 +209,9 @@ def test_protocol_map_filters_sorts_removes_and_uses_legacy_fallback():
     assert protocol_map.remove(first.assignment_id)
     assert not protocol_map.remove("not-present")
     assert protocol_map.analysis_segments_for_trial(2, 0.8)[0].source is ProtocolSource.SIGNAL_ONLY
-    legacy = protocol_map.analysis_segments_for_trial(2, 0.8, "current_step")[0]
-    assert legacy.source is ProtocolSource.LEGACY
-    assert legacy.start_time == 0.0 and legacy.end_time == 0.8
+    fallback = protocol_map.analysis_segments_for_trial(2, 0.8)[0]
+    assert fallback.protocol_family == "signal_only"
+    assert fallback.start_time == 0.0 and fallback.end_time == 0.8
 
 
 def test_protocol_map_serialisation_ignores_derived_and_unknown_keys():

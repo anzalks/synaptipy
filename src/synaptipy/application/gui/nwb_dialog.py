@@ -201,7 +201,7 @@ class NwbMetadataDialog(QtWidgets.QDialog):
         rec = self.recording
 
         # Protocol name as description
-        desc = getattr(rec, "protocol_name", "")
+        desc = getattr(rec, "imported_protocol_label", "")
         if not desc:
             desc = f"Recording from {rec.source_file.name}"
         self.session_description.setText(desc)
@@ -353,7 +353,7 @@ if __name__ == "__main__":
     # Mock recording
     class MockRec:
         def __init__(self):
-            self.protocol_name = "Test Protocol"
+            self.imported_protocol_label = "Test Protocol"
             self.source_file = type("Path", (object,), {"name": "test_file.abf", "stem": "test_file"})()
             self.metadata = {}
 

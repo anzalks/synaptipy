@@ -572,7 +572,7 @@ class TestBatchOutputEnrichment:
 
         engine = BatchAnalysisEngine()
         rec = Recording(source_file=Path("experiment_01.abf"))
-        rec.protocol_name = "CC_Step"
+        rec.imported_protocol_label = "CC_Step"
         rec.duration = 1.0
 
         channel = Channel(
@@ -621,8 +621,8 @@ class TestBatchOutputEnrichment:
     # ------------------------------------------------------------------
     # 2. Recording-level metadata propagation
     # ------------------------------------------------------------------
-    def test_protocol_name_in_output(self):
-        """Verify protocol column appears when recording has protocol_name."""
+    def test_imported_protocol_label_in_output(self):
+        """Verify import provenance appears when a reader supplied a label."""
 
         @AnalysisRegistry.register("proto_test")
         def proto_test(data, time, sampling_rate, **kwargs):
@@ -632,8 +632,8 @@ class TestBatchOutputEnrichment:
         pipeline = [{"analysis": "proto_test", "scope": "first_trial", "params": {}}]
         df = engine.run_batch([Path("f.abf")], pipeline)
 
-        assert "protocol" in df.columns
-        assert df.iloc[0]["protocol"] == "CC_Step"
+        assert "imported_protocol_label" in df.columns
+        assert df.iloc[0]["imported_protocol_label"] == "CC_Step"
 
     def test_recording_duration_in_output(self):
         """Verify recording_duration_s column appears."""
@@ -801,7 +801,7 @@ class TestBatchAllAnalysisTypes:
         """Helper: run a single-analysis pipeline through the batch engine."""
         engine = BatchAnalysisEngine()
         rec = Recording(source_file=Path("test_cell.abf"))
-        rec.protocol_name = "TestProtocol"
+        rec.imported_protocol_label = "TestProtocol"
         rec.duration = 1.0
 
         channel = Channel(

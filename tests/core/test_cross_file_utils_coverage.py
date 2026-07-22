@@ -110,11 +110,13 @@ def test_build_averaged_recording_all_channels_empty():
     # All items will fail to produce a valid average (second call returns None)
     items = [{"path": "a.wcp"}, {"path": "b.wcp"}]
 
-    # Patch get_cross_file_average to return (None, None, 0, None) for every channel
+    # The structured average carries the empty result and compatibility report.
     from unittest.mock import patch
 
-    with patch("synaptipy.core.analysis.cross_file_utils.get_cross_file_average") as mock_avg:
-        mock_avg.return_value = (None, None, 0, None)
+    from synaptipy.core.analysis.cross_file_utils import CrossFileAverageResult, CrossFileCompatibilityReport
+
+    with patch("synaptipy.core.analysis.cross_file_utils.compute_cross_file_average") as mock_avg:
+        mock_avg.return_value = CrossFileAverageResult(None, None, 0, False, CrossFileCompatibilityReport("ch0"))
         result = build_averaged_recording(items, [0], adapter)
     assert result is None
 
@@ -139,8 +141,12 @@ def test_build_averaged_recording_success():
 
     from unittest.mock import patch
 
-    with patch("synaptipy.core.analysis.cross_file_utils.get_cross_file_average") as mock_avg:
-        mock_avg.return_value = (time_arr, data_arr, 2, None)
+    from synaptipy.core.analysis.cross_file_utils import CrossFileAverageResult, CrossFileCompatibilityReport
+
+    with patch("synaptipy.core.analysis.cross_file_utils.compute_cross_file_average") as mock_avg:
+        mock_avg.return_value = CrossFileAverageResult(
+            time_arr, data_arr, 2, False, CrossFileCompatibilityReport("ch0")
+        )
         result = build_averaged_recording([{"path": "a.wcp"}, {"path": "b.wcp"}], [0], adapter)
     assert result is not None
     assert "ch0" in result.channels

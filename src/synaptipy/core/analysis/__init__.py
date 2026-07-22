@@ -28,6 +28,7 @@ from . import firing_dynamics  # noqa: F401 - registers: excitability_analysis, 
 from . import passive_properties  # noqa: F401 - registers passive-property analyses
 from . import single_spike  # noqa: F401 - registers: spike_detection, phase_plane_analysis
 from . import synaptic_events  # noqa: F401 - registers event-detection analyses
+from .contracts import ANALYSIS_RESULT_SCHEMA_VERSION, AnalysisResult  # noqa: F401
 from .epoch_manager import Epoch, EpochManager  # noqa: F401
 
 # Expose key functions for easier import (backward compatibility)
@@ -46,6 +47,8 @@ apply_builtin_protocol_requirements(AnalysisRegistry)
 # Define what `from synaptipy.core.analysis import *` imports
 __all__ = [
     "AnalysisRegistry",
+    "AnalysisResult",
+    "ANALYSIS_RESULT_SCHEMA_VERSION",
     "calculate_rmp",
     "detect_spikes_threshold",
     "calculate_rin",

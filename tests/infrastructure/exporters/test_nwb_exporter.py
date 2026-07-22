@@ -27,7 +27,7 @@ def mock_recording_for_export():
     ch1.t_start = 0.0
     rec.channels = {"0": ch1}
     rec.metadata["notes"] = "Test notes"
-    rec.protocol_name = "TestProtocol"
+    rec.imported_protocol_label = "TestProtocol"
     return rec
 
 

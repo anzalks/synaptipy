@@ -972,7 +972,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                     raise ValueError("Failed to load trial data.")
 
                 # Call the function with lists
-                results = func(data_list, time_list, fs, **params)
+                results = AnalysisRegistry.execute(self.analysis_name, data_list, time_list, fs, **params)
             else:
                 # Standard single-trial execution
                 voltage = data["data"]
@@ -980,19 +980,9 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 fs = data["sampling_rate"]
 
                 # Call the function with single arrays
-                results = func(voltage, time, fs, **params)
+                results = AnalysisRegistry.execute(self.analysis_name, voltage, time, fs, **params)
 
-            # Normalise: wrap non-dict returns; flatten metrics nesting from new 5-module format
-            if isinstance(results, list):
-                return {"module_used": self.analysis_name, "metrics": {"list_results": results}}
-            elif isinstance(results, dict):
-                # If returned dict already has module_used/metrics, pass through
-                if "module_used" in results or "metrics" in results:
-                    return results
-                # Wrap legacy flat dict in standard payload
-                return {"module_used": self.analysis_name, "metrics": results}
-            else:
-                return {"module_used": self.analysis_name, "metrics": {"result": results}}
+            return results.as_dict()
 
         except Exception as e:
             log.error(f"Analysis execution failed: {e}")
@@ -1032,18 +1022,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             return
 
         try:
-            # Flatten nested {"module_used": ..., "metrics": {...}} schema for display
-            display_source = results
-            if isinstance(results, dict) and "metrics" in results:
-                display_source = results["metrics"]
-
-            # Also flatten legacy {"result": {...}} single-key wrappers
-            if isinstance(display_source, dict) and list(display_source.keys()) == ["result"]:
-                inner = display_source["result"]
-                if isinstance(inner, dict):
-                    display_source = inner
-                elif hasattr(inner, "__dict__"):
-                    display_source = inner.__dict__
+            display_source = results.get("metrics", {})
 
             # robust extraction of items
             items = []

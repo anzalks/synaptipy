@@ -41,7 +41,7 @@ def _make_channel(n_trials: int = 3) -> Channel:
 def _make_recording(n_channels: int = 1, n_trials: int = 3) -> Recording:
     rec = Recording(source_file=Path("/tmp/test_file.abf"))
     rec.duration = 1.0
-    rec.protocol_name = "test_proto"
+    rec.imported_protocol_label = "test_proto"
     for i in range(n_channels):
         key = f"ch{i}"
         ch = _make_channel(n_trials)

@@ -313,7 +313,7 @@ def test_export_supplies_optional_metadata_defaults_without_mutating_input(base_
 
 def test_export_records_protocol_and_safely_defaults_invalid_temperature(base_recording, base_metadata, tmp_path):
     """Export metadata remains valid when optional acquisition metadata is malformed."""
-    base_recording.protocol_name = "current-step"
+    base_recording.imported_protocol_label = "current-step"
     base_recording.metadata["recording_temperature"] = "not-a-temperature"
 
     out_file = tmp_path / "protocol_temperature.nwb"

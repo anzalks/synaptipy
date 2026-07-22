@@ -482,6 +482,8 @@ Before analysing a mixed recording, use **Protocol Map...** in the Explorer's
 Analysis Selection panel to describe the protocol actually used. This is
 optional: recordings without a map retain the existing whole-trial workflow and
 are labelled as needing review rather than silently being treated as verified.
+Any imported protocol label is descriptive provenance only; it cannot route an
+analysis or make a recording protocol-compatible.
 
 ![Protocol Map dialog with reviewed manual provenance](tutorial/screenshots/explorer_protocol_map.png)
 

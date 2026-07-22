@@ -403,58 +403,11 @@ class AddStepDialog(QtWidgets.QDialog):
                     self.params_layout.addRow(label, line_edit)
                     self.param_widgets[name] = line_edit
 
-        else:
-            # Fallback for legacy/unmigrated analysis types
-            # This ensures we don't break existing analyses that haven't been migrated yet
-            self._add_legacy_parameter_widgets(analysis_name)
-
     def _on_scope_changed(self, button):
         """Show/hide trial index input based on scope selection."""
         scope_id = button.property("scope_id")
         self.trial_index_group.setVisible(scope_id == "specific_trial")
         self.selected_trials_group.setVisible(scope_id in ("selected_trials", "selected_trials_average"))
-
-    def _add_legacy_parameter_widgets(self, analysis_name: str):
-        """Fallback for analysis types not yet migrated to metadata system."""
-        if analysis_name == "rmp_analysis":
-            self._add_param("baseline_start", "Baseline Start (s):", 0.0, 0.0, 10.0, 3)
-            self._add_param("baseline_end", "Baseline End (s):", 0.1, 0.0, 10.0, 3)
-
-        elif analysis_name == "rin_analysis":
-            self._add_param("current_amplitude", "Current (pA):", -50.0, -1000.0, 1000.0, 1)
-            self._add_param("baseline_start", "Baseline Start (s):", 0.0, 0.0, 10.0, 3)
-            self._add_param("baseline_end", "Baseline End (s):", 0.1, 0.0, 10.0, 3)
-            self._add_param("response_start", "Response Start (s):", 0.3, 0.0, 10.0, 3)
-            self._add_param("response_end", "Response End (s):", 0.4, 0.0, 10.0, 3)
-
-        elif analysis_name == "tau_analysis":
-            self._add_param("stim_start_time", "Stim Start (s):", 0.1, 0.0, 10.0, 3)
-            self._add_param("fit_duration", "Fit Duration (s):", 0.05, 0.001, 1.0, 3)
-
-        elif analysis_name == "mini_detection":
-            self._add_param("threshold", "Threshold:", 5.0, 0.1, 1000.0, 1)
-            # Direction combo
-            direction_combo = QtWidgets.QComboBox()
-            direction_combo.addItems(["negative", "positive"])
-            self.params_layout.addRow("Direction:", direction_combo)
-            self.param_widgets["direction"] = direction_combo
-
-        elif analysis_name in [
-            "event_detection_threshold",
-            "event_detection_deconvolution",
-        ]:
-            self._add_param("threshold", "Threshold:", 5.0, 0.1, 1000.0, 1)
-            # Direction combo
-            direction_combo = QtWidgets.QComboBox()
-            direction_combo.addItems(["negative", "positive"])
-            self.params_layout.addRow("Direction:", direction_combo)
-            self.param_widgets["direction"] = direction_combo
-        else:
-            # Generic message for unknown analysis types
-            info_label = QtWidgets.QLabel("Default parameters will be used.")
-            style_as_subdued(info_label, italic=True)
-            self.params_layout.addRow("", info_label)
-            self.param_widgets["_info"] = info_label
 
     def _add_param(self, name: str, label: str, default: float, min_val: float, max_val: float, decimals: int):
         """Add a numeric parameter input."""

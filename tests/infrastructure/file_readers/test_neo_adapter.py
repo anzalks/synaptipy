@@ -63,7 +63,7 @@ def test_read_recording_abf_success(neo_adapter_instance, sample_abf_path):
     assert len(ch.get_data(0)) == ch.num_samples
 
     # Check specific metadata if known for the sample file
-    # assert recording.protocol_name == "ExpectedProtocol"  # If applicable
+    # assert recording.imported_protocol_label == "ExpectedProtocol"  # If applicable
     # assert recording.metadata.get('neo_reader_class') == 'AxonIO'
 
 

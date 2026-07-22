@@ -253,46 +253,41 @@ def wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs) 
 
 ### 3.3 Return Dict Conventions
 
-Wrappers **must** return a `Dict[str, Any]` using the nested output schema:
+Wrappers return a plain metrics `Dict[str, Any]`. The registry is the one
+normalisation boundary: `AnalysisRegistry.execute` emits the versioned
+`AnalysisResult` object used by the GUI, batch engine, and tidy exporter.
 
 ```python
 {
-    "module_used": "my_plugin_name",   # string identifying the source module
-    "metrics": {                       # all scalar results go here
-        "MyMetric1": 1.0,
-        "MyMetric2": 42,
-    },
+    "MyMetric1": 1.0,
+    "MyMetric2": 42,
     # optional private keys for plot overlays (hidden from results table):
     "_fit_curve": np.array(...),
     "_event_indices": [...],
 }
 ```
 
-The `metrics` dict drives the results table and batch CSV columns.  Any key
-in `metrics` appears as a column header; any value that is a number is
-written to the CSV.
+Metric keys appear as results-table and tidy-export columns.
 
 | Convention | Behaviour |
 |---|---|
-| `"module_used"` | Identifies the source; used by the batch engine to route results to the correct CSV file. |
-| Keys inside `"metrics"` | Displayed in the results table and exported to CSV.  Use plain, human-readable names. |
+| Plain metric keys | Displayed in the results table and exported to CSV. Use plain, human-readable names. |
 | Keys starting with `_` at the **top level** | **Hidden** from the results table.  Use for arrays passed to plot overlays (e.g. `"_fit_curve"`, `"_event_indices"`). |
 | Key named `"error"` at the top level | If present, the GUI shows an error message instead of results. |
-| Numeric values in `metrics` (`int`, `float`) | Displayed as-is in the results table. |
-| `np.ndarray` values in `metrics` | Displayed as shape summary (e.g. `"array(150,)"`). |
-| `None` values in `metrics` | Displayed as `"N/A"`. |
+| Numeric values (`int`, `float`) | Displayed as-is in the results table. |
+| `np.ndarray` values | Displayed as shape summary (e.g. `"array(150,)"). |
+| `None` values | Displayed as `"N/A"`. |
 
 > [!NOTE]
-> **Custom plugins vs. core module return types.** Custom plugins must return a flat
-> `dict` as described above so the batch exporter and results table can process them
-> generically. However, the five **built-in** analysis modules (`passive_properties`,
+> **Custom plugins vs. core module return types.** Custom plugins return a flat
+> metrics `dict`; the registry adds the common result schema. The five **built-in** analysis modules (`passive_properties`,
 > `single_spike`, `firing_dynamics`, `synaptic_events`, `evoked_responses`) return
 > **strongly-typed Python dataclasses** internally (`SingleSpikeResult`,
 > `TrainDynamicsResult`, `RinResult`, etc.). If you are writing code that calls a
 > built-in analysis function directly—rather than through the registry wrapper—access
 > results via named dataclass attributes (e.g. `result.rin_mohm`) rather than dict
-> key access. The registry wrappers translate these dataclasses into the flat dict
-> format before returning them to the GUI and batch engine.
+> key access. The registry execution boundary translates these dataclasses into
+> the common result schema before returning them to the GUI and batch engine.
 
 ---
 

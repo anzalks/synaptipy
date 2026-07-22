@@ -41,7 +41,7 @@ class TestPreprocessingContextRestoration:
         try:
             engine = BatchAnalysisEngine()
             recording = Recording(source_file=Path("test.abf"))
-            recording.protocol_name = "test"
+            recording.imported_protocol_label = "test"
             recording.duration = 1.0
             recording.sampling_rate = 10000.0
 
@@ -96,7 +96,7 @@ class TestPreprocessingContextRestoration:
         recordings = []
         for i in range(3):
             recording = Recording(source_file=Path(f"file_{i}.abf"))
-            recording.protocol_name = "Steps"
+            recording.imported_protocol_label = "Steps"
             recording.duration = 1.0
             recording.sampling_rate = 10000.0
 
@@ -132,7 +132,7 @@ class TestPipelineContextAdaptation:
         """Context should be reused when scopes match."""
         engine = BatchAnalysisEngine()
         recording = Recording(source_file=Path("test.abf"))
-        recording.protocol_name = "Steps"
+        recording.imported_protocol_label = "Steps"
         recording.duration = 1.0
         recording.sampling_rate = 10000.0
 
@@ -214,7 +214,7 @@ class TestErrorPropagation:
         try:
             engine = BatchAnalysisEngine()
             recording = Recording(source_file=Path("test.abf"))
-            recording.protocol_name = "test"
+            recording.imported_protocol_label = "test"
             recording.duration = 1.0
             recording.sampling_rate = 10000.0
 

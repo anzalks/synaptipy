@@ -104,6 +104,11 @@ class AnalysisRegistry:
             # Ensure type is stored in metadata
             meta = kwargs.copy()
             meta["type"] = type
+            # Registered analyses are a versioned plugin boundary.  The
+            # runtime accepts convenient implementation return values, but its
+            # consumers always receive AnalysisResult schema v1.
+            meta.setdefault("api_version", 1)
+            meta.setdefault("result_schema_version", 1)
             cls._metadata[effective_name] = meta
             # Store deep copy as factory default
             cls._original_metadata[effective_name] = copy.deepcopy(meta)
@@ -140,6 +145,23 @@ class AnalysisRegistry:
         if func is None:
             log.warning(f"Analysis function '{name}' not found in registry. Available: {list(cls._registry.keys())}")
         return func
+
+    @classmethod
+    def execute(cls, name: str, *args: Any, **kwargs: Any):
+        """Run an analysis through the sole canonical result boundary.
+
+        Preprocessors return signal data and therefore deliberately remain raw;
+        every registered analysis returns an :class:`AnalysisResult`.
+        """
+        func = cls.get_function(name)
+        if func is None:
+            raise KeyError(f"Analysis function '{name}' is not registered")
+        result = func(*args, **kwargs)
+        if cls.get_metadata(name).get("type") == "preprocessing":
+            return result
+        from synaptipy.core.analysis.contracts import AnalysisResult
+
+        return AnalysisResult.from_raw(name, result)
 
     @classmethod
     def get_metadata(cls, name: str) -> Dict[str, Any]:

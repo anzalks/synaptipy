@@ -23,7 +23,6 @@ class ProtocolSource(str, Enum):
     MANUAL = "manual"
     DRAWN = "drawn"
     SIGNAL_ONLY = "signal_only"
-    LEGACY = "legacy"
 
 
 @dataclass(frozen=True)
@@ -197,19 +196,18 @@ class ProtocolMap:
         self,
         trial_index: int,
         duration: Optional[float] = None,
-        legacy_protocol_name: Optional[str] = None,
     ) -> List[ProtocolAssignment]:
         explicit = self.assignments_for_trial(trial_index, include_annotations=False)
         if explicit:
             return explicit
         return [
             ProtocolAssignment(
-                protocol_family=legacy_protocol_name or "signal_only",
+                protocol_family="signal_only",
                 trial_indices=(trial_index,),
                 start_time=0.0,
                 end_time=duration,
-                source=ProtocolSource.LEGACY if legacy_protocol_name else ProtocolSource.SIGNAL_ONLY,
-                label=legacy_protocol_name or "Signal-only",
+                source=ProtocolSource.SIGNAL_ONLY,
+                label="Signal-only",
                 verified=False,
                 assignment_id=f"legacy-{trial_index}",
             )
@@ -311,9 +309,7 @@ def resolve_protocols(
     if not isinstance(protocol_map, ProtocolMap):
         protocol_map = ProtocolMap()
     requirement = requirement_for_analysis(analysis_name)
-    segments = protocol_map.analysis_segments_for_trial(
-        trial_index, duration=duration, legacy_protocol_name=getattr(recording, "protocol_name", None)
-    )
+    segments = protocol_map.analysis_segments_for_trial(trial_index, duration=duration)
     resolved: List[ResolvedProtocol] = []
     for assignment in segments:
         missing: List[str] = []

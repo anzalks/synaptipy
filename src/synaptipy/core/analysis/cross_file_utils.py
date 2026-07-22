@@ -59,6 +59,21 @@ class CrossFileCompatibilityReport:
         }
 
 
+@dataclass(frozen=True)
+class CrossFileAverageResult:
+    """One cross-file average together with its scientific provenance."""
+
+    time: Optional[np.ndarray]
+    data: Optional[np.ndarray]
+    contributing_file_count: int
+    has_unequal_lengths: bool
+    compatibility_report: CrossFileCompatibilityReport
+
+    @property
+    def is_empty(self) -> bool:
+        return self.time is None or self.data is None or self.contributing_file_count == 0
+
+
 def canonical_unit_and_scale(units: Any) -> Tuple[Optional[str], Optional[float]]:
     """Return a canonical electrophysiology unit and scale, or ``(None, None)``.
 
@@ -260,68 +275,13 @@ def extract_per_file_trace(  # noqa: C901 - validates all file/channel/trial fai
         return None
 
 
-def get_cross_file_average(
+def compute_cross_file_average(  # noqa: C901 - compatibility report requires explicit exclusion branches
     items: List[Dict[str, Any]],
     parsed_trials: List[int],
     channel_idx: int,
     neo_adapter: Any,
     channel_id: Optional[str] = None,
-) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], int, bool]:
-    """Compute the grand average of specified trials across all loaded files.
-
-        This compatibility wrapper omits the detailed provenance report.  New
-        callers should use :func:`get_cross_file_average_with_report` so an
-        exclusion is visible to the user and exportable with the result.
-
-        Algorithm
-        ---------
-        1. Call :func:`extract_per_file_trace` for every item; collect the
-           ``(time, averaged_data)`` pairs from files that succeed.
-        2. If all traces share the same length, compute a plain
-           :func:`numpy.mean` across the file axis.
-    3. Compatible traces with different sample counts or rates are interpolated
-       to the longest trace's physical time axis.  Values outside a trace's
-       acquisition interval remain ``NaN``, so :func:`numpy.nanmean` preserves
-       the correct effective *N*.
-        4. The reference time vector is taken from the longest contributing file
-           so the full axis is available for downstream plotting.
-
-        Parameters
-        ----------
-        items : list of dict
-            Analysis-item dicts, each containing at least a ``"path"`` key.
-        parsed_trials : list of int
-            Ordered 0-based trial indices to extract from every file.
-        channel_idx : int
-            0-based position of the target channel (sorted by channel-id),
-            shared across all files.
-        neo_adapter : object
-            Adapter with a ``read_recording(path)`` method that returns a
-            :class:`~synaptipy.core.data_model.Recording` or ``None``.
-
-        Returns
-        -------
-        tuple
-            ``(time_array, grand_average, n_files, has_unequal_lengths)``
-            where *n_files* is the number of files that contributed and
-            *has_unequal_lengths* is ``True`` when the contributing traces had
-            different sample counts (the GUI layer should warn the user).
-            Returns ``(None, None, 0, False)`` when no valid traces could be
-            obtained.
-    """
-    time, average, count, unequal, _ = get_cross_file_average_with_report(
-        items, parsed_trials, channel_idx, neo_adapter, channel_id=channel_id
-    )
-    return time, average, count, unequal
-
-
-def get_cross_file_average_with_report(  # noqa: C901 - compatibility report requires explicit exclusion branches
-    items: List[Dict[str, Any]],
-    parsed_trials: List[int],
-    channel_idx: int,
-    neo_adapter: Any,
-    channel_id: Optional[str] = None,
-) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], int, bool, CrossFileCompatibilityReport]:
+) -> CrossFileAverageResult:
     """Compute an average and a complete per-source compatibility report.
 
     Inputs are pooled only when they have the selected *channel ID*, a known
@@ -420,7 +380,7 @@ def get_cross_file_average_with_report(  # noqa: C901 - compatibility report req
             )
 
     if not valid_traces:
-        return None, None, 0, False, report
+        return CrossFileAverageResult(None, None, 0, False, report)
 
     lengths = [len(t) for t in valid_traces]
     has_unequal_lengths = len(set(lengths)) > 1
@@ -440,9 +400,15 @@ def get_cross_file_average_with_report(  # noqa: C901 - compatibility report req
 
     reference_time, grand_average = average_time_aligned_trials(valid_traces, valid_times)
     if reference_time is None or grand_average is None:
-        return None, None, 0, False, report
+        return CrossFileAverageResult(None, None, 0, False, report)
 
-    return reference_time, grand_average, len(valid_traces), has_unequal_lengths, report
+    return CrossFileAverageResult(
+        reference_time,
+        grand_average,
+        len(valid_traces),
+        has_unequal_lengths,
+        report,
+    )
 
 
 def build_averaged_recording(
@@ -454,7 +420,7 @@ def build_averaged_recording(
     """Build a synthetic ``Recording`` whose channels each hold one averaged trial.
 
     For every channel position found in the first loadable file the function
-    calls :func:`get_cross_file_average` to compute the grand average across
+    calls :func:`compute_cross_file_average` to compute the grand average across
     all *items*.  The resulting per-channel average is stored as the sole trial
     of a new :class:`~synaptipy.core.data_model.Recording` whose
     ``source_file`` is set to ``Path("__mfa__/<label>")``.
@@ -504,9 +470,11 @@ def build_averaged_recording(
     averaged_channels: Dict[str, "Channel"] = {}
     for ch_idx in range(n_channels):
         ref_ch_id, ref_ch = channels_sorted[ch_idx]
-        time_arr, avg_arr, n_files, _, report = get_cross_file_average_with_report(
-            items, trial_indices, ch_idx, neo_adapter, channel_id=ref_ch_id
-        )
+        average_result = compute_cross_file_average(items, trial_indices, ch_idx, neo_adapter, channel_id=ref_ch_id)
+        time_arr = average_result.time
+        avg_arr = average_result.data
+        n_files = average_result.contributing_file_count
+        report = average_result.compatibility_report
         if time_arr is None or avg_arr is None:
             log.debug(
                 "build_averaged_recording: channel %d produced no average - skipping.",

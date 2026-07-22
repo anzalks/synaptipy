@@ -755,7 +755,7 @@ class NeoAdapter:
 
         recording = Recording(source_file=filepath)
         if protocol is not None:
-            recording.protocol_name = protocol
+            recording.imported_protocol_label = protocol
 
         if _pyabf_rescue:
             recording.metadata["pyabf_synthetic_rescue"] = True

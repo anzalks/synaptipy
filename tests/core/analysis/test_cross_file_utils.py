@@ -15,9 +15,8 @@ import numpy as np
 
 from synaptipy.core.analysis.cross_file_utils import (
     canonical_unit_and_scale,
+    compute_cross_file_average,
     extract_per_file_trace,
-    get_cross_file_average,
-    get_cross_file_average_with_report,
 )
 
 # ---------------------------------------------------------------------------
@@ -157,7 +156,7 @@ class TestExtractPerFileTrace:
 
 
 # ---------------------------------------------------------------------------
-# Tests for get_cross_file_average
+# Tests for compute_cross_file_average
 # ---------------------------------------------------------------------------
 
 
@@ -175,12 +174,12 @@ class TestGetCrossFileAverage:
         )
         items = [{"path": Path("a.abf")}, {"path": Path("b.abf")}]
 
-        time_out, grand_avg, n, has_unequal = get_cross_file_average(items, [0], 0, adapter)
+        result = compute_cross_file_average(items, [0], 0, adapter)
 
-        assert n == 2
-        assert not has_unequal
-        assert len(grand_avg) == 100
-        np.testing.assert_allclose(grand_avg, 3.0)  # mean(2, 4)
+        assert result.contributing_file_count == 2
+        assert not result.has_unequal_lengths
+        assert len(result.data) == 100
+        np.testing.assert_allclose(result.data, 3.0)  # mean(2, 4)
 
     def test_two_files_different_sampling_rates_are_time_aligned(self):
         """Equal-duration traces are interpolated before their grand average."""
@@ -194,13 +193,13 @@ class TestGetCrossFileAverage:
         )
         items = [{"path": Path("long.abf")}, {"path": Path("short.abf")}]
 
-        _, grand_avg, n, has_unequal = get_cross_file_average(items, [0], 0, adapter)
+        result = compute_cross_file_average(items, [0], 0, adapter)
 
-        assert n == 2
-        assert has_unequal
+        assert result.contributing_file_count == 2
+        assert result.has_unequal_lengths
         # Result length equals the longest trace
-        assert len(grand_avg) == 100
-        np.testing.assert_allclose(grand_avg, 2.0)
+        assert len(result.data) == 100
+        np.testing.assert_allclose(result.data, 2.0)
 
     def test_missing_trial_skipped(self):
         """File missing the requested trial is silently excluded."""
@@ -217,10 +216,10 @@ class TestGetCrossFileAverage:
         )
         items = [{"path": Path("good.abf")}, {"path": Path("bad.abf")}]
 
-        _, avg_out, n, _ = get_cross_file_average(items, [20], 0, adapter)
+        result = compute_cross_file_average(items, [20], 0, adapter)
 
-        assert n == 1
-        np.testing.assert_allclose(avg_out, 5.0)
+        assert result.contributing_file_count == 1
+        np.testing.assert_allclose(result.data, 5.0)
 
     def test_all_files_missing_returns_none(self):
         """Returns (None, None, 0) when no file can supply the trial."""
@@ -231,12 +230,12 @@ class TestGetCrossFileAverage:
         )
         items = [{"path": Path("a.abf")}, {"path": Path("b.abf")}]
 
-        time_out, avg_out, n, has_unequal = get_cross_file_average(items, [0], 0, adapter)
+        result = compute_cross_file_average(items, [0], 0, adapter)
 
-        assert n == 0
-        assert not has_unequal
-        assert time_out is None
-        assert avg_out is None
+        assert result.contributing_file_count == 0
+        assert not result.has_unequal_lengths
+        assert result.time is None
+        assert result.data is None
 
     def test_channel_idx_out_of_range_skipped(self):
         """Files with fewer channels than requested are silently skipped."""
@@ -245,18 +244,18 @@ class TestGetCrossFileAverage:
         adapter = _make_adapter(rec)
         items = [{"path": Path("narrow.abf")}]
 
-        _, _, n, _ = get_cross_file_average(items, [0], channel_idx=5, neo_adapter=adapter)
+        result = compute_cross_file_average(items, [0], channel_idx=5, neo_adapter=adapter)
 
-        assert n == 0
+        assert result.contributing_file_count == 0
 
     def test_empty_items_list(self):
         """Empty items list returns (None, None, 0) immediately."""
         adapter = MagicMock()
-        time_out, avg_out, n, has_unequal = get_cross_file_average([], [0], 0, adapter)
-        assert n == 0
-        assert not has_unequal
-        assert time_out is None
-        assert avg_out is None
+        result = compute_cross_file_average([], [0], 0, adapter)
+        assert result.contributing_file_count == 0
+        assert not result.has_unequal_lengths
+        assert result.time is None
+        assert result.data is None
         adapter.read_recording.assert_not_called()
 
     def test_multi_trial_within_file(self):
@@ -269,10 +268,10 @@ class TestGetCrossFileAverage:
         adapter = _make_adapter(_make_recording({0: ch}))
         items = [{"path": Path("multi.abf")}]
 
-        _, avg_out, n, _ = get_cross_file_average(items, [0, 1], 0, adapter)
+        result = compute_cross_file_average(items, [0, 1], 0, adapter)
 
-        assert n == 1
-        np.testing.assert_allclose(avg_out, 2.0)
+        assert result.contributing_file_count == 1
+        np.testing.assert_allclose(result.data, 2.0)
 
     def test_time_array_corresponds_to_first_valid_file(self):
         """The returned time array originates from the first valid file."""
@@ -286,9 +285,9 @@ class TestGetCrossFileAverage:
         )
         items = [{"path": Path("a.abf")}, {"path": Path("b.abf")}]
 
-        time_out, _, _, _ = get_cross_file_average(items, [0], 0, adapter)
+        result = compute_cross_file_average(items, [0], 0, adapter)
 
-        np.testing.assert_allclose(time_out, t_a)
+        np.testing.assert_allclose(result.time, t_a)
 
     def test_different_sampling_rate_is_excluded_not_averaged(self):
         """Sample indices with different physical times must never be pooled."""
@@ -298,12 +297,10 @@ class TestGetCrossFileAverage:
         ch_slow = _make_channel({0: np.ones(100) * 9.0}, {0: t_slow})
         adapter = _make_adapter(_make_recording({0: ch_fast}), _make_recording({0: ch_slow}))
 
-        _, average, n_files, _ = get_cross_file_average(
-            [{"path": Path("fast.abf")}, {"path": Path("slow.abf")}], [0], 0, adapter
-        )
+        result = compute_cross_file_average([{"path": Path("fast.abf")}, {"path": Path("slow.abf")}], [0], 0, adapter)
 
-        assert n_files == 1
-        np.testing.assert_allclose(average, 1.0)
+        assert result.contributing_file_count == 1
+        np.testing.assert_allclose(result.data, 1.0)
 
     def test_units_are_converted_and_unknown_units_are_reported(self):
         """Compatible scale prefixes convert; unknown dimensions cannot enter an average."""
@@ -319,7 +316,7 @@ class TestGetCrossFileAverage:
             _make_recording({"0": ch_unknown}),
         )
 
-        _, average, n_files, _, report = get_cross_file_average_with_report(
+        result = compute_cross_file_average(
             [{"path": Path("mv.abf")}, {"path": Path("v.abf")}, {"path": Path("unknown.abf")}],
             [0],
             0,
@@ -327,11 +324,11 @@ class TestGetCrossFileAverage:
             channel_id="0",
         )
 
-        assert n_files == 2
-        np.testing.assert_allclose(average, 2.0)
-        assert report.canonical_units == "mV"
-        assert report.excluded_entries[0].source == "unknown.abf"
-        assert "unknown" in report.excluded_entries[0].reason
+        assert result.contributing_file_count == 2
+        np.testing.assert_allclose(result.data, 2.0)
+        assert result.compatibility_report.canonical_units == "mV"
+        assert result.compatibility_report.excluded_entries[0].source == "unknown.abf"
+        assert "unknown" in result.compatibility_report.excluded_entries[0].reason
 
 
 def test_canonical_unit_and_scale():

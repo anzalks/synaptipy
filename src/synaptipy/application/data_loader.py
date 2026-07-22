@@ -38,9 +38,9 @@ class DataLoader(QtCore.QObject):
 
     # Qt signals
     data_ready = QtCore.Signal(object)  # Emits the loaded Recording object
-    # Emits ``(path, message)`` for loader failures.  Object keeps direct
-    # callers/tests that emit a legacy string compatible with the UI slot.
-    data_error = QtCore.Signal(object)
+    # The source path is part of the typed error contract, allowing the UI to
+    # retire the matching asynchronous request without payload guessing.
+    data_error = QtCore.Signal(object, str)
     loading_started = QtCore.Signal(str)  # Emits file path when loading starts
     loading_progress = QtCore.Signal(int)  # Emits progress percentage (0-100)
 
@@ -88,7 +88,7 @@ class DataLoader(QtCore.QObject):
 
     def _emit_error(self, file_path: Path, message: str) -> None:
         """Report an error with the path needed to retire the right request."""
-        self.data_error.emit((Path(file_path), message))
+        self.data_error.emit(Path(file_path), message)
 
     @QtCore.Slot(Path, bool)
     def load_file(self, file_path: Path, lazy_load: bool = False) -> None:  # noqa: C901

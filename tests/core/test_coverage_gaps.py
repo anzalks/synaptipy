@@ -198,7 +198,7 @@ class TestBatchEngineSelectedTrials:
         ch = self._make_channel(n_trials=n_trials)
         rec.channels = {"Vm": ch}
         rec.source_file = Path("sel.abf")
-        rec.protocol_name = None
+        rec.imported_protocol_label = None
         rec.subject_id = None
         rec.cell_id = None
         rec.duration = 0.5
@@ -272,7 +272,7 @@ class TestCrossFileAverageProgressCallback:
         ch.get_relative_time_vector.return_value = np.linspace(0, 0.01, 100)
         rec.channels = {"Vm": ch}
         rec.source_file = Path("cb.abf")
-        rec.protocol_name = None
+        rec.imported_protocol_label = None
         rec.subject_id = None
         rec.cell_id = None
         rec.duration = 0.01

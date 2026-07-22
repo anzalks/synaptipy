@@ -155,6 +155,10 @@ Only mark an assignment reviewed after checking it against the acquisition
 record; this controls the compatibility/readiness checks used by analyses and
 compatible cross-file averaging.
 
+An imported filename or reader label is displayed as provenance only. It never
+chooses an analysis family or timing window; make or import a Protocol Map when
+that scientific context is needed.
+
 ### 1.7 Adding Data to the Analyser
 
 **Whole recording** - Click **"Add to Analysis Set"** to send the full file as a

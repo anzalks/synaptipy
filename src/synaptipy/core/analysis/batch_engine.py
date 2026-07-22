@@ -375,8 +375,8 @@ class BatchAnalysisEngine:
         meta: Dict[str, Any] = {}
         if recording is None:
             return meta
-        if hasattr(recording, "protocol_name") and recording.protocol_name:
-            meta["protocol"] = recording.protocol_name
+        if getattr(recording, "imported_protocol_label", None):
+            meta["imported_protocol_label"] = recording.imported_protocol_label
         if hasattr(recording, "duration") and recording.duration is not None:
             meta["recording_duration_s"] = round(float(recording.duration), 4)
         if hasattr(recording, "subject_id"):
@@ -609,9 +609,7 @@ class BatchAnalysisEngine:
     ) -> pd.DataFrame:
         """Build protocol-compatible, file-balanced cross-file averages.
 
-        The historical flat pool is retained below as a private compatibility
-        implementation, but all normal callers now go through the planner.  It
-        honours selected-trial scopes, keeps protocol groups separate, and first
+        It honours selected-trial scopes, keeps protocol groups separate, and first
         averages technical repeats within each file so a file with many sweeps
         does not dominate the cross-file result.
         """
@@ -778,13 +776,10 @@ class BatchAnalysisEngine:
                     **used_protocol.as_result_metadata(),
                 }
                 try:
-                    result = analysis_func(master_trace, master_time, sampling_rate, **clean_params)
-                    if isinstance(result, dict) and isinstance(result.get("metrics"), dict):
-                        metrics = result.pop("metrics")
-                        result.update(metrics)
-                    if not isinstance(result, dict):
-                        result = {"result": result}
-                    result.update(meta)
+                    analysis_result = AnalysisRegistry.execute(
+                        analysis_name, master_trace, master_time, sampling_rate, **clean_params
+                    )
+                    result = analysis_result.export_row(**meta)
                     self._sanitise_result_for_export(result)
                     results.append(result)
                 except Exception as exc:  # noqa: BLE001
@@ -1130,7 +1125,7 @@ class BatchAnalysisEngine:
         protocol_enabled = isinstance(getattr(recording, "protocol_map", None), ProtocolMap)
 
         def protocols_for_trial(trial_idx: int, trial_time: Any) -> List[ResolvedProtocol]:
-            """Resolve protocol context without making legacy runs disappear."""
+            """Resolve protocol context without making incomplete maps invisible."""
             if not protocol_enabled:
                 return []
             try:
@@ -1525,22 +1520,15 @@ class BatchAnalysisEngine:
                     p = params.copy()
                     p.pop("trial_index", None)
 
-                    res = analysis_func(d, t, sampling_rate, **p)
-                    # Flatten consolidated-module schema: {"module_used": ..., "metrics": {...}}
-                    if "metrics" in res and isinstance(res.get("metrics"), dict):
-                        metrics = res.pop("metrics")
-                        res.update(metrics)
-                    # Add metadata
-                    res.update(
-                        {
-                            "file_name": file_path.name,
-                            "file_path": str(file_path),
-                            "channel": channel_name,
-                            "analysis": analysis_name,
-                            "scope": scope,
-                            "sampling_rate": sampling_rate,
-                            "trial_count": total_trials,
-                        }
+                    analysis_result = AnalysisRegistry.execute(analysis_name, d, t, sampling_rate, **p)
+                    res = analysis_result.export_row(
+                        file_name=file_path.name,
+                        file_path=str(file_path),
+                        channel=channel_name,
+                        analysis=analysis_name,
+                        scope=scope,
+                        sampling_rate=sampling_rate,
+                        trial_count=total_trials,
                     )
                     if trial_idx is not None:
                         res["trial_index"] = trial_idx
@@ -1596,21 +1584,15 @@ class BatchAnalysisEngine:
 
                     if scope == "channel_set" or (scope == "all_trials" and expects_list):
                         # Pass full list (channel_set always, all_trials when expects_list=True)
-                        res = analysis_func(data, time, sampling_rate, **params)
-                        # Flatten consolidated-module schema: {"module_used": ..., "metrics": {...}}
-                        if "metrics" in res and isinstance(res.get("metrics"), dict):
-                            metrics = res.pop("metrics")
-                            res.update(metrics)
-                        res.update(
-                            {
-                                "file_name": file_path.name,
-                                "file_path": str(file_path),
-                                "channel": channel_name,
-                                "analysis": analysis_name,
-                                "scope": scope,
-                                "sampling_rate": sampling_rate,
-                                "trial_count": len(data) if isinstance(data, list) else 1,
-                            }
+                        analysis_result = AnalysisRegistry.execute(analysis_name, data, time, sampling_rate, **params)
+                        res = analysis_result.export_row(
+                            file_name=file_path.name,
+                            file_path=str(file_path),
+                            channel=channel_name,
+                            analysis=analysis_name,
+                            scope=scope,
+                            sampling_rate=sampling_rate,
+                            trial_count=len(data) if isinstance(data, list) else 1,
                         )
                         results.append(res)
                     else:

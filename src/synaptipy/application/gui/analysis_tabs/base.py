@@ -26,9 +26,9 @@ from synaptipy.application.services.data_loader_service import DataLoaderService
 
 # Use absolute path to import NeoAdapter and Recording
 from synaptipy.core.analysis.cross_file_utils import (
+    CrossFileAverageResult,
+    compute_cross_file_average,
     extract_per_file_trace,
-    get_cross_file_average,
-    get_cross_file_average_with_report,
 )
 from synaptipy.core.data_model import Recording
 from synaptipy.core.processing_pipeline import SignalProcessingPipeline
@@ -1155,11 +1155,6 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         log.debug(f"Zoom sync manager initialized for {self.__class__.__name__} (reset functionality only)")
 
-    def setup_zoom_controls(self, **kwargs):
-        """Deprecated method - analysis tabs no longer use zoom controls, only reset view."""
-        log.warning(f"setup_zoom_controls called on {self.__class__.__name__} - analysis tabs only use reset view")
-        pass
-
     def set_data_ranges(self, x_range: Tuple[float, float], y_range: Tuple[float, float]):
         """Set the base data ranges for zoom/scroll calculations.
 
@@ -1229,13 +1224,6 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         """Called when plot range changes from any source (zoom, scroll, manual)."""
         # Subclasses can override this to handle range changes
         # For example, to update analysis regions or recalculate results
-        pass
-
-    # ViewBox state change handler
-    def _on_viewbox_changed(self):
-        """Handles view box state changes (like zoom/pan) - now handled by zoom sync manager."""
-        # The zoom sync manager now handles all range synchronization
-        # This method is kept for backward compatibility
         pass
 
     # Add stub method for mouse click handling
@@ -2340,13 +2328,8 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         """
         return extract_per_file_trace(item, parsed_trials, channel_idx, self.neo_adapter)
 
-    def _get_cross_file_average(
-        self, parsed_trials: List[int], channel_idx: int
-    ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], int]:
-        """Delegate to :func:`~synaptipy.core.analysis.cross_file_utils.get_cross_file_average`.
-
-        Thin wrapper so existing call-sites and tests on the tab object
-        continue to work without modification.
+    def _get_cross_file_average(self, parsed_trials: List[int], channel_idx: int) -> CrossFileAverageResult:
+        """Compute one provenance-carrying cross-file average.
 
         Args:
             parsed_trials: Ordered list of 0-based trial indices to extract.
@@ -2354,30 +2337,25 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                            channel-id) shared across files.
 
         Returns:
-            Tuple ``(time_array, grand_average, n_files)`` where *n_files* is
-            the number of files that contributed.  Returns ``(None, None, 0)``
-            when no valid traces could be obtained.
+            A structured result with data, contribution count, and exclusions.
         """
         channel_id = self.signal_channel_combobox.currentData() if self.signal_channel_combobox else None
-        time_arr, grand_avg, n_files, has_unequal, compatibility_report = get_cross_file_average_with_report(
+        result = compute_cross_file_average(
             self._analysis_items, parsed_trials, channel_idx, self.neo_adapter, channel_id=channel_id
         )
-        exclusions = compatibility_report.excluded_entries
+        exclusions = result.compatibility_report.excluded_entries
         if exclusions:
-            details = "\n".join(f"• {entry.source}: {entry.reason}" for entry in exclusions)
-            QtWidgets.QMessageBox.information(
-                self,
-                "Cross-File Average: Compatibility Report",
-                f"{n_files} source file(s) will contribute; {len(exclusions)} were excluded.\n\n"
-                "The average remains valid for the included sources.\n\n"
-                f"Excluded sources:\n{details}",
+            log.info(
+                "Cross-file average excluded %d source(s): %s",
+                len(exclusions),
+                "; ".join(f"{entry.source}: {entry.reason}" for entry in exclusions),
             )
-        if has_unequal and n_files > 0:
+        if result.has_unequal_lengths and result.contributing_file_count > 0:
             log.warning(
                 "Cross-file average: files have unequal trace lengths. "
                 "Traces are time-aligned before averaging; verify the reported effective N."
             )
-        return time_arr, grand_avg, n_files
+        return result
 
     def _determine_cross_file_trials(self) -> List[int]:
         """Return the ordered list of 0-based trial indices for cross-file averaging.
@@ -2416,10 +2394,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         """
         try:
             channel_id = self.signal_channel_combobox.currentData() if self.signal_channel_combobox else None
-            _, _, _, has_unequal = get_cross_file_average(
+            result = compute_cross_file_average(
                 self._analysis_items, parsed_trials, channel_idx, self.neo_adapter, channel_id=channel_id
             )
-            if has_unequal and n_files > 0:
+            if result.has_unequal_lengths and n_files > 0:
                 return " [WARNING: traces of unequal length - N decreases toward end]"
         except Exception:
             pass
@@ -2465,9 +2443,13 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 if result is not None:
                     per_file_traces.append(result)
 
-            time_arr, grand_avg, n_files, has_unequal = get_cross_file_average(
+            average_result = compute_cross_file_average(
                 recording_items, parsed_trials, channel_idx, self.neo_adapter, channel_id=channel_id
             )
+            time_arr = average_result.time
+            grand_avg = average_result.data
+            n_files = average_result.contributing_file_count
+            has_unequal = average_result.has_unequal_lengths
         finally:
             QtWidgets.QApplication.restoreOverrideCursor()
 
@@ -2536,9 +2518,13 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # Determine which trials to extract; fall back to trial 0
         parsed_trials = self._determine_cross_file_trials()
 
-        time_arr, grand_avg, n_files, has_unequal = get_cross_file_average(
+        average_result = compute_cross_file_average(
             self._analysis_items, parsed_trials, channel_idx, self.neo_adapter, channel_id=channel_id
         )
+        time_arr = average_result.time
+        grand_avg = average_result.data
+        n_files = average_result.contributing_file_count
+        has_unequal = average_result.has_unequal_lengths
         if has_unequal and n_files > 0:
             log.warning(
                 "Cross-file average: unequal trace lengths across %d files. "

@@ -38,7 +38,7 @@ class TestElectrodeMetadataExport:
         """Electrode resistance should be included in NWB electrode metadata."""
         # Create recording with electrode metadata
         recording = Recording(source_file=Path("test.abf"))
-        recording.protocol_name = "IV"
+        recording.imported_protocol_label = "IV"
         recording.duration = 1.0
         recording.sampling_rate = 10000.0
 
@@ -95,7 +95,7 @@ class TestElectrodeMetadataExport:
     def test_electrode_without_resistance_seal(self):
         """NWB export should handle channels without resistance/seal gracefully."""
         recording = Recording(source_file=Path("test.abf"))
-        recording.protocol_name = "Steps"
+        recording.imported_protocol_label = "Steps"
         recording.duration = 1.0
         recording.sampling_rate = 10000.0
 
@@ -140,7 +140,7 @@ class TestPreprocessingHistoryExport:
     def test_preprocessing_history_exported(self):
         """Preprocessing steps should be exported as DynamicTable in NWB."""
         recording = Recording(source_file=Path("test.abf"))
-        recording.protocol_name = "Steps"
+        recording.imported_protocol_label = "Steps"
         recording.duration = 1.0
         recording.sampling_rate = 10000.0
 
@@ -202,7 +202,7 @@ class TestPreprocessingHistoryExport:
     def test_no_preprocessing_history(self):
         """NWB export should handle recordings without preprocessing history."""
         recording = Recording(source_file=Path("test.abf"))
-        recording.protocol_name = "Steps"
+        recording.imported_protocol_label = "Steps"
         recording.duration = 1.0
         recording.sampling_rate = 10000.0
 
@@ -251,7 +251,7 @@ class TestNWBValidation:
     def test_nwb_file_validates(self):
         """Exported NWB should pass pynwb.validate()."""
         recording = Recording(source_file=Path("test.abf"))
-        recording.protocol_name = "IV"
+        recording.imported_protocol_label = "IV"
         recording.duration = 1.0
         recording.sampling_rate = 10000.0
         recording.subject_id = "Mouse_01"
@@ -304,7 +304,7 @@ class TestDANDICompliance:
     def test_required_fields_present(self):
         """Test that all DANDI-required fields are populated."""
         recording = Recording(source_file=Path("test.abf"))
-        recording.protocol_name = "IV"
+        recording.imported_protocol_label = "IV"
         recording.duration = 1.0
         recording.sampling_rate = 10000.0
         recording.subject_id = "Mouse_01"

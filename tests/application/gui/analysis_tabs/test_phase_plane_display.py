@@ -36,7 +36,7 @@ def test_phase_plane_result_display(phase_plane_tab):
 
     # Mock results
     results = {
-        "result": {
+        "metrics": {
             "threshold_v": -45.0,
             "max_dvdt": 120.0,
             "voltage": [1, 2, 3],

@@ -842,7 +842,7 @@ class AnalyserTab(QtWidgets.QWidget):
                     file_str, protocol = path_str.split("::", 1)
                 else:
                     file_str = path_str
-                    protocol = getattr(recording, "protocol_name", None) if recording else None
+                    protocol = getattr(recording, "imported_protocol_label", None) if recording else None
 
                 file_name = Path(file_str).name
 
@@ -907,7 +907,7 @@ class AnalyserTab(QtWidgets.QWidget):
                         file_name = Path(file_name).name
                         display_text = f"{protocol} [{file_name}]"
                     else:
-                        protocol = getattr(recording, "protocol_name", None) if recording else None
+                        protocol = getattr(recording, "imported_protocol_label", None) if recording else None
                         if protocol:
                             display_text = f"{protocol} [{item['path'].name}]"
                         else:
@@ -921,7 +921,7 @@ class AnalyserTab(QtWidgets.QWidget):
                         file_name = Path(file_name).name
                         display_text = f"{protocol} [{file_name}] - {trial_info}"
                     else:
-                        protocol = getattr(recording, "protocol_name", None) if recording else None
+                        protocol = getattr(recording, "imported_protocol_label", None) if recording else None
                         if protocol:
                             display_text = f"{protocol} [{item['path'].name}] - {trial_info}"
                         else:

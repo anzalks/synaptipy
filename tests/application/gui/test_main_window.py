@@ -192,7 +192,7 @@ def test_background_loading_error_handling(main_window, qtbot):
 
         # Act: Trigger the data_error signal
         with qtbot.waitSignal(main_window.data_loader.data_error, timeout=1000):
-            main_window.data_loader.data_error.emit((Path("test.abf"), error_message))
+            main_window.data_loader.data_error.emit(Path("test.abf"), error_message)
 
         # Assert: Check that error dialog was shown
         message_box_spy.assert_called_once()
@@ -337,7 +337,7 @@ def test_error_handling_dialog(main_window, qtbot):
     """Test that critical errors show a message box."""
     error_msg = "Critical failure"
     with patch("PySide6.QtWidgets.QMessageBox.critical") as mock_critical:
-        main_window._on_data_error(error_msg)
+        main_window._on_data_error(Path("failed.abf"), error_msg)
         mock_critical.assert_called_once()
         args = mock_critical.call_args[0]
         assert error_msg in args[2]  # Message body

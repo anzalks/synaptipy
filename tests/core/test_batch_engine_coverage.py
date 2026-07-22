@@ -38,7 +38,7 @@ def _make_recording(value=-65.0, n_trials=3):
     ch = _make_channel(value=value, n_trials=n_trials)
     rec.channels = {"Vm": ch}
     rec.source_file = Path("rec.abf")
-    rec.protocol_name = None
+    rec.imported_protocol_label = None
     rec.duration = 0.5
     rec.subject_id = None
     rec.cell_id = None
@@ -124,7 +124,7 @@ class TestTrialLengthMismatch:
         """Lines 1059-1091: mixed-length trials in average scope returns error row."""
         rec = MagicMock(spec=Recording)
         rec.source_file = Path("mismatch.abf")
-        rec.protocol_name = None
+        rec.imported_protocol_label = None
         rec.subject_id = None
         rec.cell_id = None
         rec.duration = 0.5

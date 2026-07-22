@@ -412,8 +412,8 @@ class NWBExporter:
             # Append technical details to notes
             source_file_name = getattr(recording, "source_file", Path("Unknown")).name
             notes_list.append(f"Original file: {source_file_name}")
-            if hasattr(recording, "protocol_name") and recording.protocol_name:
-                notes_list.append(f"Protocol: {recording.protocol_name}")
+            if getattr(recording, "imported_protocol_label", None):
+                notes_list.append(f"Imported protocol label: {recording.imported_protocol_label}")
 
             # Recording temperature for FAIR / Q10 compliance.
             # Precedence: explicit session_metadata > recording attribute > recording.metadata dict.

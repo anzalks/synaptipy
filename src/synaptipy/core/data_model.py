@@ -533,13 +533,14 @@ class Recording:
         self.duration: Optional[float] = None
         self.t_start: Optional[float] = None
         self.session_start_time_dt: Optional[datetime] = None
-        self.protocol_name: Optional[str] = None
+        # Reader-recovered labels are provenance only.  Analyses are routed by
+        # the explicit ProtocolMap below, never by a filename heuristic.
+        self.imported_protocol_label: Optional[str] = None
         self.injected_current: Optional[float] = None
         # Protocol assignments are intentionally held below the recording level:
         # a file may contain different protocols in different trials and/or
-        # several time segments within a trial.  ``protocol_name`` above is
-        # retained as legacy import metadata and is converted to a reviewable
-        # full-trial assignment on demand.
+        # several time segments within a trial.  An imported label is not
+        # converted into an assignment: absent maps stay signal-only/reviewable.
         self.protocol_map: ProtocolMap = ProtocolMap()
         self.metadata: Dict[str, Any] = {}  # Use Any for metadata flexibility
 

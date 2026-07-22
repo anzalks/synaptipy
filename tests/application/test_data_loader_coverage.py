@@ -91,7 +91,7 @@ class TestLoadFileErrorPaths:
         self.errors = []
         self.ready = []
         self.progress = []
-        self.loader.data_error.connect(self.errors.append)
+        self.loader.data_error.connect(lambda path, message: self.errors.append((path, message)))
         self.loader.data_ready.connect(self.ready.append)
         self.loader.loading_progress.connect(self.progress.append)
 

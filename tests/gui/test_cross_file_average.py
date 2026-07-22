@@ -107,11 +107,11 @@ class TestGetCrossFileAverage:
             {"path": Path("file_b.abf")},
         ]
 
-        time_out, avg_out, n = analysis_tab._get_cross_file_average([0], 0)
+        result = analysis_tab._get_cross_file_average([0], 0)
 
-        assert n == 2
-        assert len(time_out) == 100
-        np.testing.assert_allclose(avg_out, 3.0)  # mean(2, 4) == 3
+        assert result.contributing_file_count == 2
+        assert len(result.time) == 100
+        np.testing.assert_allclose(result.data, 3.0)  # mean(2, 4) == 3
 
     def test_incompatible_duration_is_excluded(self, analysis_tab):
         """Different protocol durations are not averaged by array index."""
@@ -131,11 +131,11 @@ class TestGetCrossFileAverage:
             {"path": Path("short.abf")},
         ]
 
-        _, avg_out, n = analysis_tab._get_cross_file_average([0], 0)
+        result = analysis_tab._get_cross_file_average([0], 0)
 
-        assert n == 1
-        assert len(avg_out) == 200
-        np.testing.assert_allclose(avg_out, 1.0)
+        assert result.contributing_file_count == 1
+        assert len(result.data) == 200
+        np.testing.assert_allclose(result.data, 1.0)
 
     def test_missing_trial_skipped(self, analysis_tab):
         """File missing the requested trial is silently skipped."""
@@ -157,11 +157,11 @@ class TestGetCrossFileAverage:
             {"path": Path("bad.abf")},
         ]
 
-        time_out, avg_out, n = analysis_tab._get_cross_file_average([20], 0)
+        result = analysis_tab._get_cross_file_average([20], 0)
 
         # Only the good file contributes
-        assert n == 1
-        np.testing.assert_allclose(avg_out, 5.0)
+        assert result.contributing_file_count == 1
+        np.testing.assert_allclose(result.data, 5.0)
 
     def test_all_files_missing_trial_returns_none(self, analysis_tab):
         """Returns (None, None, 0) when no file can supply the trial."""
@@ -172,11 +172,11 @@ class TestGetCrossFileAverage:
         analysis_tab.neo_adapter.read_recording.return_value = _make_recording(ch)
         analysis_tab._analysis_items = [{"path": Path("a.abf")}, {"path": Path("b.abf")}]
 
-        time_out, avg_out, n = analysis_tab._get_cross_file_average([0], 0)
+        result = analysis_tab._get_cross_file_average([0], 0)
 
-        assert n == 0
-        assert time_out is None
-        assert avg_out is None
+        assert result.contributing_file_count == 0
+        assert result.time is None
+        assert result.data is None
 
     def test_channel_index_out_of_range_skipped(self, analysis_tab):
         """File with fewer channels than requested is silently skipped."""
@@ -185,8 +185,8 @@ class TestGetCrossFileAverage:
         analysis_tab.neo_adapter.read_recording.return_value = rec
         analysis_tab._analysis_items = [{"path": Path("narrow.abf")}]
 
-        _, _, n = analysis_tab._get_cross_file_average([0], channel_idx=5)
-        assert n == 0
+        result = analysis_tab._get_cross_file_average([0], channel_idx=5)
+        assert result.contributing_file_count == 0
 
     def test_multi_trial_within_file_averaged(self, analysis_tab):
         """Multiple parsed_trials from a single file are averaged then included."""
@@ -198,10 +198,10 @@ class TestGetCrossFileAverage:
         analysis_tab.neo_adapter.read_recording.return_value = _make_recording(ch)
         analysis_tab._analysis_items = [{"path": Path("multi.abf")}]
 
-        _, avg_out, n = analysis_tab._get_cross_file_average([0, 1], 0)
+        result = analysis_tab._get_cross_file_average([0, 1], 0)
 
-        assert n == 1
-        np.testing.assert_allclose(avg_out, 2.0)  # mean(1, 3)
+        assert result.contributing_file_count == 1
+        np.testing.assert_allclose(result.data, 2.0)  # mean(1, 3)
 
 
 # ---------------------------------------------------------------------------
