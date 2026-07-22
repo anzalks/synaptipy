@@ -115,6 +115,31 @@ At startup, Synaptipy:
 parameter widgets, and the `plots` list generates the plot overlays - all from
 metadata.
 
+### Scientific input declarations
+
+Plugins can declare the data context that makes their output interpretable:
+
+```python
+@AnalysisRegistry.register(
+    name="my_evoked_metric",
+    requires_secondary_channel={
+        "param_name": "ttl_data",
+        "label": "TTL / Stimulus Channel:",
+    },
+    protocol_requirements={
+        "families": ("optogenetic", "single_stim"),
+        "requires_stimulus_timing": True,
+    },
+    supported_channel_units=("pA",),
+)
+```
+
+`requires_secondary_channel` must be a dictionary, not `True`. The GUI renders
+the channel selector from that declaration. In a batch pipeline, set the
+top-level `secondary_channel` field to the corresponding channel ID or native
+name. `supported_channel_units` prevents a unit-specific plugin such as a
+charge integral from being run on an incompatible channel.
+
 ---
 
 ## 2. Quick Start - Your First Plugin in 5 Minutes

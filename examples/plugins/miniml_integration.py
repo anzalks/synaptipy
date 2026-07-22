@@ -319,6 +319,7 @@ def run_miniml_detection(
     name="miniml_events",
     label="miniML Events",
     expects_list=False,
+    supported_channel_units=("pA",),
     run_button=True,
     ui_params=[
         {

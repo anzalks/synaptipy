@@ -240,6 +240,7 @@ def calculate_synaptic_charge(
     name="synaptic_charge",
     label="Synaptic Charge (AUC)",
     expects_list=False,
+    supported_channel_units=("pA",),
     ui_params=[
         {
             "name": "baseline_method",

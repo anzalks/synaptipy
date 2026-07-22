@@ -84,6 +84,14 @@ def detect_spikes_spikeinterface(
         Dict matching the Synaptipy result schema, or ``{"error": ...}`` on
         failure.
     """
+    if data.ndim != 1 or data.size == 0:
+        return {"error": "data must be a non-empty 1-D array"}
+    if not np.isfinite(sampling_rate) or sampling_rate <= 0:
+        return {"error": "sampling_rate must be a positive finite value"}
+    nyquist_hz = float(sampling_rate) / 2.0
+    if not (0 < freq_min < freq_max < nyquist_hz):
+        return {"error": ("Bandpass cutoffs must satisfy 0 < freq_min < freq_max < " f"Nyquist ({nyquist_hz:g} Hz).")}
+
     # Lazy imports so the plugin loads even without spikeinterface installed
     try:
         import spikeinterface.core as sc
@@ -91,9 +99,6 @@ def detect_spikes_spikeinterface(
         from spikeinterface.sortingcomponents.peak_detection import detect_peaks
     except ImportError as exc:
         return {"error": f"SpikeInterface is not installed: {exc}"}
-
-    if data.ndim != 1 or data.size == 0:
-        return {"error": "data must be a non-empty 1-D array"}
 
     log.info("SpikeInterface: starting sorting pipeline")
 

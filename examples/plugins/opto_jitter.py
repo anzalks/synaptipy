@@ -208,7 +208,17 @@ def calculate_opto_jitter(
     name="opto_jitter",
     label="Opto Latency Jitter",
     expects_list=True,
-    requires_secondary_channel=True,
+    requires_secondary_channel={
+        "param_name": "secondary_data",
+        "label": "TTL / Stimulus Channel:",
+        "tooltip": "Select the TTL channel used to identify each optical stimulus onset.",
+    },
+    protocol_requirements={
+        "families": ("optogenetic",),
+        "requires_stimulus_timing": True,
+        "requires_multi_trial": True,
+        "description": "Verified optical stimulus timing across repeated sweeps",
+    },
     ui_params=[
         {
             "name": "ttl_threshold",

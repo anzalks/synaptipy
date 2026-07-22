@@ -185,6 +185,17 @@ def si_mocks(fs, synthetic_trace):
 
 
 class TestReturnSchema:
+    def test_rejects_a_band_above_nyquist_without_importing_spikeinterface(self, synthetic_trace):
+        result = detect_spikes_spikeinterface(
+            synthetic_trace,
+            sampling_rate=10_000.0,
+            freq_min=300.0,
+            freq_max=5_000.0,
+            threshold_mad=5.0,
+            peak_sign="neg",
+        )
+        assert "Nyquist" in result["error"]
+
     def test_module_used_is_spike_interface(self, si_mocks, synthetic_trace, fs):
         t = np.arange(len(synthetic_trace)) / fs
         result = run_spike_interface_wrapper(synthetic_trace, t, fs)

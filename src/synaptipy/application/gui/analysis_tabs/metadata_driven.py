@@ -919,6 +919,15 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         # Check if the analysis requires all trials
         metadata = AnalysisRegistry.get_metadata(self.analysis_name)
         requires_multi_trial = metadata.get("requires_multi_trial", False)
+        supported_units = tuple(metadata.get("supported_channel_units", ()))
+        if supported_units and self._selected_item_recording and self.signal_channel_combobox:
+            channel = self._selected_item_recording.channels.get(self.signal_channel_combobox.currentData())
+            channel_units = str(getattr(channel, "units", "")) if channel is not None else ""
+            if channel_units not in supported_units:
+                supported = ", ".join(supported_units)
+                raise ValueError(
+                    f"{metadata.get('label', self.analysis_name)} requires a channel in {supported}, not {channel_units or 'unknown units'}."
+                )
 
         protocol_contexts = self._update_protocol_readiness(data)
         incompatible = [context for context in protocol_contexts if context.status == "incompatible"]

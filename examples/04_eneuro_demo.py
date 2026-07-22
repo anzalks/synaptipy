@@ -8,6 +8,10 @@ recordings from examples/data/.
 Analysis is performed exclusively through the engine's registered pipeline —
 no direct calls to internal analysis functions.
 
+For selected-trial averaging and reviewed protocol provenance, see
+``05_protocol_aware_batch.py``. This demonstration intentionally preserves its
+per-file/all-trial design for a compact public-engine example.
+
 Outputs:
   paper/results/demo_results.csv — per-file/trial results table from the engine
 

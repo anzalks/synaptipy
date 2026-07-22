@@ -278,8 +278,40 @@ BUILTIN_ANALYSIS_REQUIREMENTS: Dict[str, ProtocolRequirement] = {
 
 
 def requirement_for_analysis(name: str) -> ProtocolRequirement:
-    """Return protocol requirements for a supplied analysis; plugins stay opt-in."""
-    return BUILTIN_ANALYSIS_REQUIREMENTS.get(name, _SIGNAL)
+    """Return the protocol requirement declared by a supplied analysis or plugin.
+
+    Built-in requirements remain the canonical defaults.  Plugins may opt in by
+    placing a ``protocol_requirements`` mapping in their registry metadata.  A
+    malformed plugin declaration deliberately falls back to signal-only so an
+    optional extension cannot prevent the application from starting.
+    """
+    builtin_requirement = BUILTIN_ANALYSIS_REQUIREMENTS.get(name)
+    if builtin_requirement is not None:
+        return builtin_requirement
+
+    try:
+        from synaptipy.core.analysis.registry import AnalysisRegistry
+
+        declaration = AnalysisRegistry.get_metadata(name).get("protocol_requirements")
+    except (ImportError, AttributeError):
+        return _SIGNAL
+
+    if isinstance(declaration, ProtocolRequirement):
+        return declaration
+    if not isinstance(declaration, dict):
+        return _SIGNAL
+
+    try:
+        families = tuple(str(family) for family in declaration.get("families", _SIGNAL.families))
+        return ProtocolRequirement(
+            families=families or _SIGNAL.families,
+            requires_command=bool(declaration.get("requires_command", False)),
+            requires_stimulus_timing=bool(declaration.get("requires_stimulus_timing", False)),
+            requires_multi_trial=bool(declaration.get("requires_multi_trial", False)),
+            description=str(declaration.get("description", "Plugin-declared protocol requirement")),
+        )
+    except (TypeError, ValueError):
+        return _SIGNAL
 
 
 def apply_builtin_protocol_requirements(registry: Any) -> None:

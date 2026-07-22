@@ -18,6 +18,7 @@ environments.
 | [01_batch_analysis.ipynb](01_batch_analysis.ipynb) | Load ABF files, run spike detection across recordings, plot raw traces with scale bars and per-file spike counts as a strip plot, export results to CSV |
 | [02_optogenetics.ipynb](02_optogenetics.ipynb) | Simulate TTL-driven spiking, extract TTL epochs, compute optical latency/response probability, generate raster and PSTH figures |
 | [03_custom_plugin.ipynb](03_custom_plugin.ipynb) | Walkthrough of creating a custom analysis plugin with `@AnalysisRegistry.register` |
+| [05_protocol_aware_batch.py](05_protocol_aware_batch.py) | Canonical current workflow: reviewed protocol assignments, selected trials, compatible cross-file averaging, and provenance-preserving CSV output |
 
 **Sample data** for the notebooks lives in `data/`
 (ABF and WCP whole-cell patch-clamp recordings).
@@ -36,6 +37,11 @@ scripts and cannot be executed directly from the command line.
 | `plugins/opto_jitter.py` | Opto Latency Jitter | Trial-to-trial spike-latency jitter after an optogenetic TTL pulse (requires a TTL channel) |
 | `plugins/ap_repolarization.py` | AP Repolarization Rate | Maximum repolarization rate (dV/dt minimum) of the first action potential in a search window |
 | `plugins/miniml_integration.py` | miniML Events | Demonstrates deep-learning integration via delvendahl/miniML for synaptic event detection using a pre-trained Keras model. |
+
+The plugin API supports optional `protocol_requirements`, `supported_channel_units`,
+and a dictionary-valued `requires_secondary_channel` declaration.  Use the TTL
+selector declaration for stimulus-dependent plugins; batch pipelines then set
+`secondary_channel` to the channel ID or native channel name used in every file.
 
 To activate: check **Enable Custom Plugins** in
 **Edit > Preferences** (or **Synaptipy > Preferences** on macOS), then
@@ -126,6 +132,7 @@ Then open Synaptipy, go to **Edit > Preferences**, check
 - Never mix `conda install numpy` and `pip install numpy` in the same env —
   conda's numpy and pip's numpy have separate file trees and will clobber each
   other.  This env uses pip exclusively for numpy; keep it that way.
-- TensorFlow 2.15 is compatible with numpy 2.x.  TensorFlow 2.16+ and 3.x
-  require `tensorflow-macos` on Apple Silicon — stay on 2.15 unless you
-  upgrade deliberately.
+- The miniML integration is optional and its TensorFlow/Keras compatibility is
+  controlled by the tested `tensorflow>=2.17` plus `tf_keras` recipe above.
+  Do not substitute an older TensorFlow release without validating the model
+  and NumPy compatibility in a separate environment.

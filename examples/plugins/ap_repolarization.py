@@ -98,8 +98,8 @@ def calculate_ap_repolarization(
     if ap_data.size < 4:
         return {"error": "Too few samples after AP onset"}
 
-    # First derivative via gradient (V/sample -> V/s)
-    dvdt = np.gradient(ap_data, ap_time)
+    # Input is millivolts, while the public metric is volts per second.
+    dvdt = np.gradient(ap_data / 1000.0, ap_time)
 
     # Max repolarization = most negative dV/dt
     min_idx = int(np.argmin(dvdt))

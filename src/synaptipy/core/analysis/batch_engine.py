@@ -1083,12 +1083,68 @@ class BatchAnalysisEngine:
         """
         analysis_name = task.get("analysis")
         scope = task.get("scope", "first_trial")
-        params = task.get("params", {})
+        params = dict(task.get("params", {}))
 
         # Check metadata for type and batch-dispatch flags
         meta = AnalysisRegistry.get_metadata(analysis_name)
         is_preprocessing = meta.get("type") == "preprocessing"
         expects_list = meta.get("expects_list", False)
+        supported_units = tuple(meta.get("supported_channel_units", ()))
+        channel_units = str(getattr(channel, "units", ""))
+        if supported_units and channel_units not in supported_units:
+            return [
+                {
+                    "file_name": file_path.name,
+                    "file_path": str(file_path),
+                    "channel": channel_name,
+                    "analysis": analysis_name,
+                    "scope": scope,
+                    "error": (
+                        f"{meta.get('label', analysis_name)} requires channel units "
+                        f"{', '.join(supported_units)}, not {channel_units or 'unknown units'}."
+                    ),
+                }
+            ], None
+
+        secondary_config = meta.get("requires_secondary_channel")
+        secondary_channel = None
+        secondary_param_name = ""
+        if isinstance(secondary_config, dict):
+            secondary_param_name = str(secondary_config.get("param_name", "secondary_data"))
+            secondary_selector = task.get("secondary_channel", params.pop("secondary_channel", None))
+            if recording is None or not secondary_selector:
+                return [
+                    {
+                        "file_name": file_path.name,
+                        "file_path": str(file_path),
+                        "channel": channel_name,
+                        "analysis": analysis_name,
+                        "scope": scope,
+                        "error": "This analysis requires a secondary channel. Set secondary_channel to its ID or name.",
+                    }
+                ], None
+            selector = str(secondary_selector)
+            secondary_channel = recording.channels.get(selector)
+            if secondary_channel is None:
+                secondary_channel = next(
+                    (
+                        candidate
+                        for channel_id, candidate in recording.channels.items()
+                        if str(channel_id) == selector or str(getattr(candidate, "name", "")) == selector
+                    ),
+                    None,
+                )
+            if secondary_channel is None:
+                return [
+                    {
+                        "file_name": file_path.name,
+                        "file_path": str(file_path),
+                        "channel": channel_name,
+                        "analysis": analysis_name,
+                        "scope": scope,
+                        "error": f"Secondary channel '{selector}' was not found in this recording.",
+                    }
+                ], None
 
         # Get the registered analysis function
         analysis_func = AnalysisRegistry.get_function(analysis_name)
@@ -1569,10 +1625,37 @@ class BatchAnalysisEngine:
                 # Helper to run analysis and format result
                 total_trials = getattr(channel, "num_trials", 0)
 
+                def secondary_trace(trial_idx: Optional[int] = None):
+                    """Return the secondary trace aligned with the requested primary scope."""
+                    if secondary_channel is None:
+                        return None
+                    if scope in ("average", "selected_trials_average"):
+                        indices = selected_trial_indices if scope == "selected_trials_average" else None
+                        return secondary_channel.get_time_aligned_average(indices).data
+                    index = 0 if trial_idx is None else trial_idx
+                    return secondary_channel.get_data(index)
+
+                def secondary_trial_list() -> List[Any]:
+                    """Return every selected secondary trial for list-based analyses."""
+                    if secondary_channel is None:
+                        return []
+                    indices = selected_trial_indices
+                    if indices is None:
+                        indices = list(range(channel.num_trials))
+                    traces = [secondary_channel.get_data(index) for index in indices]
+                    if any(trace is None for trace in traces):
+                        raise ValueError("The selected secondary channel does not contain every requested trial.")
+                    return traces
+
                 def run_single(d, t, trial_idx=None, protocol: Optional[ResolvedProtocol] = None):
                     # Remove trial_index from params if present
                     p = params.copy()
                     p.pop("trial_index", None)
+                    if secondary_channel is not None:
+                        trace = secondary_trace(trial_idx)
+                        if trace is None:
+                            raise ValueError("The selected secondary channel has no matching trial.")
+                        p[secondary_param_name] = trace
 
                     analysis_result = AnalysisRegistry.execute(analysis_name, d, t, sampling_rate, **p)
                     res = analysis_result.export_row(
@@ -1592,6 +1675,8 @@ class BatchAnalysisEngine:
                         res["selected_trial_indices"] = ",".join(str(index) for index in selected_trial_indices)
                         res["selected_trial_count"] = len(selected_trial_indices)
                     res.update(average_qc_metadata)
+                    if secondary_channel is not None:
+                        res["secondary_channel"] = getattr(secondary_channel, "name", None) or secondary_param_name
                     if trial_idx is not None:
                         res["trial_index"] = trial_idx
                     if protocol is not None:
@@ -1646,7 +1731,12 @@ class BatchAnalysisEngine:
 
                     if scope == "channel_set" or (scope == "all_trials" and expects_list):
                         # Pass full list (channel_set always, all_trials when expects_list=True)
-                        analysis_result = AnalysisRegistry.execute(analysis_name, data, time, sampling_rate, **params)
+                        list_params = params.copy()
+                        if secondary_channel is not None:
+                            list_params[secondary_param_name] = secondary_trial_list()
+                        analysis_result = AnalysisRegistry.execute(
+                            analysis_name, data, time, sampling_rate, **list_params
+                        )
                         res = analysis_result.export_row(
                             file_name=file_path.name,
                             file_path=str(file_path),
@@ -1656,6 +1746,8 @@ class BatchAnalysisEngine:
                             sampling_rate=sampling_rate,
                             trial_count=len(data) if isinstance(data, list) else 1,
                         )
+                        if secondary_channel is not None:
+                            res["secondary_channel"] = getattr(secondary_channel, "name", None) or secondary_param_name
                         results.append(res)
                     else:
                         # Iterate 'all_trials' or 'selected_trials'

@@ -18,6 +18,7 @@ from matplotlib import pyplot as plt
 
 from synaptipy.core.analysis.passive_properties import calculate_rin
 from synaptipy.core.data_model import Channel, Recording
+from synaptipy.core.protocols import ProtocolAssignment, ProtocolSource
 
 # ---------------------------------------------------------------------------
 # Publication-quality rcParams -- inject before any figure is created
@@ -67,7 +68,7 @@ def _draw_l_scale_bar(ax, x0, y0, dx, dy, x_label, y_label, fontsize=7):
 
 
 def create_synthetic_data():
-    """Create a synthetic voltage clamp recording for demonstration"""
+    """Create a deterministic current-step recording with explicit provenance."""
     # Create a recording
     recording = Recording(source_file=Path("synthetic_basic_usage.abf"))
     recording.sampling_rate = 10000.0  # 10 kHz
@@ -80,7 +81,8 @@ def create_synthetic_data():
     voltage_data[2000:5000] = -10.0  # -10 mV step from 0.2s to 0.5s
 
     # Add some noise
-    voltage_data += np.random.normal(0, 0.2, size=voltage_data.shape)
+    rng = np.random.default_rng(0)
+    voltage_data += rng.normal(0, 0.2, size=voltage_data.shape)
 
     # Create a mock voltage channel
     v_channel = Channel(id="1", name="Vm", units="mV", sampling_rate=10000.0, data_trials=[voltage_data])
@@ -91,7 +93,7 @@ def create_synthetic_data():
     current_data[2000:5000] = -50.0  # -50 pA step from 0.2s to 0.5s
 
     # Add some noise
-    current_data += np.random.normal(0, 1.0, size=current_data.shape)
+    current_data += rng.normal(0, 1.0, size=current_data.shape)
 
     # Create a mock current channel
     i_channel = Channel(id="2", name="Im", units="pA", sampling_rate=10000.0, data_trials=[current_data])
@@ -100,6 +102,18 @@ def create_synthetic_data():
     # Add channels to recording
     recording.channels[v_channel.id] = v_channel
     recording.channels[i_channel.id] = i_channel
+    recording.protocol_map.add(
+        ProtocolAssignment(
+            "current_step",
+            (0,),
+            start_time=0.2,
+            end_time=0.5,
+            source=ProtocolSource.MANUAL,
+            parameters={"current_steps": [-50.0]},
+            label="Synthetic -50 pA current step",
+            verified=True,
+        )
+    )
 
     return recording, time_vec
 
@@ -133,6 +147,8 @@ def main():
     recording, time_vec = create_synthetic_data()
     print("Created synthetic recording with 2 channels")
     print(f"Recording duration: {recording.duration}s at {recording.sampling_rate}Hz")
+    assignment = recording.protocol_map.assignments[0]
+    print(f"Protocol: {assignment.protocol_family} ({assignment.source.value}, reviewed={assignment.verified})")
 
     # Analyze input resistance
     print("\nAnalyzing input resistance...")
@@ -237,6 +253,8 @@ def main():
     # Option: Export to NWB (uncomment to use)
     """
     print("\nExporting to NWB...")
+    from synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
+
     nwb_exporter = NWBExporter()
     output_path = Path('./output_recording.nwb')
 

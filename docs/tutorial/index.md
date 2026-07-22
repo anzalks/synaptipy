@@ -1337,7 +1337,7 @@ Click **"Run Batch"** in the Analyser tab toolbar. The dialog shows:
 
 ### 5.3 Building a Pipeline
 
-1. **Add Step** - select from all 15 registered analyses (or registered
+1. **Add Step** - select from all registered analyses (or registered
    preprocessing functions).
 2. **Scope** - determines how data is fed to the analysis function:
    - *Average* - single averaged trace across all trials.

@@ -51,6 +51,88 @@ def test_explicit_protocol_incompatibility_is_not_silent():
     assert "current_step" in resolved[0].missing[0]
 
 
+def test_plugin_protocol_requirements_are_resolved_from_registry_metadata():
+    analysis_name = "_plugin_protocol_requirement_test"
+    AnalysisRegistry.register(
+        analysis_name,
+        protocol_requirements={
+            "families": ("optogenetic",),
+            "requires_stimulus_timing": True,
+            "description": "Test optical timing requirement",
+        },
+    )(lambda data, time, sampling_rate, **kwargs: {"value": 1})
+    recording = _recording(-65.0, "opto.abf")
+    recording.protocol_map.add(
+        ProtocolAssignment(
+            "optogenetic",
+            (0,),
+            source=ProtocolSource.RECORDED,
+            parameters={"ttl_channel": "FrameTTL", "stimulus_times": [0.01]},
+            verified=True,
+        )
+    )
+
+    requirement = requirement_for_analysis(analysis_name)
+    resolved = resolve_protocols(recording, 0, 0.1, analysis_name)
+
+    assert requirement.families == ("optogenetic",)
+    assert requirement.requires_stimulus_timing is True
+    assert resolved[0].status == "ready"
+    AnalysisRegistry._registry.pop(analysis_name, None)
+    AnalysisRegistry._metadata.pop(analysis_name, None)
+    AnalysisRegistry._original_metadata.pop(analysis_name, None)
+
+
+def test_batch_injects_a_named_secondary_channel_for_plugin_analysis():
+    analysis_name = "_secondary_channel_plugin_test"
+    AnalysisRegistry.register(
+        analysis_name,
+        expects_list=True,
+        requires_secondary_channel={"param_name": "ttl_data", "label": "TTL Channel:"},
+    )(
+        lambda data, time, sampling_rate, **kwargs: {
+            "primary_trials": len(data),
+            "ttl_trials": len(kwargs["ttl_data"]),
+            "ttl_peak": float(np.max(kwargs["ttl_data"][0])),
+        }
+    )
+    recording = _recording(-65.0, "opto.abf")
+    recording.channels["FrameTTL"] = Channel(
+        "FrameTTL",
+        "FrameTTL",
+        "mV",
+        1_000.0,
+        [np.array([0.0, 5.0]), np.array([0.0, 5.0])],
+    )
+
+    result = BatchAnalysisEngine().run_batch(
+        [recording],
+        [{"analysis": analysis_name, "scope": "all_trials", "secondary_channel": "FrameTTL", "params": {}}],
+    )
+
+    assert result.iloc[0]["primary_trials"] == 2
+    assert result.iloc[0]["ttl_trials"] == 2
+    assert result.iloc[0]["ttl_peak"] == 5.0
+    assert result.iloc[0]["secondary_channel"] == "FrameTTL"
+    AnalysisRegistry._registry.pop(analysis_name, None)
+    AnalysisRegistry._metadata.pop(analysis_name, None)
+    AnalysisRegistry._original_metadata.pop(analysis_name, None)
+
+
+def test_batch_rejects_a_plugin_on_unsupported_channel_units():
+    analysis_name = "_unit_safe_plugin_test"
+    AnalysisRegistry.register(analysis_name, supported_channel_units=("pA",))(lambda *args, **kwargs: {"value": 1})
+    result = BatchAnalysisEngine().run_batch(
+        [_recording(-65.0, "voltage.abf")],
+        [{"analysis": analysis_name, "scope": "first_trial", "params": {}}],
+    )
+
+    assert "requires channel units pA" in result.iloc[0]["error"]
+    AnalysisRegistry._registry.pop(analysis_name, None)
+    AnalysisRegistry._metadata.pop(analysis_name, None)
+    AnalysisRegistry._original_metadata.pop(analysis_name, None)
+
+
 def test_protocol_map_round_trip_and_verified_manual_requirements():
     source = ProtocolMap()
     source.add(

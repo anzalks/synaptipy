@@ -285,6 +285,20 @@ class AddStepDialog(QtWidgets.QDialog):
         self.selected_trials_group.setVisible(False)
         layout.addWidget(self.selected_trials_group)
 
+        # Secondary-channel input for analyses such as optogenetic jitter.
+        # A channel name or ID is resolved independently in every recording,
+        # so the same portable pipeline can run across a file collection.
+        self.secondary_channel_group = QtWidgets.QWidget()
+        secondary_layout = QtWidgets.QHBoxLayout(self.secondary_channel_group)
+        secondary_layout.setContentsMargins(0, 0, 0, 0)
+        self.secondary_channel_label = QtWidgets.QLabel("Secondary Channel:")
+        self.secondary_channel_input = QtWidgets.QLineEdit()
+        self.secondary_channel_input.setPlaceholderText("Exact channel ID or name, e.g. FrameTTL")
+        secondary_layout.addWidget(self.secondary_channel_label)
+        secondary_layout.addWidget(self.secondary_channel_input)
+        self.secondary_channel_group.setVisible(False)
+        layout.addWidget(self.secondary_channel_group)
+
         # Parameters Section
         params_group = QtWidgets.QGroupBox("Parameters")
         self.params_layout = QtWidgets.QFormLayout(params_group)
@@ -354,6 +368,17 @@ class AddStepDialog(QtWidgets.QDialog):
             self.description_label.setText(first_para[:200] + "..." if len(first_para) > 200 else first_para)
         else:
             self.description_label.setText("No description available.")
+
+        secondary_config = meta.get("requires_secondary_channel") if meta else None
+        if isinstance(secondary_config, dict):
+            self.secondary_channel_label.setText(secondary_config.get("label", "Secondary Channel:"))
+            self.secondary_channel_input.setToolTip(
+                secondary_config.get("tooltip", "Enter the secondary channel ID or name used in every recording.")
+            )
+            self.secondary_channel_group.setVisible(True)
+        else:
+            self.secondary_channel_input.clear()
+            self.secondary_channel_group.setVisible(False)
 
         # Add common parameter widgets based on analysis type
         self._add_parameter_widgets(analysis_name)
@@ -458,6 +483,8 @@ class AddStepDialog(QtWidgets.QDialog):
                 params[name] = widget.text()
 
         self._result_config = {"analysis": analysis_name, "scope": selected_scope, "params": params}
+        if not self.secondary_channel_group.isHidden():
+            self._result_config["secondary_channel"] = self.secondary_channel_input.text().strip()
 
         self.accept()
 

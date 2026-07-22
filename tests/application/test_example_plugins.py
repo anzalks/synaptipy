@@ -251,6 +251,8 @@ class TestOptoJitterPlugin:
         assert isinstance(meta.get("plots"), list)
         assert len(meta["plots"]) >= 1
         assert meta.get("expects_list") is True
+        assert meta["requires_secondary_channel"]["param_name"] == "secondary_data"
+        assert meta["protocol_requirements"]["families"] == ("optogenetic",)
 
     def test_output_schema(self, opto_module, synthetic_opto):
         """Wrapper returns the nested {module_used, metrics} schema."""
