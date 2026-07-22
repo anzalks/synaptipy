@@ -1111,40 +1111,47 @@ class BatchAnalysisEngine:
         secondary_param_name = ""
         if isinstance(secondary_config, dict):
             secondary_param_name = str(secondary_config.get("param_name", "secondary_data"))
-            secondary_selector = task.get("secondary_channel", params.pop("secondary_channel", None))
-            if recording is None or not secondary_selector:
-                return [
-                    {
-                        "file_name": file_path.name,
-                        "file_path": str(file_path),
-                        "channel": channel_name,
-                        "analysis": analysis_name,
-                        "scope": scope,
-                        "error": "This analysis requires a secondary channel. Set secondary_channel to its ID or name.",
-                    }
-                ], None
-            selector = str(secondary_selector)
-            secondary_channel = recording.channels.get(selector)
-            if secondary_channel is None:
-                secondary_channel = next(
-                    (
-                        candidate
-                        for channel_id, candidate in recording.channels.items()
-                        if str(channel_id) == selector or str(getattr(candidate, "name", "")) == selector
-                    ),
-                    None,
-                )
-            if secondary_channel is None:
-                return [
-                    {
-                        "file_name": file_path.name,
-                        "file_path": str(file_path),
-                        "channel": channel_name,
-                        "analysis": analysis_name,
-                        "scope": scope,
-                        "error": f"Secondary channel '{selector}' was not found in this recording.",
-                    }
-                ], None
+            # An explicit payload remains valid for scripted pipelines and
+            # backward-compatible built-ins such as ``optogenetic_sync``.
+            # Otherwise resolve the declared secondary channel from the recording.
+            if secondary_param_name not in params:
+                secondary_selector = task.get("secondary_channel", params.pop("secondary_channel", None))
+                if recording is None or not secondary_selector:
+                    return [
+                        {
+                            "file_name": file_path.name,
+                            "file_path": str(file_path),
+                            "channel": channel_name,
+                            "analysis": analysis_name,
+                            "scope": scope,
+                            "error": (
+                                "This analysis requires a secondary channel. "
+                                "Set secondary_channel to its ID or name."
+                            ),
+                        }
+                    ], None
+                selector = str(secondary_selector)
+                secondary_channel = recording.channels.get(selector)
+                if secondary_channel is None:
+                    secondary_channel = next(
+                        (
+                            candidate
+                            for channel_id, candidate in recording.channels.items()
+                            if str(channel_id) == selector or str(getattr(candidate, "name", "")) == selector
+                        ),
+                        None,
+                    )
+                if secondary_channel is None:
+                    return [
+                        {
+                            "file_name": file_path.name,
+                            "file_path": str(file_path),
+                            "channel": channel_name,
+                            "analysis": analysis_name,
+                            "scope": scope,
+                            "error": f"Secondary channel '{selector}' was not found in this recording.",
+                        }
+                    ], None
 
         # Get the registered analysis function
         analysis_func = AnalysisRegistry.get_function(analysis_name)

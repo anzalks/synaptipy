@@ -1185,6 +1185,7 @@ class TestBatchAllAnalysisTypes:
             [data],
         )
         self._assert_common_columns(df, "optogenetic_sync", "first_trial")
+        assert "requires a secondary channel" not in str(df.iloc[0].get("error", "")).lower()
 
     # ------------------------------------------------------------------
     # 15. train_dynamics

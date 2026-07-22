@@ -925,9 +925,9 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             channel_units = str(getattr(channel, "units", "")) if channel is not None else ""
             if channel_units not in supported_units:
                 supported = ", ".join(supported_units)
-                raise ValueError(
-                    f"{metadata.get('label', self.analysis_name)} requires a channel in {supported}, not {channel_units or 'unknown units'}."
-                )
+                analysis_label = metadata.get("label", self.analysis_name)
+                actual_units = channel_units or "unknown units"
+                raise ValueError(f"{analysis_label} requires a channel in {supported}, not {actual_units}.")
 
         protocol_contexts = self._update_protocol_readiness(data)
         incompatible = [context for context in protocol_contexts if context.status == "incompatible"]
