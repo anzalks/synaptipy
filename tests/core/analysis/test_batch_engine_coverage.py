@@ -16,6 +16,7 @@ import pytest
 import synaptipy.core.analysis  # noqa: F401 – populate registry
 from synaptipy.core.analysis.batch_engine import BatchAnalysisEngine, _worker_process_file
 from synaptipy.core.analysis.registry import AnalysisRegistry
+from synaptipy.core.averaging import TimeAlignedAverage
 from synaptipy.core.data_model import Channel, Recording
 
 # ---------------------------------------------------------------------------
@@ -538,13 +539,14 @@ class TestProcessTaskContextAdaptation:
             raise ValueError("mean failed")
 
         monkeypatch.setattr(np, "mean", _boom)
-        self.channel.get_averaged_data = MagicMock(return_value=DATA.copy())
-        self.channel.get_relative_averaged_time_vector = MagicMock(return_value=T.copy())
+        self.channel.get_time_aligned_average = MagicMock(
+            return_value=TimeAlignedAverage(T.copy(), DATA.copy(), np.ones_like(DATA, dtype=int), [])
+        )
 
         results, _ = self.engine._process_task(task, self.channel, "Vm", self.file_path, ctx)
 
         assert isinstance(results, list)
-        self.channel.get_averaged_data.assert_called_once()
+        self.channel.get_time_aligned_average.assert_called_once()
 
     def test_context_selected_average_fallback_when_parse_fails(self, monkeypatch):
         """With strict mode, parse failures now return error immediately instead of falling back."""

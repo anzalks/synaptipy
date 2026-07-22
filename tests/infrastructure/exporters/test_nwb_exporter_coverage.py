@@ -323,7 +323,7 @@ def test_export_records_protocol_and_safely_defaults_invalid_temperature(base_re
 
     with NWBHDF5IO(str(out_file), "r") as io:
         nwbfile = io.read()
-        assert "Protocol: current-step" in nwbfile.notes
+        assert "Imported protocol label: current-step" in nwbfile.notes
         assert "Recording temperature: 22.0 degC" in nwbfile.notes
 
 
