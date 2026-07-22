@@ -146,6 +146,14 @@ class PlotExporter:
         # tries to create a display window in a headless / embedded context.
         matplotlib.use("Agg")
 
+        # Embed TrueType fonts, rather than Type 3 glyph outlines, so labels
+        # remain editable text in Illustrator, Affinity Designer, and Inkscape.
+        # This applies only to the vector PDF route; SVG uses PyQtGraph's native
+        # SVG exporter, which emits ``<text>`` elements directly.
+        if fmt == "pdf":
+            matplotlib.rcParams["pdf.fonttype"] = 42
+            matplotlib.rcParams["ps.fonttype"] = 42
+
         # 1. Setup Figure
         plots_to_export = []
 

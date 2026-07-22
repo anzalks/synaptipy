@@ -637,7 +637,7 @@ class TestProcessTaskScopeLoading:
         results, _ = self.engine._process_task(task, self.channel, "Vm", self.file_path, ctx)
         assert isinstance(results, list)
 
-    def test_selected_trials_execution_returns_current_shape(self):
+    def test_selected_trials_execution_runs_each_selected_trial(self):
         @AnalysisRegistry.register("_test_selected_trials_exec")
         def _selected_trials_exec(data, time, sampling_rate, **kwargs):
             return {"data_kind": type(data).__name__, "sample_count": len(data)}
@@ -649,9 +649,10 @@ class TestProcessTaskScopeLoading:
                 "params": {"trial_indices": "0,2"},
             }
             results, _ = self.engine._process_task(task, self.channel, "Vm", self.file_path, self.empty_ctx)
-            assert len(results) == 1
-            assert results[0]["data_kind"] == "list"
-            assert "trial_index" not in results[0]
+            assert len(results) == 2
+            assert [result["data_kind"] for result in results] == ["ndarray", "ndarray"]
+            assert [result["trial_index"] for result in results] == [0, 2]
+            assert [result["selected_trial_indices"] for result in results] == ["0,2", "0,2"]
         finally:
             AnalysisRegistry._registry.pop("_test_selected_trials_exec", None)
             AnalysisRegistry._metadata.pop("_test_selected_trials_exec", None)

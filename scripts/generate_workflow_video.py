@@ -1,13 +1,29 @@
 import os
-import sys
-import time
-from pathlib import Path
 
-import imageio
-import numpy as np
-from PySide6.QtCore import QPoint, QPointF, QRect, QSize, Qt, QTimer
-from PySide6.QtGui import QColor, QImage, QPainter, QPen
-from PySide6.QtWidgets import (
+# Must be configured before importing PySide6 on headless CI workers.
+os.environ["QT_QPA_PLATFORM"] = "offscreen"
+os.environ["QT_MAC_WANTS_LAYER"] = "1"
+
+import sys  # noqa: E402 - offscreen environment must precede all Qt-related imports
+import time  # noqa: E402 - offscreen environment must precede all Qt-related imports
+from pathlib import Path  # noqa: E402 - offscreen environment must precede all Qt-related imports
+
+import imageio  # noqa: E402 - offscreen environment must precede all Qt-related imports
+import numpy as np  # noqa: E402 - offscreen environment must precede all Qt-related imports
+from PySide6.QtCore import (  # noqa: E402 - offscreen environment must precede all Qt-related imports
+    QPoint,
+    QPointF,
+    QSize,
+    Qt,
+    QTimer,
+)
+from PySide6.QtGui import (  # noqa: E402 - offscreen environment must precede all Qt-related imports
+    QColor,
+    QImage,
+    QPainter,
+    QPen,
+)
+from PySide6.QtWidgets import (  # noqa: E402 - offscreen environment must precede all Qt-related imports
     QApplication,
     QFileDialog,
     QGraphicsRectItem,
@@ -18,10 +34,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-os.environ["QT_QPA_PLATFORM"] = "offscreen"
-os.environ["QT_MAC_WANTS_LAYER"] = "1"
-
-from synaptipy.application.gui.main_window import MainWindow
+from synaptipy.application.gui.main_window import MainWindow  # noqa: E402 - offscreen environment must be set first
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 _ABF21 = _PROJECT_ROOT / "examples" / "data" / "2023_04_11_0021.abf"
@@ -199,12 +212,12 @@ def _os_is_dark() -> bool:
     return False
 
 
-def run_choreography():
+def run_choreography():  # noqa: C901 - linear scripted tutorial sequence is intentionally explicit
     global global_vg
 
     QApplication.setAttribute(Qt.ApplicationAttribute.AA_DontUseNativeDialogs)
 
-    app = QApplication.instance() or QApplication(sys.argv)
+    QApplication.instance() or QApplication(sys.argv)
 
     from synaptipy.shared.theme_manager import ThemeMode, apply_theme
 

@@ -15,8 +15,7 @@ def test_resolve_effective_trials_current_trial_branch():
     from synaptipy.core.analysis.cross_file_utils import _resolve_effective_trials
 
     item = {"target_type": "Current Trial", "trial_index": 3}
-    channel = MagicMock(num_trials=10)
-    result = _resolve_effective_trials(item, channel, [0, 1, 2])
+    result = _resolve_effective_trials(item, [0, 1, 2])
     assert result == [3]
 
 
@@ -24,17 +23,15 @@ def test_resolve_effective_trials_recording_branch():
     from synaptipy.core.analysis.cross_file_utils import _resolve_effective_trials
 
     item = {"target_type": "Recording"}
-    channel = MagicMock(num_trials=5)
-    result = _resolve_effective_trials(item, channel, [0])
-    assert result == [0, 1, 2, 3, 4]
+    result = _resolve_effective_trials(item, [0])
+    assert result == [0]
 
 
 def test_resolve_effective_trials_fallback_branch():
     from synaptipy.core.analysis.cross_file_utils import _resolve_effective_trials
 
     item = {}
-    channel = MagicMock(num_trials=10)
-    result = _resolve_effective_trials(item, channel, [2, 4])
+    result = _resolve_effective_trials(item, [2, 4])
     assert result == [2, 4]
 
 

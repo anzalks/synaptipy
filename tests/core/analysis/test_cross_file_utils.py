@@ -85,6 +85,42 @@ class TestExtractPerFileTrace:
 
         np.testing.assert_allclose(avg_out, 2.0)
 
+    def test_recording_item_honours_selected_trials(self):
+        """A selected project-tree file does not silently average unselected trials."""
+        t = np.linspace(0, 1, 100)
+        ch = _make_channel(
+            {0: np.ones(100) * 1.0, 1: np.ones(100) * 7.0},
+            {0: t.copy(), 1: t.copy()},
+        )
+        adapter = _make_adapter(_make_recording({0: ch}))
+
+        _, average = extract_per_file_trace(
+            {"path": Path("selected.abf"), "target_type": "Recording"},
+            [1],
+            0,
+            adapter,
+        )
+
+        np.testing.assert_allclose(average, 7.0)
+
+    def test_current_trial_item_overrides_selected_trials(self):
+        """An explicitly added current trial retains its own trial identity."""
+        t = np.linspace(0, 1, 100)
+        ch = _make_channel(
+            {0: np.ones(100) * 1.0, 1: np.ones(100) * 7.0},
+            {0: t.copy(), 1: t.copy()},
+        )
+        adapter = _make_adapter(_make_recording({0: ch}))
+
+        _, average = extract_per_file_trace(
+            {"path": Path("current.abf"), "target_type": "Current Trial", "trial_index": 1},
+            [0],
+            0,
+            adapter,
+        )
+
+        np.testing.assert_allclose(average, 7.0)
+
     def test_mismatched_trial_sample_counts_are_time_aligned(self):
         """Equal-duration trials are interpolated, never index-truncated."""
         t_long = np.linspace(0, 1, 100)

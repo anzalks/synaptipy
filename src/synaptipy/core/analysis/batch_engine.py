@@ -1142,6 +1142,7 @@ class BatchAnalysisEngine:
 
         data = None
         time = None
+        selected_trial_indices: Optional[List[int]] = None
 
         # Check if we can use context
         if context["data"] is not None:
@@ -1237,6 +1238,7 @@ class BatchAnalysisEngine:
                         selected_indices = list(range(len(context["data"])))
 
                     if selected_indices:
+                        selected_trial_indices = selected_indices
                         selected_data = [context["data"][i] for i in selected_indices if i < len(context["data"])]
                         lengths = {len(a) for a in selected_data}
                         if len(lengths) > 1:
@@ -1268,12 +1270,44 @@ class BatchAnalysisEngine:
                         channel_name,
                         e,
                     )
-                except Exception as e:
+                except (IndexError, KeyError, TypeError) as exc:
                     log.warning(
                         "Could not average selected trials from context (%s/%s): %s. Reloading from source.",
                         file_path.name,
                         channel_name,
-                        e,
+                        exc,
+                    )
+
+            elif context["scope"] == "all_trials" and scope == "selected_trials":
+                trial_indices_str = params.get("trial_indices", "")
+                try:
+                    if trial_indices_str:
+                        from synaptipy.shared.utils import parse_trial_selection_string
+
+                        selected_trial_indices = sorted(
+                            parse_trial_selection_string(trial_indices_str, len(context["data"]), strict=True)
+                        )
+                    else:
+                        selected_trial_indices = list(range(len(context["data"])))
+                    data = [context["data"][index] for index in selected_trial_indices]
+                    time = [context["time"][index] for index in selected_trial_indices]
+                except ValueError as exc:
+                    return [
+                        {
+                            "file_name": file_path.name,
+                            "file_path": str(file_path),
+                            "channel": channel_name,
+                            "analysis": analysis_name,
+                            "scope": scope,
+                            "error": str(exc),
+                        }
+                    ], None
+                except (IndexError, KeyError, TypeError) as exc:
+                    log.warning(
+                        "Could not select trials from context (%s/%s): %s. Reloading from source.",
+                        file_path.name,
+                        channel_name,
+                        exc,
                     )
 
         # If data is still None, load from channel
@@ -1343,6 +1377,7 @@ class BatchAnalysisEngine:
                     if d is not None:
                         data.append(d)
                         time.append(t)
+                selected_trial_indices = selected_indices
 
             elif scope == "selected_trials_average":
                 trial_indices_str = params.get("trial_indices", "")
@@ -1371,6 +1406,9 @@ class BatchAnalysisEngine:
 
                 data = channel.get_averaged_data(trial_indices=selected_indices)
                 time = channel.get_relative_averaged_time_vector()
+                selected_trial_indices = (
+                    selected_indices if selected_indices is not None else list(range(channel.num_trials))
+                )
 
             elif scope == "first_trial":
                 data = channel.get_data(0)
@@ -1528,8 +1566,15 @@ class BatchAnalysisEngine:
                         analysis=analysis_name,
                         scope=scope,
                         sampling_rate=sampling_rate,
-                        trial_count=total_trials,
+                        trial_count=(
+                            len(selected_trial_indices)
+                            if scope == "selected_trials_average" and selected_trial_indices is not None
+                            else total_trials
+                        ),
                     )
+                    if selected_trial_indices is not None:
+                        res["selected_trial_indices"] = ",".join(str(index) for index in selected_trial_indices)
+                        res["selected_trial_count"] = len(selected_trial_indices)
                     if trial_idx is not None:
                         res["trial_index"] = trial_idx
                     if protocol is not None:
@@ -1575,7 +1620,7 @@ class BatchAnalysisEngine:
                         rows.append(run_single(segment_data, segment_time, trial_idx, protocol))
                     return rows
 
-                if scope == "all_trials" or scope == "channel_set":
+                if scope in ("all_trials", "selected_trials", "channel_set"):
                     # For channel_set, some functions expect the list (e.g. F-I curve)
                     # others expect iteration.
                     # Check if function handles list?

@@ -324,6 +324,68 @@ class TestBatchAnalysisSystem:
         assert df.iloc[2]["mean"] == 30.0
         assert all(df.trial_index == [0, 1, 2])
 
+    def test_batch_engine_selected_trials_scope_runs_each_selected_trial(self):
+        """Selected Trials preserves user order-independent trial identity."""
+
+        @AnalysisRegistry.register("selected_trial_analysis")
+        def selected_trial_analysis(data, time, sampling_rate, **kwargs):
+            return {"mean": float(np.mean(data))}
+
+        engine = BatchAnalysisEngine()
+        rec = Recording(source_file=Path("dummy.abf"))
+        rec.channels["0"] = Channel(
+            id="0",
+            name="Vm",
+            units="mV",
+            sampling_rate=1000.0,
+            data_trials=[np.ones(100) * 10.0, np.ones(100) * 20.0, np.ones(100) * 30.0],
+        )
+        engine.neo_adapter.read_recording = MagicMock(return_value=rec)
+
+        df = engine.run_batch(
+            [Path("selected.abf")],
+            [{"analysis": "selected_trial_analysis", "scope": "selected_trials", "params": {"trial_indices": "0,2"}}],
+        )
+
+        assert df["trial_index"].tolist() == [0, 2]
+        assert df["mean"].tolist() == [10.0, 30.0]
+        assert df["selected_trial_indices"].tolist() == ["0,2", "0,2"]
+        assert df["selected_trial_count"].tolist() == [2, 2]
+
+    def test_batch_engine_selected_average_has_selected_provenance(self):
+        """Selected-trial averages exclude unselected sweeps and export their provenance."""
+
+        @AnalysisRegistry.register("selected_average_analysis")
+        def selected_average_analysis(data, time, sampling_rate, **kwargs):
+            return {"mean": float(np.mean(data))}
+
+        engine = BatchAnalysisEngine()
+        rec = Recording(source_file=Path("dummy.abf"))
+        rec.channels["0"] = Channel(
+            id="0",
+            name="Vm",
+            units="mV",
+            sampling_rate=1000.0,
+            data_trials=[np.ones(100) * 10.0, np.ones(100) * 100.0, np.ones(100) * 30.0],
+        )
+        engine.neo_adapter.read_recording = MagicMock(return_value=rec)
+
+        df = engine.run_batch(
+            [Path("selected_average.abf")],
+            [
+                {
+                    "analysis": "selected_average_analysis",
+                    "scope": "selected_trials_average",
+                    "params": {"trial_indices": "0,2"},
+                }
+            ],
+        )
+
+        assert df.iloc[0]["mean"] == 20.0
+        assert df.iloc[0]["trial_count"] == 2
+        assert df.iloc[0]["selected_trial_indices"] == "0,2"
+        assert df.iloc[0]["selected_trial_count"] == 2
+
     def test_batch_engine_multiple_analyses(self):
         """Test running multiple analyses in a pipeline."""
 

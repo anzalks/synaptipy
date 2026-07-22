@@ -23,6 +23,7 @@ from synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
 from synaptipy.core.analysis.registry import AnalysisRegistry
 from synaptipy.shared.styling import style_button, style_label
 from synaptipy.shared.theme_manager import style_as_subdued
+from synaptipy.shared.xlsx_exporter import write_dataframe_to_xlsx
 
 log = logging.getLogger(__name__)
 
@@ -1163,20 +1164,10 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
                     log.debug(f"Exported batch results to JSON: {file_path}")
 
                 elif file_path.lower().endswith(".xlsx"):
-                    # Excel Export — requires openpyxl
-                    try:
-                        export_df_clean.to_excel(file_path, index=False, sheet_name="Batch Results")
-                        log.debug(f"Exported batch results to Excel: {file_path}")
-                    except ImportError:
-                        # openpyxl not installed — fall back to CSV
-                        csv_path = file_path.replace(".xlsx", ".csv")
-                        self._write_csv_with_header(export_df_clean, csv_path)
-                        QtWidgets.QMessageBox.warning(
-                            self,
-                            "Excel Not Available",
-                            f"openpyxl is not installed. Results saved as CSV instead:\n{csv_path}",
-                        )
-                        return
+                    # The application ships a standards-compliant writer, so
+                    # Excel export does not depend on an optional package.
+                    write_dataframe_to_xlsx(export_df_clean, file_path, sheet_name="Batch Results")
+                    log.debug(f"Exported batch results to Excel: {file_path}")
 
                 else:
                     # CSV Export with metadata header

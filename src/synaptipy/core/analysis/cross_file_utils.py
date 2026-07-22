@@ -183,17 +183,15 @@ def sampling_rate_from_timebase(time_vector: np.ndarray) -> Optional[float]:
     return 1.0 / dt if dt > 0 and np.isfinite(dt) else None
 
 
-def _resolve_effective_trials(item: Dict[str, Any], channel: Any, parsed_trials: List[int]) -> List[int]:
+def _resolve_effective_trials(item: Dict[str, Any], parsed_trials: List[int]) -> List[int]:
     """Return the list of trial indices to use for *item* within *channel*.
 
-    ``"Current Trial"`` items specify their own ``trial_index``; ``"Recording"``
-    items use every available trial; all other items fall back to *parsed_trials*.
+    ``"Current Trial"`` items specify their own ``trial_index``.  Every other
+    item honours the user-selected *parsed_trials* list, including full
+    ``"Recording"`` entries selected from the project tree.
     """
     if item.get("target_type") == "Current Trial" and item.get("trial_index") is not None:
         return [item["trial_index"]]
-    if item.get("target_type") == "Recording":
-        n_avail = getattr(channel, "num_trials", 1)
-        return list(range(max(1, n_avail)))
     return parsed_trials
 
 
@@ -249,7 +247,7 @@ def extract_per_file_trace(  # noqa: C901 - validates all file/channel/trial fai
             return None
 
         # Determine which trials to use for this item.
-        effective_trials = _resolve_effective_trials(item, channel, parsed_trials)
+        effective_trials = _resolve_effective_trials(item, parsed_trials)
 
         file_traces: List[np.ndarray] = []
         file_times: List[np.ndarray] = []
