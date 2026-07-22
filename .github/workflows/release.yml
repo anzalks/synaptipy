@@ -231,10 +231,10 @@ jobs:
           exit 1
 
   # ── 5. Publish to official PyPI (OIDC Trusted Publisher) ─────────────────────
-  # Skipped on workflow_dispatch (dry_run).
-  # Also skipped when smoke_test_testpypi was skipped (e.g. testpypi not yet
-  # configured) — in that case pypi-publish.result == 'skipped' so the release
-  # job still runs via its always()-based if condition.
+  # Only publish after the artifact was successfully installed from TestPyPI.
+  # If the TestPyPI Trusted Publisher is unavailable, both this job and the
+  # PyPI upload are skipped.  The GitHub Release job can still publish the
+  # already-validated binary artifacts and dist files for maintainer review.
   pypi-publish:
     name: Publish to PyPI
     needs: smoke_test_testpypi
@@ -242,8 +242,7 @@ jobs:
     timeout-minutes: 10
     if: >
       (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')) &&
-      (needs.smoke_test_testpypi.result == 'success' ||
-       needs.smoke_test_testpypi.result == 'skipped')
+      needs.smoke_test_testpypi.result == 'success'
     environment:
       name: pypi
       url: https://pypi.org/p/synaptipy

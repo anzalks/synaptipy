@@ -88,3 +88,10 @@ validates the distribution and documentation before its publication jobs.
 Manual workflow dispatch defaults to a dry run that produces build artifacts
 without publishing. The workflow also exposes a non-dry-run option, so use it
 only when an intentional manual publication is required.
+
+For a real publication, the workflow uploads the wheel and source distribution
+to TestPyPI first, installs that exact version in a clean environment, and only
+then permits the PyPI upload. If TestPyPI or that smoke test is unavailable,
+PyPI publishing is skipped; it is never bypassed. The macOS DMG name is derived
+from the canonical `pyproject.toml` version at build time, so it has no separate
+version string for the bump script to edit.

@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 BUMP_SCRIPT = ROOT / "scripts" / "bump_version.py"
 OFFLINE_HELP_SCRIPT = ROOT / "scripts" / "build_offline_help.py"
+RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
 
 
 def _git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -88,3 +89,11 @@ def test_offline_help_cleanup_removes_stale_generated_output(tmp_path: Path) -> 
     module.step_clean_build_outputs()
     assert not module.HTML_BUILD.exists()
     assert not module.QTHELP_BUILD.exists()
+
+
+def test_pypi_publish_requires_a_successful_testpypi_smoke_test() -> None:
+    """Never let an unavailable TestPyPI check bypass the PyPI release gate."""
+    workflow = RELEASE_WORKFLOW.read_text(encoding="utf-8")
+    pypi_job = workflow.split("  pypi-publish:\n", maxsplit=1)[1].split("\n  # ── 6.", maxsplit=1)[0]
+    assert "needs.smoke_test_testpypi.result == 'success'" in pypi_job
+    assert "needs.smoke_test_testpypi.result == 'skipped'" not in pypi_job
