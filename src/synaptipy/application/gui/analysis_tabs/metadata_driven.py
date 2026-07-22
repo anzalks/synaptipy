@@ -1141,13 +1141,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 self.plot_widget.removeItem(item)
         self._dynamic_plot_items.clear()
 
-        # Normalise result structure – support both new {"module_used", "metrics"} and legacy formats
-        if isinstance(results, dict) and "metrics" in results:
-            result_item = results["metrics"]
-        elif isinstance(results, dict) and "result" in results:
-            result_item = results["result"]
-        else:
-            result_item = results
+        result_item = results.get("metrics", {}) if isinstance(results, dict) else {}
 
         plots_meta = self.metadata.get("plots", [])
 
@@ -1351,9 +1345,6 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
     def _viz_vlines(self, cfg, result):
         data_key = cfg.get("data")
         vals = self._val(result, data_key, [])
-        # Fall back to metrics subdict when key not found at top level
-        if not vals and isinstance(result, dict) and "metrics" in result:
-            vals = result["metrics"].get(data_key, [])
         color = cfg.get("color")
         if isinstance(vals, (int, float)):
             vals = [vals]
@@ -1593,19 +1584,16 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         return x_arr, y1_arr, y2_arr
 
     def _val_with_metrics(self, result, key):
-        """Extract *key* from *result* directly, then fall back to result['metrics']."""
+        """Extract *key* from canonical analysis metrics."""
         if key is None:
             return None
-        val = self._val(result, key)
-        if val is None and isinstance(result, dict):
-            val = result.get("metrics", {}).get(key)
-        return val
+        metrics = result.get("metrics", {}) if isinstance(result, dict) else {}
+        return self._val(metrics, key)
 
     def _viz_fill_between(self, cfg, result):
         """Draw a shaded region between two curves (y1 and y2) along a shared x axis.
 
-        The ``result`` dict is searched directly then inside ``result['metrics']``
-        so both flat and nested ``{"module_used", "metrics"}`` schemas are supported.
+        Values are read from the canonical ``result['metrics']`` mapping.
 
         Config keys:
             x     -- key for the shared x-axis array (required)

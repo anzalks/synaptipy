@@ -31,13 +31,12 @@ from . import synaptic_events  # noqa: F401 - registers event-detection analyses
 from .contracts import ANALYSIS_RESULT_SCHEMA_VERSION, AnalysisResult  # noqa: F401
 from .epoch_manager import Epoch, EpochManager  # noqa: F401
 
-# Expose key functions for easier import (backward compatibility)
+# Expose stable direct-analysis helpers.
 from .passive_properties import calculate_rin, calculate_rmp, calculate_sag_ratio, calculate_tau
 
 # Import registry first so the decorator is available when modules load
 from .registry import AnalysisRegistry  # noqa: F401
 from .single_spike import detect_spikes_threshold
-from .synaptic_events import detect_minis_threshold
 
 # Attach a common, inspectable protocol contract to every supplied analysis.
 # External plugins are deliberately not modified; they can opt in by declaring
@@ -54,7 +53,6 @@ __all__ = [
     "calculate_rin",
     "calculate_tau",
     "calculate_sag_ratio",
-    "detect_minis_threshold",
     "ProtocolAssignment",
     "ProtocolMap",
     "ProtocolRequirement",

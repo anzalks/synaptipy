@@ -1238,124 +1238,6 @@ def _remove_stale(output_dir: Path, captured: List[str]) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _run_legacy_capture(output_dir: Path) -> bool:  # noqa: C901
-    """Execute the full capture pipeline. Return *True* on success."""
-    from PySide6.QtCore import Qt, QTimer  # noqa: PLC0415
-    from PySide6.QtWidgets import QApplication  # noqa: PLC0415
-
-    from synaptipy.application.gui.main_window import MainWindow  # noqa: PLC0415
-    from synaptipy.application.session_manager import SessionManager  # noqa: PLC0415
-    from synaptipy.shared.theme_manager import ThemeMode, apply_theme  # noqa: PLC0415
-
-    captured: List[str] = []
-    success = False
-
-    QApplication.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps)
-    app = QApplication.instance() or QApplication(sys.argv)
-
-    # Published docs must look the same on every maintainer and CI host.
-    apply_theme(ThemeMode.DARK)
-    print("[theme] using deterministic dark theme")
-
-    try:
-        # Register all built-in analyses and bundled example plugins before the
-        # MainWindow is constructed so every documented analysis tab is present.
-        import synaptipy.core.analysis  # noqa: F401 — registers built-in analyses
-        from synaptipy.application import plugin_manager  # noqa: PLC0415
-
-        # User plugins are deliberately allowed to shadow bundled plugins in
-        # normal interactive use. That is not appropriate for documentation:
-        # a capture must be independent of the maintainer's home directory.
-        original_plugin_dir = plugin_manager.PLUGIN_DIR
-        try:
-            with tempfile.TemporaryDirectory(prefix="synaptipy-docs-plugins-") as sandbox:
-                plugin_manager.PLUGIN_DIR = Path(sandbox)
-                plugin_manager.PluginManager.load_plugins()
-        finally:
-            plugin_manager.PLUGIN_DIR = original_plugin_dir
-
-        # Suppress the session-restore dialog which blocks in headless mode.
-        MainWindow._offer_session_restore = lambda self: None
-
-        window = MainWindow()
-        window.resize(_WINDOW_W, _WINDOW_H)
-
-        # Turn off downsampling for high-fidelity screenshots
-        if hasattr(window.explorer_tab, "config_panel"):
-            window.explorer_tab.config_panel.downsample_cb.setChecked(False)
-
-        window.show()
-        _pump(10)
-
-        sm = SessionManager()
-        analyser = window.analyser_tab
-
-        # --- Explorer screenshots ---
-        print("[explorer]")
-        captured.extend(_capture_explorer_screenshots(window, output_dir))
-        captured.extend(_capture_protocol_map(window, output_dir))
-        captured.extend(_capture_batch_compatible_average(window, output_dir))
-
-        # Return focus to Analyser tab before starting analysis captures.
-        window.tab_widget.setCurrentIndex(1)
-        _pump(5)
-
-        # --- Analyser overview (no data) ---
-        _grab(window, output_dir / "analyser_tab.png")
-        captured.append("analyser_tab.png")
-
-        # --- Per-module analysis screenshots ---
-        print("[intrinsic properties]")
-        captured.extend(_capture_intrinsic_properties(window, analyser, sm, output_dir))
-
-        print("[spike analysis]")
-        captured.extend(_capture_spike_analysis(window, analyser, sm, output_dir))
-
-        print("[excitability]")
-        captured.extend(_capture_excitability(window, analyser, sm, output_dir))
-
-        print("[synaptic events]")
-        captured.extend(_capture_synaptic_events(window, analyser, sm, output_dir))
-
-        print("[evoked responses]")
-        captured.extend(_capture_evoked_responses(window, analyser, sm, output_dir))
-
-        print("[cross-file average]")
-        captured.extend(_capture_cross_file_average(window, analyser, sm, output_dir))
-
-        print("[miniml plugin]")
-        captured.extend(_capture_miniml_plugin(window, analyser, sm, output_dir))
-
-        print("[spikeinterface plugin]")
-        captured.extend(_capture_spike_interface_plugin(window, analyser, sm, output_dir))
-
-        # --- Exporter tab ---
-        window.tab_widget.setCurrentIndex(2)
-        _pump(5)
-        _grab(window, output_dir / "exporter_tab.png")
-        captured.append("exporter_tab.png")
-
-        window.close()
-        _pump(3)
-        success = True
-
-    except Exception:
-        print("[ERROR] Screenshot capture raised an exception:", file=sys.stderr)
-        traceback.print_exc()
-        success = False
-
-    if success and captured:
-        _remove_stale(output_dir, captured)
-        print(f"\n[done] {len(captured)} screenshot(s) written to: {output_dir}")
-    elif not captured:
-        print("[WARN] No screenshots were captured.", file=sys.stderr)
-        success = False
-
-    QTimer.singleShot(0, app.quit)
-    app.exec()
-    return success
-
-
 def capture_protocol_map_only(output_dir: Path) -> bool:
     """Write just the Protocol Map tutorial image without pruning other images.
 
@@ -1363,13 +1245,12 @@ def capture_protocol_map_only(output_dir: Path) -> bool:
     default full capture remains the release-refresh command and still removes
     stale generated screenshots.
     """
-    from PySide6.QtCore import Qt, QTimer  # noqa: PLC0415
+    from PySide6.QtCore import QTimer  # noqa: PLC0415
     from PySide6.QtWidgets import QApplication  # noqa: PLC0415
 
     from synaptipy.application.gui.main_window import MainWindow  # noqa: PLC0415
     from synaptipy.shared.theme_manager import ThemeMode, apply_theme  # noqa: PLC0415
 
-    QApplication.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps)
     app = QApplication.instance() or QApplication(sys.argv)
     apply_theme(ThemeMode.DARK)
 
@@ -1396,13 +1277,12 @@ def capture_protocol_map_only(output_dir: Path) -> bool:
 
 def capture_batch_compatible_average_only(output_dir: Path) -> bool:
     """Write just the batch-compatible-average image without pruning images."""
-    from PySide6.QtCore import Qt, QTimer  # noqa: PLC0415
+    from PySide6.QtCore import QTimer  # noqa: PLC0415
     from PySide6.QtWidgets import QApplication  # noqa: PLC0415
 
     from synaptipy.application.gui.main_window import MainWindow  # noqa: PLC0415
     from synaptipy.shared.theme_manager import ThemeMode, apply_theme  # noqa: PLC0415
 
-    QApplication.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps)
     app = QApplication.instance() or QApplication(sys.argv)
     apply_theme(ThemeMode.DARK)
 
@@ -1442,14 +1322,13 @@ def _load_bundled_plugins_only() -> None:
 
 def capture_group_only(output_dir: Path, group: str) -> bool:
     """Capture one isolated documentation group without pruning other assets."""
-    from PySide6.QtCore import Qt, QTimer  # noqa: PLC0415
+    from PySide6.QtCore import QTimer  # noqa: PLC0415
     from PySide6.QtWidgets import QApplication  # noqa: PLC0415
 
     from synaptipy.application.gui.main_window import MainWindow  # noqa: PLC0415
     from synaptipy.application.session_manager import SessionManager  # noqa: PLC0415
     from synaptipy.shared.theme_manager import ThemeMode, apply_theme  # noqa: PLC0415
 
-    QApplication.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps)
     app = QApplication.instance() or QApplication(sys.argv)
     apply_theme(ThemeMode.DARK)
 

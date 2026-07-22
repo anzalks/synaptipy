@@ -245,12 +245,12 @@ def test_protocol_requirements_default_and_registry_application():
     assert registry.applied["rin_analysis"]["protocol_requirements"]["requires_command"]
 
 
-def test_resolve_protocols_covers_legacy_ready_and_missing_context_states():
+def test_resolve_protocols_covers_implicit_ready_and_missing_context_states():
     recording = _recording(-65.0, "protocols.abf")
 
-    legacy = resolve_protocols(recording, 0, 0.1, "rin_analysis")[0]
-    assert legacy.status == "needs_review"
-    assert legacy.missing
+    implicit = resolve_protocols(recording, 0, 0.1, "rin_analysis")[0]
+    assert implicit.status == "needs_review"
+    assert implicit.missing
 
     recording.protocol_map.add(
         ProtocolAssignment(

@@ -270,14 +270,8 @@ def run_gui():  # noqa: C901
 
     app = QtWidgets.QApplication.instance()
     if app is None:
-        # Enable High DPI scaling before creating QApplication
-        try:
-            QtCore.QCoreApplication.setAttribute(QtCore.Qt.ApplicationAttribute.AA_EnableHighDpiScaling, True)
-            QtCore.QCoreApplication.setAttribute(QtCore.Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
-        except Exception as e:
-            log.warning(f"Could not set High DPI attributes: {e}")
-
-        # Check if HighDpiScaleFactorRoundingPolicy is available (Qt 6.0+)
+        # Qt 6 always enables high-DPI scaling. Keep the rounding policy
+        # explicit so fractional display scale factors remain predictable.
         if hasattr(QtCore.Qt, "HighDpiScaleFactorRoundingPolicy"):
             try:
                 QtWidgets.QApplication.setHighDpiScaleFactorRoundingPolicy(
@@ -288,12 +282,6 @@ def run_gui():  # noqa: C901
                 log.warning(f"Could not set High DPI policy: {e}")
 
         app = QtWidgets.QApplication(sys.argv)
-
-        # Enable High DPI pixmaps (for better icon rendering)
-        try:
-            app.setAttribute(QtCore.Qt.ApplicationAttribute.AA_UseHighDpiPixmaps, True)
-        except Exception as e:
-            log.warning(f"Could not enable High DPI pixmaps: {e}")
 
     # Force locale to English/US to ensure dot decimal separators
     # This fixes issues where European locales force comma separators in spinboxes

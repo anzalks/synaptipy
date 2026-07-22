@@ -134,7 +134,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         # --- Scrollbar State ---
         # Scrollbar widgets and base ranges now live inside SynaptipyPlotCanvas
-        # (Phase 3).  Properties on this class forward to canvas._x_scrollbar etc.
+        # Canvas owns its own scrollbar state.
         # before the canvas is created, the properties return None / False safely.
 
         # --- PHASE 1: Data Selection and Plotting ---
@@ -193,15 +193,6 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             self._update_plot_pens_only()
         else:
             self._plot_selected_data()
-
-    @property
-    def thread_pool(self) -> QtCore.QThreadPool:
-        """Backward-compatible accessor for the underlying QThreadPool.
-
-        Delegates to the :class:`DataLoaderService` so callers that held a
-        direct reference to ``self.thread_pool`` continue to work unchanged.
-        """
-        return self._data_loader.thread_pool
 
     def _is_active_analysis_tab(self) -> bool:
         """Return True only when this widget is active at every level of tab nesting.
@@ -721,33 +712,6 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 for method in sorted(self._active_preprocessing_settings["filters"].keys()):
                     self.pipeline.add_step(self._active_preprocessing_settings["filters"][method])
 
-    def _on_preprocessing_complete(self, result_data):
-        """
-        Legacy callback.
-        If result_data is provided, it updates plot.
-        If None (from synchronous flow), it does nothing (handled in caller).
-        """
-        self._is_preprocessing = False
-        if self.preprocessing_widget:
-            self.preprocessing_widget.set_processing_state(False)
-
-        if result_data is None:
-            return
-
-        log.debug("Preprocessing complete (async).")
-        # Legacy Handling for async if needed:
-        if self._preprocessed_data is None:
-            self._preprocessed_data = self._current_plot_data.copy() if self._current_plot_data else {}
-        self._preprocessed_data["data"] = result_data
-
-        if self._current_plot_data:
-            self._current_plot_data["data"] = result_data
-
-        if self.plot_widget:
-            self.plot_widget.clear()
-            time = self._current_plot_data.get("time")
-            if time is not None:
-                self.plot_widget.plot(time, result_data, pen="k")
                 self._update_plot_pens_only()
                 self._on_data_plotted()
 
@@ -910,10 +874,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         """Adds a SynaptipyPlotCanvas to the provided layout.
 
         Scrollbar creation, state management, and ViewBox synchronisation are
-        delegated to :meth:`SynaptipyPlotCanvas.setup_scrollbars` (Phase 3).
-        ``BaseAnalysisTab`` retains backward-compatible proxy attributes
-        ``_x_scrollbar``, ``_y_scrollbar``, ``_base_x_range``, and
-        ``_base_y_range`` that forward to the canvas object.
+        delegated to :meth:`SynaptipyPlotCanvas.setup_scrollbars`.
         """
         log.debug(f"[ANALYSIS-BASE] Setting up plot area for {self.__class__.__name__}")
 
@@ -953,66 +914,6 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self._setup_zoom_sync()
 
         log.debug(f"[ANALYSIS-BASE] Plot area setup complete for {self.__class__.__name__}")
-
-    # ------------------------------------------------------------------
-    # Scrollbar proxy properties and high-level range setter (Phase 3)
-    #
-    # All scrollbar state (widgets, base ranges, updating flags) now lives
-    # inside ``SynaptipyPlotCanvas``.  The properties below keep existing
-    # code in ``_plot_selected_data`` and subclasses working without change.
-    # ------------------------------------------------------------------
-
-    @property
-    def _x_scrollbar(self):
-        """Proxy to canvas scrollbar (backward compatibility)."""
-        return getattr(self.plot_canvas, "_x_scrollbar", None)
-
-    @property
-    def _y_scrollbar(self):
-        """Proxy to canvas scrollbar (backward compatibility)."""
-        return getattr(self.plot_canvas, "_y_scrollbar", None)
-
-    @property
-    def _base_x_range(self):
-        """Proxy to canvas base X range (backward compatibility)."""
-        return getattr(self.plot_canvas, "_base_x_range", None)
-
-    @_base_x_range.setter
-    def _base_x_range(self, value):
-        if self.plot_canvas is not None:
-            self.plot_canvas._base_x_range = value
-
-    @property
-    def _base_y_range(self):
-        """Proxy to canvas base Y range (backward compatibility)."""
-        return getattr(self.plot_canvas, "_base_y_range", None)
-
-    @_base_y_range.setter
-    def _base_y_range(self, value):
-        if self.plot_canvas is not None:
-            self.plot_canvas._base_y_range = value
-
-    @property
-    def _x_scroll_updating(self):
-        return getattr(self.plot_canvas, "_x_scroll_updating", False)
-
-    @_x_scroll_updating.setter
-    def _x_scroll_updating(self, value):
-        if self.plot_canvas is not None:
-            self.plot_canvas._x_scroll_updating = value
-
-    @property
-    def _y_scroll_updating(self):
-        return getattr(self.plot_canvas, "_y_scroll_updating", False)
-
-    @_y_scroll_updating.setter
-    def _y_scroll_updating(self, value):
-        if self.plot_canvas is not None:
-            self.plot_canvas._y_scroll_updating = value
-
-    # --- END Scrollbar proxies ---
-
-    # --- END ADDED ---
 
     # --- ADDED: Method to setup save button ---
     def _setup_save_button(self, layout: QtWidgets.QLayout, alignment=QtCore.Qt.AlignmentFlag.AlignCenter):

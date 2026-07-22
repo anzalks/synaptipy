@@ -1405,8 +1405,8 @@ class BatchAnalysisEngine:
             ], None
 
         # Averages and list-based analyses cannot be scientifically interpreted
-        # when they combine explicit, incompatible protocol assignments.  Legacy
-        # recordings are allowed through as ``needs_review`` for compatibility.
+        # when they combine explicit, incompatible protocol assignments.
+        # Recordings without a protocol map remain ``needs_review``.
         if protocol_enabled and scope in ("average", "selected_trials_average", "channel_set"):
             if scope == "selected_trials_average" and params.get("trial_indices"):
                 from synaptipy.shared.utils import parse_trial_selection_string

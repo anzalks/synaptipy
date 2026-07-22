@@ -3,7 +3,7 @@
 """
 Tests for DataLoaderService.
 
-Verifies the async loading logic, signal emissions, and backward-compatible
+Verifies the async loading logic, signal emissions, and
 thread_pool property without spawning real threads (workers are synchronised
 with QThreadPool.waitForDone / qtbot.waitSignal).
 """
@@ -158,41 +158,3 @@ class TestAsyncLoadError:
             service.load_recording(Path("bad.abf"))
 
         service.wait_for_done()
-
-
-# ---------------------------------------------------------------------------
-# Backward-compatibility: BaseAnalysisTab.thread_pool
-# ---------------------------------------------------------------------------
-
-
-class TestBaseAnalysisTabBackwardCompat:
-    def test_tab_thread_pool_delegates_to_service(self, qtbot, monkeypatch):
-        """BaseAnalysisTab.thread_pool returns the service's internal pool."""
-        from unittest.mock import MagicMock
-
-        monkeypatch.setattr(
-            "synaptipy.application.gui.analysis_tabs.base.BaseAnalysisTab._setup_plot_area",
-            MagicMock(),
-        )
-        from synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
-        from synaptipy.core.analysis.registry import AnalysisRegistry
-
-        # Register a minimal analysis function for the duration of the test
-        name = "_dls_compat_test"
-
-        def _func(data, time, fs, **kwargs):
-            return {"v": 0}
-
-        AnalysisRegistry.register(name, label="DLS Test", ui_params=[])(_func)
-        try:
-            neo_adapter = MagicMock()
-            tab = MetadataDrivenAnalysisTab(name, neo_adapter)
-            qtbot.addWidget(tab)
-
-            from PySide6 import QtCore
-
-            assert isinstance(tab.thread_pool, QtCore.QThreadPool)
-            # Must be the same object as the service's pool
-            assert tab.thread_pool is tab._data_loader.thread_pool
-        finally:
-            AnalysisRegistry._registry.pop(name, None)

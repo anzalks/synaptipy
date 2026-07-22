@@ -202,7 +202,6 @@ def _os_is_dark() -> bool:
 def run_choreography():
     global global_vg
 
-    QApplication.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps)
     QApplication.setAttribute(Qt.ApplicationAttribute.AA_DontUseNativeDialogs)
 
     app = QApplication.instance() or QApplication(sys.argv)

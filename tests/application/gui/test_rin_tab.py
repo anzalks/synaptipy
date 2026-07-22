@@ -131,9 +131,11 @@ def test_get_specific_result_data(rin_tab):
 def test_result_hlines_visualization(rin_tab):
     """Test that result h-lines are plotted from analysis results."""
     result_data = {
-        "baseline_voltage_mv": -65.0,
-        "steady_state_voltage_mv": -75.0,
-        "rin_mohm": 200.0,
+        "metrics": {
+            "baseline_voltage_mv": -65.0,
+            "steady_state_voltage_mv": -75.0,
+            "rin_mohm": 200.0,
+        }
     }
 
     rin_tab._plot_analysis_visualizations(result_data)

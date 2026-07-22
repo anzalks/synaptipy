@@ -35,7 +35,6 @@ except ImportError:
 
 # Import styling module - this should always succeed
 from synaptipy.shared.styling import (  # noqa: E402
-    PLOT_COLORS,
     configure_plot_widget,
     get_average_pen,
     get_grid_pen,
@@ -47,12 +46,7 @@ from synaptipy.shared.styling import (  # noqa: E402
 
 
 class TestStylingConstants(unittest.TestCase):
-    """Test the theme and color constants."""
-
-    def test_plot_colors_available(self):
-        """Verify PLOT_COLORS is available and contains colors."""
-        self.assertIsInstance(PLOT_COLORS, list)
-        self.assertGreater(len(PLOT_COLORS), 0)
+    """Test the theme values."""
 
     def test_system_theme_mode_function(self):
         """Verify system theme mode function works correctly."""

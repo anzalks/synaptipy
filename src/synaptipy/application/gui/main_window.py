@@ -634,18 +634,6 @@ class MainWindow(QtWidgets.QMainWindow):
                             if hasattr(analysis_widget, "plot_widget"):
                                 update_plot_pens([analysis_widget.plot_widget])
                                 log.debug(f"Updated plot pens for analysis tab: {analysis_widget.get_display_name()}")
-                    # Fallback for legacy QTabWidget structure
-                    elif hasattr(self.analyser_tab, "count"):
-                        for i in range(self.analyser_tab.count()):
-                            analysis_widget = self.analyser_tab.widget(i)
-                            if hasattr(analysis_widget, "plot_widget"):
-                                update_plot_pens([analysis_widget.plot_widget])
-                                log.debug(f"Updated plot pens for analysis tab {i}")
-                    else:
-                        # analyser_tab might be a single widget (unlikely now but safe fallback)
-                        if hasattr(self.analyser_tab, "plot_widget"):
-                            update_plot_pens([self.analyser_tab.plot_widget])
-                            log.debug("Updated plot pens for single analysis tab")
                 except Exception as e:
                     log.debug(f"Could not update plot pens for analysis tabs: {e}")
 
@@ -755,20 +743,6 @@ class MainWindow(QtWidgets.QMainWindow):
             # Check for _loaded_analysis_tabs list (AnalyserTab is QWidget now)
             if hasattr(self.analyser_tab, "_loaded_analysis_tabs"):
                 for analysis_tab in self.analyser_tab._loaded_analysis_tabs:
-                    if hasattr(analysis_tab, "_popup_windows"):
-                        for popup in analysis_tab._popup_windows:
-                            if popup and not popup.isVisible():
-                                popup.show()
-                                popup_count += 1
-                            elif popup and popup.isVisible():
-                                # Bring to front if already visible
-                                popup.raise_()
-                                popup.activateWindow()
-                                popup_count += 1
-            # Fallback for legacy QTabWidget structure
-            elif hasattr(self.analyser_tab, "count"):
-                for i in range(self.analyser_tab.count()):
-                    analysis_tab = self.analyser_tab.widget(i)
                     if hasattr(analysis_tab, "_popup_windows"):
                         for popup in analysis_tab._popup_windows:
                             if popup and not popup.isVisible():

@@ -305,21 +305,6 @@ def style_error_message(widget):
     return widget
 
 
-# ==============================================================================
-# Legacy compatibility - simplified for original UI appearance
-# ==============================================================================
-
-# Basic color constants for backward compatibility
-PLOT_COLORS = [
-    "#E69F00",  # Orange
-    "#56B4E9",  # Sky blue
-    "#009E73",  # Bluish green
-    "#F0E442",  # Yellow
-    "#0072B2",  # Blue
-    "#D55E00",  # Vermilion
-    "#CC79A7",  # Reddish purple
-]
-
 # Expose main functions
 __all__ = [
     "apply_stylesheet",
@@ -336,7 +321,6 @@ __all__ = [
     "style_info_label",
     "style_error_message",
     "get_system_theme_mode",
-    "PLOT_COLORS",
     "get_system_accent_color",
     "customize_viewbox_selection_colors",
     "apply_theme_to_plot_widget",

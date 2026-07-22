@@ -95,21 +95,6 @@ def test_visualization_with_wrapper_result(event_tab):
     assert len(event_tab._dynamic_plot_items) > 0
 
 
-def test_visualization_with_flat_dict(event_tab):
-    """Test that flat dict with _event_times/_event_peaks renders markers."""
-    time_arr = event_tab._current_plot_data["time"]
-    data_arr = event_tab._current_plot_data["data"]
-    indices = np.array([10, 50, 100])
-    result_dict = {
-        "_event_times": time_arr[indices].tolist(),
-        "_event_peaks": data_arr[indices].tolist(),
-    }
-
-    event_tab._plot_analysis_visualizations(result_dict)
-
-    assert len(event_tab._dynamic_plot_items) > 0
-
-
 def test_display_results_curated(event_tab):
     """Test curated event result table display."""
     event_tab._current_event_indices = [10, 20, 30, 40, 50]

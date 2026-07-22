@@ -279,19 +279,3 @@ class SynaptipyPlotFactory:
 
         except Exception as e:
             log.debug(f"Failed to configure existing plot: {e}")
-
-
-# Convenience functions for backward compatibility
-def create_analysis_plot(parent: Optional[QtWidgets.QWidget] = None) -> pg.PlotWidget:
-    """Create a plot widget for analysis tabs."""
-    return SynaptipyPlotFactory.create_plot_widget(parent=parent, enable_grid=True, mouse_mode="rect")
-
-
-def create_explorer_plot(parent: Optional[QtWidgets.QWidget] = None) -> pg.PlotWidget:
-    """Create a plot widget for explorer tab."""
-    return SynaptipyPlotFactory.create_plot_widget(parent=parent, enable_grid=True, mouse_mode="rect")
-
-
-def configure_plot_safely(plot_widget: pg.PlotWidget) -> None:
-    """Safely configure an existing plot widget."""
-    SynaptipyPlotFactory.configure_existing_plot(plot_widget)

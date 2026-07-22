@@ -7,14 +7,9 @@ Consolidates all synaptic event detection methods (adaptive threshold,
 template matching, baseline-peak-kinetics) from event_detection.py into
 one self-contained module.
 
-All registry wrapper functions return::
+Registry execution normalises each wrapper output into the shared
+``AnalysisResult`` schema before it reaches the GUI, batch engine, or exporter.
 
-    {
-        "module_used": "synaptic_events",
-        "metrics": { ... flat result keys ... }
-    }
-
-Exports ``detect_minis_threshold`` as a backward-compatibility alias.
 """
 
 import logging
@@ -721,10 +716,6 @@ def detect_events_threshold(  # noqa: C901
     except (ValueError, TypeError, IndexError, RuntimeError) as e:
         log.error(f"Error during adaptive threshold event detection: {e}", exc_info=True)
         return EventDetectionResult(value=0, unit="Hz", is_valid=False, error_message=str(e))
-
-
-# Backward compatibility alias
-detect_minis_threshold = detect_events_threshold
 
 
 @AnalysisRegistry.register(

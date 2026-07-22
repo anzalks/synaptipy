@@ -209,7 +209,7 @@ class ProtocolMap:
                 source=ProtocolSource.SIGNAL_ONLY,
                 label="Signal-only",
                 verified=False,
-                assignment_id=f"legacy-{trial_index}",
+                assignment_id=f"implicit-signal-only-{trial_index}",
             )
         ]
 
@@ -298,14 +298,13 @@ def resolve_protocols(
 ) -> List[ResolvedProtocol]:
     """Resolve executable segments and report requirement gaps without guessing.
 
-    Legacy/no-map recordings remain executable but are marked ``needs_review``.
+    Recordings without a map remain executable but are marked ``needs_review``.
     Explicit incompatible assignments are marked ``incompatible`` and should be
     excluded by a batch planner.
     """
     protocol_map = getattr(recording, "protocol_map", None)
-    # Readers and third-party callers may provide Recording-like objects that
-    # predate ProtocolMap.  Treat those as legacy rather than accidentally
-    # interpreting a mock/foreign attribute as a populated map.
+    # Readers and third-party callers may provide Recording-like objects without
+    # a ProtocolMap. Treat those as an explicit signal-only/review state.
     if not isinstance(protocol_map, ProtocolMap):
         protocol_map = ProtocolMap()
     requirement = requirement_for_analysis(analysis_name)
@@ -313,7 +312,7 @@ def resolve_protocols(
     resolved: List[ResolvedProtocol] = []
     for assignment in segments:
         missing: List[str] = []
-        explicit = assignment.assignment_id.startswith("legacy-") is False
+        explicit = not assignment.assignment_id.startswith("implicit-signal-only-")
         if assignment.protocol_family not in requirement.families:
             missing.append(f"requires protocol family: {', '.join(requirement.families)}")
         if requirement.requires_command and not (
