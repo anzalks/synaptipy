@@ -228,19 +228,38 @@ def bump(old_version: str, new_version: str, *, dry_run: bool = False) -> None:
     # README.md — replace all inline version references in the Standalone section
     _replace_all(ROOT / "README.md", old_version, new_version, dry_run=dry_run)
 
-    # CHANGELOG.md — insert new section header after [Unreleased]
+    # CHANGELOG.md — promote [Unreleased] content into the new version section
     changelog = ROOT / "CHANGELOG.md"
     text = changelog.read_text(encoding="utf-8")
-    new_section = (
-        f"## [{new_version}] - {today}\n\n"
-        f"### Changed\n\n"
-        f"- Bumped version to `{new_version}` across all canonical locations.\n\n"
-    )
     marker = "## [Unreleased]"
     if marker not in text:
         print(f"  WARNING: '{marker}' not found in CHANGELOG.md - skipping section insert")
     else:
-        new_text = text.replace(marker + "\n", marker + "\n\n" + new_section, 1)
+        # Find the content between [Unreleased] and the next ## section
+        unreleased_start = text.index(marker) + len(marker)
+        next_section = re.search(r"\n## \[", text[unreleased_start:])
+        if next_section:
+            unreleased_content = text[unreleased_start : unreleased_start + next_section.start()]
+        else:
+            unreleased_content = text[unreleased_start:]
+
+        # Build the new version section with the promoted content
+        new_header = f"## [{new_version}] - {today}"
+        if unreleased_content.strip():
+            new_section = f"{new_header}\n{unreleased_content}"
+        else:
+            new_section = (
+                f"{new_header}\n\n"
+                f"### Changed\n\n"
+                f"- Bumped version to `{new_version}` across all canonical locations.\n\n"
+            )
+
+        # Replace [Unreleased] block with empty [Unreleased] + promoted section
+        if next_section:
+            old_block = text[text.index(marker) : unreleased_start + next_section.start()]
+        else:
+            old_block = text[text.index(marker) :]
+        new_text = text.replace(old_block, f"{marker}\n\n{new_section}", 1)
 
         # Manage link-reference anchors at the bottom of CHANGELOG
         unreleased_anchor = f"[Unreleased]: https://github.com/anzalks/synaptipy/compare/v{new_version}...HEAD"
