@@ -326,7 +326,7 @@ using the metadata in the repository `CITATION.cff` file:
 
 ```
 Shahul, A. K. (2026). SynaptiPy: An Open-Source Electrophysiology
-Visualization and Analysis Suite (v0.1.6.1).
+Visualization and Analysis Suite (v0.1.7).
 https://github.com/anzalks/synaptipy
 ```
 

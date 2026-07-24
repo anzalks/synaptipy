@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-07-24
+
+
 ### Added
 
 - Canonical time-aware trial averaging with per-sample contributor counts and
@@ -909,3 +912,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Limited documentation
 - Examples need further development
 - No support for all possible Neo file formats (depends on installed backends)
+
+[Unreleased]: https://github.com/anzalks/synaptipy/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/anzalks/synaptipy/compare/v0.1.6.1...v0.1.7
+[0.1.6.1]: https://github.com/anzalks/synaptipy/releases/tag/v0.1.6.1
