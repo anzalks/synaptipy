@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 BUMP_SCRIPT = ROOT / "scripts" / "bump_version.py"
 OFFLINE_HELP_SCRIPT = ROOT / "scripts" / "build_offline_help.py"
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
+VERIFY_CI_SCRIPT = ROOT / "scripts" / "verify_ci.py"
 
 
 def _git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -97,3 +98,16 @@ def test_pypi_publish_requires_a_successful_testpypi_smoke_test() -> None:
     pypi_job = workflow.split("  pypi-publish:\n", maxsplit=1)[1].split("\n  # ── 6.", maxsplit=1)[0]
     assert "needs.smoke_test_testpypi.result == 'success'" in pypi_job
     assert "needs.smoke_test_testpypi.result == 'skipped'" not in pypi_job
+
+
+def test_emoji_scan_exclusions_accept_windows_separators() -> None:
+    """Verifier exclusions must work for both Windows and POSIX paths."""
+    spec = importlib.util.spec_from_file_location("verify_ci", VERIFY_CI_SCRIPT)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert module._emoji_scan_path_is_excluded(r".\.agent\rules.md")
+    assert module._emoji_scan_path_is_excluded(r".\docs\nwb_mapping.md")
+    assert module._emoji_scan_path_is_excluded("./docs/nwb_mapping.md")
+    assert not module._emoji_scan_path_is_excluded(r".\src\synaptipy\core\results.py")

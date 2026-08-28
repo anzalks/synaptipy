@@ -115,6 +115,39 @@ def test_preferences_theme_radios_initialized_correctly(qapp, qtbot):
         assert dlg.theme_system_radio.isChecked()
 
 
+def test_preferences_uses_canonical_settings_namespace(qapp, qtbot):
+    """Preferences and startup must read the same persistent settings store."""
+    from synaptipy.application.gui.preferences_dialog import PreferencesDialog
+    from synaptipy.shared.constants import APP_NAME, SETTINGS_SECTION
+
+    dlg = PreferencesDialog()
+    qtbot.addWidget(dlg)
+
+    assert dlg._settings.organizationName() == APP_NAME
+    assert dlg._settings.applicationName() == SETTINGS_SECTION
+
+
+def test_saved_theme_is_applied_before_welcome_screen_creation(qapp):
+    """The first visible widget must be constructed with the saved theme."""
+    from synaptipy.application.startup_manager import StartupManager
+
+    events = []
+    welcome = MagicMock()
+    with (
+        patch("synaptipy.shared.theme_manager.install_system_theme_listener"),
+        patch("synaptipy.shared.theme_manager.apply_theme", side_effect=lambda: events.append("theme")),
+        patch(
+            "synaptipy.application.startup_manager.WelcomeScreen",
+            side_effect=lambda: events.append("welcome") or welcome,
+        ),
+        patch("synaptipy.application.startup_manager.QtCore.QTimer.singleShot"),
+    ):
+        result = StartupManager(qapp).start_loading()
+
+    assert result is welcome
+    assert events == ["theme", "welcome"]
+
+
 # ---------------------------------------------------------------------------
 # 3. Theme Manager: apply_theme cycles correctly
 # ---------------------------------------------------------------------------
@@ -170,51 +203,41 @@ def test_apply_theme_light_uses_fusion(qapp):
     mock_set_style.assert_called_once_with("Fusion")
 
 
-def test_apply_theme_system_restores_native(qapp):
-    """apply_theme(SYSTEM) must restore the saved native style name."""
-    from synaptipy.shared import theme_manager
+def test_apply_theme_system_uses_detected_dark_palette(qapp):
+    """System mode must resolve the operating-system preference before painting."""
     from synaptipy.shared.theme_manager import ThemeMode, apply_theme
 
-    # Pre-seed a known native style name.
-    theme_manager._initial_style_name = "macintosh"
-
     with (
-        patch.object(qapp, "setStyle") as mock_set_style,
-        patch.object(qapp, "setStyleSheet"),
-        patch.object(qapp, "setPalette"),
+        patch("synaptipy.shared.theme_manager._detect_system_dark_mode", return_value=True),
+        patch("synaptipy.shared.theme_manager._apply_dark_theme") as apply_dark,
+        patch("synaptipy.shared.theme_manager._apply_light_theme") as apply_light,
     ):
         apply_theme(ThemeMode.SYSTEM)
 
-    mock_set_style.assert_called_once_with("macintosh")
+    apply_dark.assert_called_once_with(qapp)
+    apply_light.assert_not_called()
 
 
-def test_initial_style_name_captured_on_first_call(qapp):
-    """_initial_style_name must be captured from app on the first apply_theme call."""
-    from synaptipy.shared import theme_manager
+def test_apply_theme_system_uses_detected_light_palette(qapp):
+    """System mode must use the light palette when the operating system is light."""
     from synaptipy.shared.theme_manager import ThemeMode, apply_theme
-
-    theme_manager._initial_style_name = None  # reset
-
-    real_style_name = qapp.style().objectName()
-
-    with patch.object(qapp, "setStyle"), patch.object(qapp, "setStyleSheet"), patch.object(qapp, "setPalette"):
-        apply_theme(ThemeMode.DARK)
-
-    assert theme_manager._initial_style_name == real_style_name
-
-
-def test_apply_theme_system_clears_stylesheet(qapp):
-    """apply_theme(SYSTEM) must call setStyleSheet('') to remove any custom CSS."""
-    from synaptipy.shared import theme_manager
-    from synaptipy.shared.theme_manager import ThemeMode, apply_theme
-
-    theme_manager._initial_style_name = "fusion"
 
     with (
-        patch.object(qapp, "setStyle"),
-        patch.object(qapp, "setStyleSheet") as mock_ss,
-        patch.object(qapp, "setPalette"),
+        patch("synaptipy.shared.theme_manager._detect_system_dark_mode", return_value=False),
+        patch("synaptipy.shared.theme_manager._apply_dark_theme") as apply_dark,
+        patch("synaptipy.shared.theme_manager._apply_light_theme") as apply_light,
     ):
         apply_theme(ThemeMode.SYSTEM)
 
-    mock_ss.assert_called_once_with("")
+    apply_light.assert_called_once_with(qapp)
+    apply_dark.assert_not_called()
+
+
+def test_system_detection_uses_qt_color_scheme_before_palette():
+    """A prior explicit palette must not be mistaken for the OS preference."""
+    from synaptipy.shared.theme_manager import _detect_system_dark_mode
+
+    app = MagicMock()
+    app.styleHints.return_value.colorScheme.return_value = QtCore.Qt.ColorScheme.Dark
+    with patch("synaptipy.shared.theme_manager.QtWidgets.QApplication.instance", return_value=app):
+        assert _detect_system_dark_mode() is True

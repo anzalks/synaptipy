@@ -9,16 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Applied the saved theme before the first visible widget and made System mode
+  track Qt's operating-system color scheme without changing scientific plots.
+- Unified plugin preferences under the canonical settings namespace, activated
+  downloaded plugins immediately when enabled, and preserved the current UI
+  when a reload is cancelled or fails.
+- Corrected Windows path handling in the local CI emoji scanner.
+- Isolated QSettings during tests. The suite read, and could overwrite, the
+  developer's real application preferences, so a machine with "Enable Custom
+  Plugins" switched off failed the plugin-discovery tests while CI passed.
 - Evoked Responses analyses now accept the TTL / stimulus channel selected in
   the tab as recorded stimulus timing, so optogenetics, paired-pulse, and
   stimulus-train analyses run on recordings without a hand-built Protocol Map.
   A run with no stimulus channel selected still stops, now naming the control
   that fixes it instead of reporting a Protocol Map incompatibility.
-- Paired-Pulse Ratio and Stimulus Train (STP) accept manually entered stimulus
-  onsets as a timing source. Recordings made without a TTL channel could not be
-  analysed at all: unticking "Detect Stim from TTL" and entering the onsets left
-  the tab blocked with no route forward. Manually timed results carry a warning
-  recording that the timing was not verified against a recorded channel.
 - Paired-Pulse Ratio reads stimulus onsets from the selected TTL channel by
   default instead of measuring at unrelated placeholder onsets.
 - TTL detection no longer falls back silently to manual onsets or to a generated
@@ -33,6 +37,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A channel whose recorded name identifies it as the stimulus output (TTL, trig,
   stim, opto, and similar) is preselected as the evoked analyses' stimulus
   channel when exactly one such channel exists.
+- Paired-Pulse Ratio and Stimulus Train (STP) accept manually entered stimulus
+  onsets as a timing source. Recordings made without a TTL channel could not be
+  analysed at all: unticking "Detect Stim from TTL" and entering the onsets left
+  the tab blocked with no route forward. Manually timed results carry a warning
+  recording that the timing was not verified against a recorded channel.
 - Evoked Sync reports the baseline-subtracted response amplitude its Amplitude
   Window parameter describes.
 - Evoked response polarity defaults now follow the recorded channel's clamp

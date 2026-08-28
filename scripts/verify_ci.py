@@ -156,6 +156,25 @@ def check_tests() -> bool:
         return False
 
 
+def _emoji_scan_path_is_excluded(path: str) -> bool:
+    """Return whether a path is excluded, independent of OS separators."""
+    normalized = path.replace("\\", "/")
+    if normalized.endswith("scripts/verify_ci.py") or normalized.endswith(".agent/rules.md"):
+        return True
+    return any(
+        part in normalized
+        for part in [
+            "site-packages",
+            "dist-packages",
+            "venv",
+            ".env",
+            ".verify_venv_temp",
+            "lib/python",
+            "docs/",
+        ]
+    )
+
+
 def check_no_emojis() -> bool:  # noqa: C901
     """Scan codebase for emojis.
 
@@ -201,25 +220,7 @@ def check_no_emojis() -> bool:  # noqa: C901
         for file in files:
             if file.endswith((".py", ".md", ".txt", ".yml", ".yaml")):
                 path = os.path.join(root, file)
-                # Skip the verification script itself
-                if "verify_ci.py" in path:
-                    continue
-                # Skip the rules file (as it contains the example prohibited emojis)
-                if ".agent/rules.md" in path:
-                    continue
-                # Skip virtual environment directories and docs
-                if any(
-                    x in path
-                    for x in [
-                        "site-packages",
-                        "dist-packages",
-                        "venv",
-                        ".env",
-                        ".verify_venv_temp",
-                        "lib/python",
-                        "docs/",
-                    ]
-                ):
+                if _emoji_scan_path_is_excluded(path):
                     continue
 
                 try:

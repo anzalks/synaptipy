@@ -225,6 +225,54 @@ def test_plugin_load_failures_show_one_nonfatal_summary(main_window):
     assert "broken_plugin.py" in warning.call_args.args[2]
 
 
+def test_cancelled_plugin_reload_keeps_current_analyser_ui(main_window):
+    """Declining plugin consent must not tear down and rebuild active tabs."""
+    with (
+        patch("synaptipy.application.plugin_manager.PluginManager.reload_plugins", return_value=None) as reload_plugins,
+        patch.object(main_window.analyser_tab, "rebuild_analysis_tabs") as rebuild_tabs,
+    ):
+        applied = main_window._on_plugins_toggled(True)
+
+    reload_plugins.assert_called_once_with(enabled=True)
+    rebuild_tabs.assert_not_called()
+    assert applied is False
+
+
+def test_downloaded_plugins_hot_load_when_enabled(main_window):
+    """A completed example-plugin download must activate without a restart."""
+    with (
+        patch.object(main_window.settings, "value", return_value=True),
+        patch.object(main_window, "_on_plugins_toggled", return_value=True) as toggle_plugins,
+    ):
+        main_window._on_plugins_downloaded(Path("plugins"))
+
+    toggle_plugins.assert_called_once_with(True)
+
+
+def test_downloaded_plugins_stay_inactive_when_disabled(main_window):
+    """Downloading files must not bypass an explicit disabled preference."""
+    with (
+        patch.object(main_window.settings, "value", return_value=False),
+        patch.object(main_window, "_on_plugins_toggled") as toggle_plugins,
+    ):
+        main_window._on_plugins_downloaded(Path("plugins"))
+
+    toggle_plugins.assert_not_called()
+
+
+def test_plugin_rebuild_preserves_selected_core_analysis(main_window):
+    """Hot-loading plugins must not jump the user back to another analysis."""
+    analyser = main_window.analyser_tab
+    if analyser.sub_tab_widget.count() < 2:
+        pytest.skip("Need at least two analysis tabs to verify selection preservation")
+
+    analyser.sub_tab_widget.setCurrentIndex(1)
+    selected_name = analyser.sub_tab_widget.currentWidget().get_registry_name()
+    analyser.rebuild_analysis_tabs()
+
+    assert analyser.sub_tab_widget.currentWidget().get_registry_name() == selected_name
+
+
 def test_loading_progress_updates(main_window, qtbot):
     """Test that loading progress updates are handled correctly."""
     # Test progress update

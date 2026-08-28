@@ -14,6 +14,7 @@ from typing import Optional
 from PySide6 import QtCore, QtWidgets
 
 from synaptipy.application.session_manager import SessionManager
+from synaptipy.shared.constants import APP_NAME, SETTINGS_SECTION
 from synaptipy.shared.scroll_settings import (
     ScrollDirection,
     get_scroll_direction,
@@ -54,7 +55,7 @@ class PreferencesDialog(QtWidgets.QDialog):
         self.setMinimumWidth(450)
         self.setMinimumHeight(350)
 
-        self._settings = QtCore.QSettings()
+        self._settings = QtCore.QSettings(APP_NAME, SETTINGS_SECTION)
 
         # Store original values for cancel
         self._original_scroll_direction = get_scroll_direction()
@@ -346,6 +347,7 @@ class PreferencesDialog(QtWidgets.QDialog):
         plugins_enabled = self.enable_plugins_checkbox.isChecked()
         plugins_changed = plugins_enabled != self._original_enable_plugins
         self._settings.setValue("enable_plugins", plugins_enabled)
+        self._settings.sync()
         log.debug(f"Applied enable_plugins: {plugins_enabled} (changed={plugins_changed})")
 
         # Save performance settings and emit if changed
@@ -401,6 +403,7 @@ class PreferencesDialog(QtWidgets.QDialog):
         self._settings.setValue("enable_plugins", True)
         self._settings.setValue("performance/max_cpu_cores", 1)
         self._settings.setValue("performance/max_ram_allocation_gb", 4.0)
+        self._settings.sync()
 
         # Update original values
         self._original_scroll_direction = ScrollDirection.SYSTEM

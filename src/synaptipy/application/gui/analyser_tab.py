@@ -565,6 +565,11 @@ class AnalyserTab(QtWidgets.QWidget):
         """
         log.debug("Rebuilding analysis sub-tabs after plugin reload.")
 
+        current_registry_name = None
+        current_widget = self.sub_tab_widget.currentWidget()
+        if current_widget is not None and hasattr(current_widget, "get_registry_name"):
+            current_registry_name = current_widget.get_registry_name()
+
         # Mark every existing tab as unmounting so that any in-flight signals
         # (e.g. debounce timers, currentChanged) exit quietly without popups.
         for tab in self._loaded_analysis_tabs:
@@ -590,9 +595,17 @@ class AnalyserTab(QtWidgets.QWidget):
         # Re-apply current source items so the new tabs are populated
         self.update_analysis_sources(self.session_manager.selected_analysis_items)
 
-        # Manually fire an update for the first tab so the screen refreshes.
+        target_index = 0
+        if current_registry_name is not None:
+            for index, tab in enumerate(self._loaded_analysis_tabs):
+                if tab.get_registry_name() == current_registry_name:
+                    target_index = index
+                    break
+
+        # Preserve the user's current analysis when it still exists.
         if self.sub_tab_widget.count() > 0:
-            self._on_tab_changed(0)
+            self.sub_tab_widget.setCurrentIndex(target_index)
+            self._on_tab_changed(target_index)
 
         log.debug("Analysis sub-tabs rebuilt successfully.")
 

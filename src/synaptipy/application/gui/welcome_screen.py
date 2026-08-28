@@ -507,6 +507,7 @@ class DemoDownloadBanner(QtWidgets.QFrame):
     """
 
     file_ready = QtCore.Signal(object)  # pathlib.Path
+    plugins_ready = QtCore.Signal(object)  # plugin directory Path
 
     def __init__(self, parent: Optional[QtWidgets.QWidget] = None) -> None:
         super().__init__(parent)
@@ -609,16 +610,11 @@ class DemoDownloadBanner(QtWidgets.QFrame):
         self._status_label.setText(f"Downloading plugins… {files_done}/{total_files} files")
 
     def _on_plugin_finished(self, dest_path: object) -> None:
-        """Notify user that plugins downloaded and explain how to activate them."""
+        """Publish completed plugins so the main window can activate them."""
         self._progress_bar.setVisible(False)
         self._status_label.setVisible(False)
         self._plugin_download_btn.setEnabled(True)
-        QtWidgets.QMessageBox.information(
-            self,
-            "Plugins Downloaded",
-            f"Example plugins saved to:\n{_PLUGIN_DEST_DIR}\n\n"
-            "To activate them, enable 'Enable Custom Plugins' in Edit \u2192 Preferences.",
-        )
+        self.plugins_ready.emit(dest_path)
         log.info("Plugin download finished: %s", dest_path)
 
     def _on_plugin_failed(self, error_msg: str) -> None:

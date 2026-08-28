@@ -35,9 +35,7 @@ class ThemeSignals(QtCore.QObject):
 # Global signal instance
 _theme_signals: Optional[ThemeSignals] = None
 
-# The style name active at application startup (captured lazily on first apply).
-# Restored when the user switches back to System theme.
-_initial_style_name: Optional[str] = None
+_system_theme_listener_installed = False
 
 
 def get_theme_signals() -> ThemeSignals:
@@ -71,7 +69,6 @@ def set_theme_mode(mode: ThemeMode) -> None:
     settings.sync()
     log.debug(f"Theme mode set to: {mode.value}")
 
-    # Emit signal
     signals = get_theme_signals()
     signals.theme_changed.emit(mode.value)
 
@@ -104,6 +101,17 @@ def _detect_system_dark_mode() -> bool:
     """
     import sys
 
+    app = QtWidgets.QApplication.instance()
+    if app is not None:
+        try:
+            scheme = app.styleHints().colorScheme()
+            if scheme == QtCore.Qt.ColorScheme.Dark:
+                return True
+            if scheme == QtCore.Qt.ColorScheme.Light:
+                return False
+        except (AttributeError, RuntimeError):
+            log.debug("Qt color-scheme detection unavailable; using platform fallback")
+
     if sys.platform == "win32":
         # Read Windows dark mode setting from registry
         try:
@@ -123,7 +131,6 @@ def _detect_system_dark_mode() -> bool:
             # Fallback to palette detection below
 
     # Fallback: use palette luminance detection
-    app = QtWidgets.QApplication.instance()
     if app:
         palette = app.palette()
         # Compare window background luminance
@@ -132,6 +139,25 @@ def _detect_system_dark_mode() -> bool:
         luminance = (0.299 * bg_color.red() + 0.587 * bg_color.green() + 0.114 * bg_color.blue()) / 255
         return luminance < 0.5
     return False
+
+
+def install_system_theme_listener(app: QtWidgets.QApplication) -> None:
+    """Reapply System mode when Qt reports an operating-system theme change."""
+    global _system_theme_listener_installed
+    if _system_theme_listener_installed:
+        return
+
+    style_hints = app.styleHints()
+    signal = getattr(style_hints, "colorSchemeChanged", None)
+    if signal is None:
+        return
+
+    def _on_color_scheme_changed(_scheme) -> None:
+        if get_theme_mode() == ThemeMode.SYSTEM:
+            apply_theme(ThemeMode.SYSTEM)
+
+    signal.connect(_on_color_scheme_changed)
+    _system_theme_listener_installed = True
 
 
 def apply_theme(mode: Optional[ThemeMode] = None) -> None:
@@ -149,19 +175,13 @@ def apply_theme(mode: Optional[ThemeMode] = None) -> None:
         log.warning("No QApplication instance found, cannot apply theme")
         return
 
-    # Capture the native style name once, before we ever change it.
-    global _initial_style_name
-    if _initial_style_name is None:
-        _initial_style_name = app.style().objectName()
-        log.debug("Captured initial style name: %s", _initial_style_name)
-
     if mode == ThemeMode.SYSTEM:
-        # Restore the OS-native appearance: reset to the original platform style,
-        # clear any custom CSS, and reset the palette to the platform default.
-        app.setStyle(_initial_style_name)
-        app.setStyleSheet("")
-        app.setPalette(app.style().standardPalette())
-        log.debug("Applied system theme (native: %s)", _initial_style_name)
+        if _detect_system_dark_mode():
+            _apply_dark_theme(app)
+            log.debug("Applied detected system dark theme")
+        else:
+            _apply_light_theme(app)
+            log.debug("Applied detected system light theme")
 
     elif mode == ThemeMode.LIGHT:
         _apply_light_theme(app)
@@ -360,6 +380,7 @@ __all__ = [
     "set_theme_mode",
     "is_dark_mode",
     "apply_theme",
+    "install_system_theme_listener",
     "get_theme_signals",
     "style_as_subdued",
     "warning_banner_stylesheet",

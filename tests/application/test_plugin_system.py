@@ -164,6 +164,15 @@ class TestSettingsGate:
         new_keys = set(after) - set(before)
         assert not new_keys, f"Plugins were loaded despite enable_plugins=False: {new_keys}"
 
+    def test_plugin_manager_uses_canonical_settings_namespace(self):
+        """Plugin discovery must read the same store shown by Preferences."""
+        from synaptipy.application.plugin_manager import _get_settings
+        from synaptipy.shared.constants import APP_NAME, SETTINGS_SECTION
+
+        settings = _get_settings()
+        assert settings.organizationName() == APP_NAME
+        assert settings.applicationName() == SETTINGS_SECTION
+
     def test_loads_plugins_when_enabled(self):
         """load_plugins() registers opto_jitter and ap_repolarization when enable_plugins=True."""
         from synaptipy.application.plugin_manager import PluginManager
@@ -214,6 +223,39 @@ class TestSettingsGate:
 
         assert len(failures) == 1
         assert AnalysisRegistry.get_function("partial_failure_test") is None
+
+    def test_reload_disabled_preserves_core_registry_entries(self):
+        """Disabling extensions must never unregister built-in analyses."""
+        from synaptipy.application.plugin_manager import PluginManager
+
+        original_registry = dict(AnalysisRegistry._registry)
+        original_metadata = dict(AnalysisRegistry._metadata)
+        original_defaults = dict(AnalysisRegistry._original_metadata)
+        original_core = set(AnalysisRegistry._core_analyses)
+        try:
+            AnalysisRegistry.clear()
+
+            @AnalysisRegistry.register("core_for_reload_test")
+            def core_analysis(data, time, sampling_rate, **kwargs):
+                return {}
+
+            AnalysisRegistry.mark_core_snapshot()
+
+            @AnalysisRegistry.register("plugin_for_reload_test")
+            def plugin_analysis(data, time, sampling_rate, **kwargs):
+                return {}
+
+            with patch("synaptipy.application.plugin_manager.QSettings") as mock_settings_cls:
+                mock_settings_cls.return_value.value.return_value = False
+                assert PluginManager.reload_plugins() == []
+
+            assert AnalysisRegistry.get_function("core_for_reload_test") is core_analysis
+            assert AnalysisRegistry.get_function("plugin_for_reload_test") is None
+        finally:
+            AnalysisRegistry._registry = original_registry
+            AnalysisRegistry._metadata = original_metadata
+            AnalysisRegistry._original_metadata = original_defaults
+            AnalysisRegistry._core_analyses = original_core
 
 
 # ---------------------------------------------------------------------------

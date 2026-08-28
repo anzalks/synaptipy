@@ -122,6 +122,16 @@ class StartupManager(QtCore.QObject):
         """
         log.debug("Starting optimized application loading process")
 
+        # Apply the saved preference before constructing the first visible
+        # widget. This prevents a native/system palette flash on startup.
+        try:
+            from synaptipy.shared.theme_manager import apply_theme, install_system_theme_listener
+
+            install_system_theme_listener(self.app)
+            apply_theme()
+        except Exception as e:
+            log.warning(f"Could not restore saved theme: {e}")
+
         # Create and setup welcome screen
         self.welcome_screen = WelcomeScreen()
         self.welcome_screen.set_loading_steps(len(self.LOADING_STEPS))
@@ -134,14 +144,6 @@ class StartupManager(QtCore.QObject):
     def _begin_loading(self):
         """Begin the optimized loading process."""
         log.debug("Beginning optimized loading process")
-
-        # Restore the user's saved theme preference before building any UI
-        try:
-            from synaptipy.shared.theme_manager import apply_theme
-
-            apply_theme()
-        except Exception as e:
-            log.warning(f"Could not restore saved theme: {e}")
 
         # Step 0: Initial setup
         self._update_progress(0)

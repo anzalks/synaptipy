@@ -354,6 +354,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # --- Demo banner + update banner + tab widget packed into the central container ---
         self._demo_banner = DemoDownloadBanner(parent=self)
         self._demo_banner.file_ready.connect(self._on_demo_file_ready)
+        self._demo_banner.plugins_ready.connect(self._on_plugins_downloaded)
         # Hide by default; shown via Help menu or _show_demo_download_banner()
         self._demo_banner.setVisible(False)
 
@@ -471,6 +472,19 @@ class MainWindow(QtWidgets.QMainWindow):
             self.status_bar.showMessage(f"Loaded demo file: {path.name}", 5000)
         except Exception as exc:
             log.error("Failed to load demo file %s: %s", path, exc)
+
+    @QtCore.Slot(object)
+    def _on_plugins_downloaded(self, dest_path: object) -> None:
+        """Activate downloaded plugins immediately when extensions are enabled."""
+        enabled = self.settings.value("enable_plugins", True, type=bool)
+        if not enabled:
+            self.status_bar.showMessage(
+                "Example plugins downloaded. Enable Custom Plugins in Preferences to activate them.", 8000
+            )
+            return
+
+        if self._on_plugins_toggled(True):
+            self.status_bar.showMessage(f"Example plugins loaded from {Path(str(dest_path))}.", 8000)
 
     def _refresh_demo_action_state(self) -> None:
         """Disable the Demo Data menu item if all demo files are already present."""
@@ -677,16 +691,21 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.critical(self, "Error", f"Failed to open preferences:\n{e}")
 
     @QtCore.Slot(bool)
-    def _on_plugins_toggled(self, enabled: bool):
+    def _on_plugins_toggled(self, enabled: bool) -> bool:
         """Hot-reload plugins and rebuild Analyser tabs when the user toggles the plugin setting."""
         log.info(f"Plugin setting changed to {enabled}. Hot-reloading plugins...")
         try:
             from synaptipy.application.plugin_manager import PluginManager
 
-            failures = PluginManager.reload_plugins()
+            failures = PluginManager.reload_plugins(enabled=enabled)
         except Exception as e:
             log.error(f"Failed to reload plugins: {e}")
-            failures = []
+            self.status_bar.showMessage("Plugin setting could not be applied. See the log for details.", 5000)
+            return False
+
+        if failures is None:
+            self.status_bar.showMessage("Plugin reload cancelled; current plugins remain active.", 5000)
+            return False
 
         if hasattr(self, "analyser_tab") and self.analyser_tab:
             try:
@@ -697,6 +716,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         if failures:
             QtCore.QTimer.singleShot(0, lambda: self._show_plugin_load_failures(failures))
+        return True
 
     @QtCore.Slot(dict)
     def _on_performance_settings_changed(self, settings: dict) -> None:

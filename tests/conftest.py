@@ -1,9 +1,76 @@
 import gc
 import os
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
+
+# Throwaway QSettings location for the session; see _isolate_qsettings().
+_TEST_SETTINGS_DIR: "str | None" = None
+
+
+def _isolate_qsettings() -> None:
+    """Point QSettings at a throwaway location for the whole test session.
+
+    Without this the suite reads, and can overwrite, the developer's real
+    application preferences.  Every call site in the application constructs
+    ``QSettings(APP_NAME, ...)``, which resolves to
+    ``HKEY_CURRENT_USER\\Software\\Synaptipy\\Viewer`` on Windows: a developer
+    who has switched "Enable Custom Plugins" off in the app makes the
+    plugin-discovery tests fail on their machine while CI, which has no stored
+    preference, passes.  Tests must depend on the repository, never on the state
+    of the machine running them.
+
+    The redirect has to be done by substituting the class.  ``setDefaultFormat``
+    does not reach the ``(organization, application)`` constructor, which always
+    uses ``NativeFormat``, and ``setPath`` explicitly has no effect on the
+    Windows registry.  Substituting here in ``pytest_configure`` means the
+    replacement is in place before collection imports any application module,
+    including those that bind the name via ``from PySide6.QtCore import
+    QSettings``.
+    """
+    global _TEST_SETTINGS_DIR
+    from PySide6 import QtCore
+
+    real_settings_cls = QtCore.QSettings
+    ini_format = real_settings_cls.Format.IniFormat
+    _TEST_SETTINGS_DIR = tempfile.mkdtemp(prefix="synaptipy-test-settings-")
+    settings_dir = _TEST_SETTINGS_DIR
+
+    class IsolatedQSettings(real_settings_cls):
+        """QSettings that keeps the app's named scopes in a temp INI file.
+
+        Only storage moves.  ``organizationName()`` and ``applicationName()``
+        still report the names the caller asked for, so tests asserting that a
+        component reads the canonical namespace keep their meaning.
+        """
+
+        def __init__(self, *args, **kwargs):
+            # Only the (organization, application) form needs redirecting; every
+            # other form already names an explicit file or format.
+            organization = application = ""
+            redirected = False
+            if args and isinstance(args[0], str) and not str(args[0]).endswith(".ini"):
+                organization = args[0]
+                application = args[1] if len(args) > 1 and isinstance(args[1], str) else ""
+                path = os.path.join(settings_dir, f"{organization}-{application or 'default'}.ini")
+                super().__init__(path, ini_format)
+                redirected = True
+            else:
+                super().__init__(*args, **kwargs)
+            self._isolated_names = (organization, application) if redirected else None
+
+        def organizationName(self):
+            names = getattr(self, "_isolated_names", None)
+            return names[0] if names else super().organizationName()
+
+        def applicationName(self):
+            names = getattr(self, "_isolated_names", None)
+            return names[1] if names else super().applicationName()
+
+    QtCore.QSettings = IsolatedQSettings
 
 
 def pytest_configure(config):
@@ -22,6 +89,8 @@ def pytest_configure(config):
     """
     if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
         gc.disable()
+
+    _isolate_qsettings()
 
 
 @pytest.fixture(autouse=True)
@@ -74,6 +143,9 @@ def pytest_sessionfinish(session, exitstatus):
       We pass the pseudo-handle as ctypes.c_void_p(-1) directly to avoid the
       GetCurrentProcess return-type issue entirely.
     """
+    if _TEST_SETTINGS_DIR:
+        shutil.rmtree(_TEST_SETTINGS_DIR, ignore_errors=True)
+
     if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
         if sys.platform == "win32":
             import ctypes

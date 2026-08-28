@@ -321,7 +321,7 @@ class TestPluginManagerLoading:
             patch.object(AnalysisRegistry, "unregister_plugins") as unregister_plugins,
         ):
             mock_settings_cls.return_value.value.return_value = True
-            assert PluginManager.reload_plugins() == []
+            assert PluginManager.reload_plugins() is None
 
         unregister_plugins.assert_not_called()
 

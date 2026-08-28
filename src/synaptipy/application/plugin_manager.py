@@ -35,12 +35,19 @@ from typing import List, Optional
 
 from PySide6.QtCore import QSettings
 
+from synaptipy.shared.constants import APP_NAME, SETTINGS_SECTION
+
 log = logging.getLogger(__name__)
 
 # Default location for 3rd-party user plugins
 PLUGIN_DIR = Path.home() / ".synaptipy" / "plugins"
 
 _THIS_FILE = Path(__file__).resolve()
+
+
+def _get_settings() -> QSettings:
+    """Return the canonical application settings namespace."""
+    return QSettings(APP_NAME, SETTINGS_SECTION)
 
 
 @dataclass(frozen=True)
@@ -88,6 +95,38 @@ def _get_bundled_plugin_dir() -> Optional[Path]:
 
 class PluginManager:
     """Manages the discovery, loading, and registration of third-party plugins."""
+
+    @classmethod
+    def _ensure_core_registry_snapshot(cls) -> None:
+        """Ensure plugin reloads cannot mistake built-ins for plugin entries.
+
+        GUI startup normally creates this snapshot before loading extensions,
+        but the CLI, tests, and embedders can invoke the manager directly.
+        Without it, disabling plugins removes every registered analysis.
+        """
+        from synaptipy.core.analysis.registry import AnalysisRegistry
+
+        if AnalysisRegistry._core_analyses:
+            return
+
+        import synaptipy.core.analysis  # noqa: F401 - registration side effect
+
+        # Direct callers may already have loaded third-party functions. Only
+        # registrations owned by the core package belong in the immutable set.
+        AnalysisRegistry._core_analyses = {
+            name
+            for name, function in AnalysisRegistry._registry.items()
+            if getattr(function, "__module__", "").startswith("synaptipy.core.analysis")
+        }
+        log.debug("Core analysis snapshot ensured: %d entries.", len(AnalysisRegistry._core_analyses))
+
+    @staticmethod
+    def _purge_plugin_modules() -> None:
+        """Discard dynamically loaded plugin modules before a fresh import."""
+        for module_name in list(sys.modules):
+            if module_name.startswith("synaptipy_plugin_"):
+                sys.modules.pop(module_name, None)
+        importlib.invalidate_caches()
 
     @classmethod
     def create_plugin_directory(cls):
@@ -228,7 +267,7 @@ class PluginManager:
                 log.warning("Could not read plugin file for fingerprinting: %s (%s)", p, exc)
         fingerprint = hasher.hexdigest()
 
-        settings = QSettings()
+        settings = _get_settings()
         acknowledged_key = "plugin_security_acknowledged"
         last_ack = settings.value(acknowledged_key, "", type=str)
         if last_ack == fingerprint:
@@ -287,7 +326,9 @@ class PluginManager:
         Loading is skipped entirely when the ``enable_plugins`` QSettings key
         is ``False`` (set via Preferences -> Extensions).
         """
-        if not QSettings().value("enable_plugins", True, type=bool):
+        cls._ensure_core_registry_snapshot()
+
+        if not _get_settings().value("enable_plugins", True, type=bool):
             log.info("Plugin loading is disabled via Preferences (enable_plugins=False). Skipping.")
             return []
 
@@ -328,19 +369,27 @@ class PluginManager:
         return failures
 
     @classmethod
-    def reload_plugins(cls) -> List[PluginLoadFailure]:
+    def reload_plugins(cls, enabled: Optional[bool] = None) -> Optional[List[PluginLoadFailure]]:
         """
         Hot-reload plugins without restarting the application.
 
         Purges all plugin-contributed analyses from ``AnalysisRegistry``,
         then re-loads plugins if the ``enable_plugins`` setting is ``True``.
         Call this after the user toggles the "Enable Custom Plugins" preference,
-        then rebuild the Analyser UI to reflect the change.
+        then rebuild the Analyser UI to reflect the change. Returns ``None``
+        when the user cancels the security confirmation, signalling callers to
+        preserve the current UI.
         """
         from synaptipy.core.analysis.registry import AnalysisRegistry
 
-        if not QSettings().value("enable_plugins", True, type=bool):
+        cls._ensure_core_registry_snapshot()
+
+        if enabled is None:
+            enabled = _get_settings().value("enable_plugins", True, type=bool)
+
+        if not enabled:
             AnalysisRegistry.unregister_plugins()
+            cls._purge_plugin_modules()
             log.info("Plugin reload: enable_plugins is False - plugins will not be re-loaded.")
             return []
 
@@ -357,9 +406,10 @@ class PluginManager:
         user_plugins = [p for p in plugin_files if p.parent.resolve() == PLUGIN_DIR.resolve()]
         if not cls._warn_user_plugins(user_plugins):
             log.info("Plugin reload cancelled; keeping the currently loaded plugins.")
-            return []
+            return None
 
         AnalysisRegistry.unregister_plugins()
+        cls._purge_plugin_modules()
         log.debug("Plugin analyses unregistered for hot-reload.")
 
         log.info("Hot-reloading %d plugin(s)...", len(plugin_files))
