@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Restored the documentation link check. Two DOI links whose publishers refuse
+  automated requests (Cold Spring Harbor Perspectives, 403; Frontiers, timeout)
+  are now ignored by name. The pattern has to list the doi.org form because the
+  check is matched against the URI in the document, before the redirect to the
+  publisher that does the blocking.
+
 - Applied the saved theme before the first visible widget and made System mode
   track Qt's operating-system color scheme without changing scientific plots.
 - Unified plugin preferences under the canonical settings namespace, activated

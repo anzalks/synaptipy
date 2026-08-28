@@ -234,6 +234,13 @@ linkcheck_ignore = [
     r"https://rupress\.org/",  # Rockefeller University Press — blocks crawler checks with 403
     r"https://github\.com/anzalks/synaptipy#dependencies-and-citations",  # anchor check can be flaky in CI
     r"https://codecov\.io/",  # badge endpoint returns 504 under CI load
+    # DOI links whose publisher blocks automated checks.  linkcheck matches these
+    # patterns against the URI written in the document, so the doi.org form has to
+    # be listed here: ignoring the publisher domain never matches, because the
+    # block only happens after doi.org redirects.  The DOIs themselves resolve
+    # correctly in a browser.
+    r"https://doi\.org/10\.1101/cshperspect\.a005702",  # CSH Perspectives — 403 to crawlers
+    r"https://doi\.org/10\.3389/fninf\.2014\.00010",  # Frontiers — read timeout to crawlers
 ]
 # Allow redirects without treating them as broken (DOI resolvers always redirect)
 linkcheck_allowed_redirects = {
