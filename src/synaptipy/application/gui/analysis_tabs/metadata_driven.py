@@ -23,7 +23,7 @@ import numpy as np
 import pyqtgraph as pg
 from PySide6 import QtCore, QtWidgets
 
-from synaptipy.application.gui.analysis_tabs.base import BaseAnalysisTab
+from synaptipy.application.gui.analysis_tabs.base import AnalysisNotConfigured, BaseAnalysisTab
 from synaptipy.core.analysis.registry import AnalysisRegistry
 from synaptipy.shared.plot_customization import get_hv_line_pen, get_scatter_pen_and_brush
 from synaptipy.shared.styling import style_button
@@ -221,6 +221,15 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         self.results_layout = QtWidgets.QFormLayout(results_group)
         self.results_labels: Dict[str, QtWidgets.QLabel] = {}
 
+        # Errors and warnings the analysis reported about its own inputs.  These
+        # must be visible next to the numbers: an evoked analysis that fell back
+        # to a different stimulus source still produces a full results table, and
+        # nothing in the numbers themselves says so.
+        self.analysis_message_label = QtWidgets.QLabel("")
+        self.analysis_message_label.setWordWrap(True)
+        self.analysis_message_label.setVisible(False)
+        self.results_layout.addRow(self.analysis_message_label)
+
         # We don't know the result keys ahead of time, so we'll add them dynamically
         # or we could add a text area for generic output
         # self.results_text = QtWidgets.QTextEdit()
@@ -388,10 +397,15 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         # Re-setup interactive regions for the new parameter set
         self._setup_interactive_regions()
 
-        # Show/hide the secondary channel row based on the new sub-analysis metadata
+        # Show/hide the secondary channel row based on the new sub-analysis metadata.
+        # The parameter name is re-read as well: sub-analyses within one module are
+        # free to name their secondary input differently, and keeping the old name
+        # would inject the channel data under a key the new function ignores.
         if hasattr(self, "_secondary_channel_combobox") and self._secondary_channel_combobox is not None:
             sec_cfg = self.metadata.get("requires_secondary_channel")
             show_sec = bool(sec_cfg and isinstance(sec_cfg, dict))
+            if show_sec:
+                self._secondary_channel_param_name = sec_cfg.get("param_name", "secondary_data")
             try:
                 if hasattr(self, "permanent_params_layout"):
                     self.permanent_params_layout.setRowVisible(self._secondary_channel_combobox, show_sec)
@@ -401,6 +415,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         # Clear previous results
         if self.results_table:
             self.results_table.setRowCount(0)
+        self._show_analysis_messages({})
         self._current_event_indices = []
         if self._event_markers_item:
             self._event_markers_item.setData(x=[], y=[])
@@ -409,8 +424,33 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             self._artifact_curve_item.setData([], [])
             self._artifact_curve_item.setVisible(False)
 
+        # Drop the previous method's overlays.  These are keyed off the old
+        # metadata's ``plots`` list, so leaving them on the canvas draws stimulus
+        # lines and fits from an analysis that is no longer selected.
+        self._clear_dynamic_plot_items()
+
+        # Apply channel-aware defaults for the newly generated widgets, then
+        # re-run so the tab shows results for the method that is now selected
+        # instead of an empty table.
+        self._update_parameter_visibility()
+        if self._current_plot_data and self._analysis_debounce_timer:
+            self._analysis_debounce_timer.start(self._debounce_delay_ms)
+
         # Scroll the left panel so the Parameters group is visible.
         QtCore.QTimer.singleShot(50, self._scroll_to_params)
+
+    def _clear_dynamic_plot_items(self):
+        """Remove the per-run overlay items from the main plot."""
+        if not self.plot_widget:
+            return
+        for item in getattr(self, "_dynamic_plot_items", []):
+            try:
+                if item in self.plot_widget.items:
+                    self.plot_widget.removeItem(item)
+            except RuntimeError:
+                continue
+        if hasattr(self, "_dynamic_plot_items"):
+            self._dynamic_plot_items.clear()
 
     def _scroll_to_params(self) -> None:
         """Scroll the left control panel to bring the Parameters group into view."""
@@ -715,10 +755,42 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 display_name = f"{channel.name or f'Ch {chan_id}'} ({chan_id}) [{units}]"
                 self._secondary_channel_combobox.addItem(display_name, userData=chan_id)
             self._secondary_channel_combobox.setEnabled(True)
+            self._preselect_named_stimulus_channel()
         else:
             self._secondary_channel_combobox.setEnabled(False)
 
         self._secondary_channel_combobox.blockSignals(False)
+
+    # Channel names a recording system gives its stimulus/trigger output.  Matching
+    # is on the recorded name only — never on the shape of the signal — so the
+    # choice stays visible in the dropdown and the user can override it.
+    _STIMULUS_CHANNEL_HINTS = ("ttl", "trig", "stim", "digital", "sync", "opto", "laser", "led")
+
+    def _preselect_named_stimulus_channel(self):
+        """Preselect a channel whose recorded name identifies it as the stimulus.
+
+        Without this the evoked analyses open blocked on a dropdown the user has
+        to find first.  Only an unambiguous name match is used: no match, or more
+        than one, leaves the selection on "(None)".
+        """
+        combo = self._secondary_channel_combobox
+        if combo is None or combo.currentData() is not None:
+            return  # already chosen — never override the user
+
+        primary_id = self.signal_channel_combobox.currentData() if self.signal_channel_combobox else None
+        matches = []
+        for index in range(combo.count()):
+            chan_id = combo.itemData(index)
+            if chan_id is None or chan_id == primary_id:
+                continue
+            channel = self._selected_item_recording.channels.get(chan_id)
+            name = str(getattr(channel, "name", "") or chan_id).lower()
+            if any(hint in name for hint in self._STIMULUS_CHANNEL_HINTS):
+                matches.append(index)
+
+        if len(matches) == 1:
+            combo.setCurrentIndex(matches[0])
+            log.debug("Preselected stimulus channel %r from its name.", combo.currentData())
 
     def _inject_secondary_channel_data(self, params: Dict[str, Any], data: Dict[str, Any]):
         """Load data from the secondary channel and inject it into params.
@@ -816,6 +888,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
         # Update generator
         try:
+            self.param_generator.apply_context_defaults(context)
             self.param_generator.update_visibility(context)
         except RuntimeError:
             pass  # UI is being torn down or rebuilt — safe to ignore
@@ -932,7 +1005,31 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         protocol_contexts = self._update_protocol_readiness(data)
         incompatible = [context for context in protocol_contexts if context.status == "incompatible"]
         if incompatible:
-            detail = "; ".join(incompatible[0].missing)
+            missing = incompatible[0].missing
+            detail = "; ".join(missing)
+            # The usual way to hit a timing gap is an unselected stimulus channel,
+            # which the user can fix here and now.  Naming the Protocol Map instead
+            # sends them to a dialog they do not need.
+            sec_cfg = metadata.get("requires_secondary_channel")
+            if (
+                isinstance(sec_cfg, dict)
+                and any("stimulus timing" in item for item in missing)
+                and not self._has_supplied_stimulus_timing()
+            ):
+                sec_label = str(sec_cfg.get("label", "secondary channel")).rstrip(":")
+                routes = [f"Select the {sec_label} above"]
+                # Offer the manual route only when this analysis actually has one;
+                # Evoked Sync, for instance, can only read timing from a channel.
+                manual_cfg = metadata.get("manual_stimulus_timing")
+                if isinstance(manual_cfg, dict):
+                    toggle = self.param_generator.widgets.get(manual_cfg.get("param"))
+                    toggle_label = manual_cfg.get("label", "Detect Stim from TTL")
+                    if toggle is not None:
+                        routes.append(f"untick '{toggle_label}' to enter the stimulus onsets yourself")
+                routes.append("or mark the stimulus timings as verified in the Protocol Map")
+                raise AnalysisNotConfigured(
+                    f"{metadata.get('label', self.analysis_name)} needs stimulus timing. " + ", ".join(routes) + "."
+                )
             raise ValueError(f"Protocol Map is incompatible with this analysis: {detail}")
         fingerprints = {context.protocol_fingerprint for context in protocol_contexts}
         if requires_multi_trial and len(fingerprints) > 1:
@@ -997,6 +1094,44 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             log.error(f"Analysis execution failed: {e}")
             raise
 
+    def _has_selected_secondary_channel(self) -> bool:
+        """True when the user has picked a real channel in the secondary dropdown.
+
+        For the evoked analyses that channel is the recorded TTL / stimulus
+        trace, so selecting it is the user supplying recorded stimulus timing for
+        this run.  ``(None)`` carries userData None and does not count.
+        """
+        combo = self._secondary_channel_combobox
+        if combo is None or not self._secondary_channel_param_name:
+            return False
+        try:
+            return combo.currentData() is not None
+        except RuntimeError:
+            return False
+
+    def _uses_manual_stimulus_timing(self) -> bool:
+        """True when the user has switched this analysis to manual stimulus onsets.
+
+        An analysis declares the toggle via ``manual_stimulus_timing`` metadata.
+        Turning TTL detection off and typing the onsets is the user stating the
+        stimulus timing explicitly — it is visible in the panel, drawn on the
+        plot, and saved with the result — so it counts as supplied timing.
+        """
+        config = self.metadata.get("manual_stimulus_timing")
+        if not isinstance(config, dict) or not hasattr(self, "param_generator"):
+            return False
+        widget = self.param_generator.widgets.get(config.get("param"))
+        if widget is None:
+            return False
+        try:
+            return self.param_generator._widget_value(widget) == config.get("manual_value", False)
+        except RuntimeError:
+            return False
+
+    def _has_supplied_stimulus_timing(self) -> bool:
+        """True when the user has given this run a stimulus-timing source."""
+        return self._has_selected_secondary_channel() or self._uses_manual_stimulus_timing()
+
     def _update_protocol_readiness(self, data: Dict[str, Any]):
         """Show an auditable readiness state before a core analysis is called."""
         if not self._selected_item_recording:
@@ -1007,7 +1142,13 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         trial_index = source if isinstance(source, int) else 0
         time = data.get("time") if isinstance(data, dict) else None
         duration = float(time[-1]) if time is not None and len(time) else None
-        contexts = resolve_protocols(self._selected_item_recording, trial_index, duration, self.analysis_name)
+        contexts = resolve_protocols(
+            self._selected_item_recording,
+            trial_index,
+            duration,
+            self.analysis_name,
+            stimulus_timing_supplied=self._has_supplied_stimulus_timing(),
+        )
         if not contexts:
             self.protocol_readiness_label.setText("Protocol: unavailable")
             return []
@@ -1022,6 +1163,68 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         self.protocol_readiness_label.setText(f"Protocol: {families} ({state})")
         return contexts
 
+    def _report_analysis_blocked(self, message: str) -> None:
+        """Render a blocked/unconfigured run in the tab's message area.
+
+        Any stale results are cleared with it, so a "select a channel" hint is
+        never left sitting above numbers, or beside stimulus lines, left over
+        from a run that did happen.
+        """
+        if self.results_table:
+            try:
+                self.results_table.setRowCount(0)
+            except RuntimeError:
+                pass
+        self._clear_dynamic_plot_items()
+        label = getattr(self, "analysis_message_label", None)
+        if label is None:
+            super()._report_analysis_blocked(message)
+            return
+        try:
+            label.setText(f"<span style='color:#b8860b;'>&#9888; {message}</span>")
+            label.setVisible(True)
+        except RuntimeError:
+            pass
+
+    def _show_analysis_messages(self, results: Dict[str, Any]):
+        """Surface the analysis's own errors and warnings above the results table.
+
+        ``AnalysisResult.warnings`` and any ``error`` / ``*_error`` metric are
+        reported by analyses that ran but could not use the inputs the user
+        asked for.  Without this they were carried all the way to CSV export and
+        never shown in the GUI.
+        """
+        label = getattr(self, "analysis_message_label", None)
+        if label is None:
+            return
+
+        errors: List[str] = []
+        warnings: List[str] = []
+
+        if isinstance(results, dict):
+            warnings.extend(str(w) for w in results.get("warnings", []) or [])
+            metrics = results.get("metrics", {})
+            if isinstance(metrics, dict):
+                for key, value in metrics.items():
+                    key_str = str(key)
+                    if (key_str == "error" or key_str.endswith("_error")) and value:
+                        errors.append(str(value))
+
+        try:
+            if errors:
+                body = "<br>".join(f"&#9888; {text}" for text in errors + warnings)
+                label.setText(f"<span style='color:#c0392b;'>{body}</span>")
+                label.setVisible(True)
+            elif warnings:
+                body = "<br>".join(f"&#9888; {text}" for text in warnings)
+                label.setText(f"<span style='color:#b8860b;'>{body}</span>")
+                label.setVisible(True)
+            else:
+                label.clear()
+                label.setVisible(False)
+        except RuntimeError:
+            pass  # label destroyed during a tab rebuild
+
     def _display_analysis_results(self, results: Dict[str, Any]):  # noqa: C901
         """
         Display analysis results in text area.
@@ -1029,6 +1232,8 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         """
         if not self.results_table:
             return
+
+        self._show_analysis_messages(results)
 
         try:
             display_source = results.get("metrics", {})
@@ -1144,11 +1349,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         # Clear generic dynamic items
         if not hasattr(self, "_dynamic_plot_items"):
             self._dynamic_plot_items = []
-
-        for item in self._dynamic_plot_items:
-            if item in self.plot_widget.items:
-                self.plot_widget.removeItem(item)
-        self._dynamic_plot_items.clear()
+        self._clear_dynamic_plot_items()
 
         result_item = results.get("metrics", {}) if isinstance(results, dict) else {}
 

@@ -191,8 +191,13 @@ class TestRunPprWrapperTtl:
         assert abs(onsets[0] - 0.1) < 0.001
         assert abs(onsets[1] - 0.25) < 0.001
 
-    def test_no_ttl_data_falls_back_to_manual(self):
-        """When use_ttl=True but ttl_data is None, manual values should be used."""
+    def test_no_ttl_data_reports_an_error_instead_of_using_manual_onsets(self):
+        """use_ttl=True with no TTL channel must fail loudly, not measure elsewhere.
+
+        Falling back to the manual spinboxes produced a complete ratio table
+        that was indistinguishable from a real measurement, so a user who forgot
+        to pick the TTL channel had no way to tell the numbers were meaningless.
+        """
         fs = 10_000.0
         t, d = _sine_trace(fs, 0.5)
         _add_negative_peak(d, t, 0.1, 10.0)
@@ -210,9 +215,75 @@ class TestRunPprWrapperTtl:
         )
 
         metrics = result["metrics"]
-        onsets = metrics["_stim_onsets"]
+        assert "no TTL channel is selected" in metrics["ppr_error"]
+        assert "_stim_onsets" not in metrics
+        assert "ratio_p2" not in metrics
+
+    def test_ttl_with_no_detectable_edges_reports_an_error(self):
+        """A TTL channel that never crosses threshold is an error, not a fallback."""
+        fs = 10_000.0
+        t, d = _sine_trace(fs, 0.5)
+        _add_negative_peak(d, t, 0.1, 10.0)
+        _add_negative_peak(d, t, 0.25, 8.0)
+
+        result = run_ppr_wrapper(
+            data=d,
+            time=t,
+            sampling_rate=fs,
+            use_ttl=True,
+            ttl_data=np.zeros_like(t),
+            ttl_threshold=2.5,
+            stim1_onset_s=0.1,
+            stim2_onset_s=0.25,
+            polarity="negative",
+        )
+
+        assert "TTL detection found 0 stimulus onset" in result["metrics"]["ppr_error"]
+
+    def test_manual_onsets_remain_available_when_ttl_is_disabled(self):
+        """Disabling TTL detection is the supported way to type onsets by hand."""
+        fs = 10_000.0
+        t, d = _sine_trace(fs, 0.5)
+        _add_negative_peak(d, t, 0.1, 10.0)
+        _add_negative_peak(d, t, 0.25, 8.0)
+
+        result = run_ppr_wrapper(
+            data=d,
+            time=t,
+            sampling_rate=fs,
+            use_ttl=False,
+            stim1_onset_s=0.1,
+            stim2_onset_s=0.25,
+            polarity="negative",
+        )
+
+        onsets = result["metrics"]["_stim_onsets"]
         assert abs(onsets[0] - 0.1) < 1e-6
         assert abs(onsets[1] - 0.25) < 1e-6
+
+    def test_fewer_ttl_onsets_than_requested_pulses_is_warned(self):
+        """A short train still runs, but the shortfall is reported, not hidden."""
+        fs = 10_000.0
+        t, d = _sine_trace(fs, 0.5)
+        _add_negative_peak(d, t, 0.1, 10.0)
+        _add_negative_peak(d, t, 0.25, 8.0)
+        ttl = np.zeros_like(t)
+        for onset in (0.1, 0.25):
+            ttl[(t >= onset) & (t < onset + 0.002)] = 5.0
+
+        result = run_ppr_wrapper(
+            data=d,
+            time=t,
+            sampling_rate=fs,
+            use_ttl=True,
+            ttl_data=ttl,
+            ttl_threshold=2.5,
+            n_pulses=5,
+            polarity="negative",
+        )
+
+        assert result["metrics"]["n_pulses"] == 2
+        assert any("2 onsets but 5 pulses" in warning for warning in result["warnings"])
 
 
 # ---------------------------------------------------------------------------

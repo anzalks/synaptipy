@@ -848,6 +848,12 @@ def calculate_n_pulse_ratio(  # noqa: C901
             "label": "Event Direction:",
             "choices": ["negative", "positive"],
             "default": "negative",
+            "tooltip": (
+                "Direction of the evoked response. Defaults to negative for "
+                "voltage-clamp (inward currents) and positive for current-clamp "
+                "(depolarising potentials); change it to override."
+            ),
+            "default_by_clamp_mode": {"voltage_clamp": "negative", "current_clamp": "positive"},
             "visible_when": {"param": "event_detection_type", "value": "Events (Threshold)"},
         },
         {
@@ -896,6 +902,12 @@ def calculate_n_pulse_ratio(  # noqa: C901
             "label": "Template Direction:",
             "choices": ["negative", "positive"],
             "default": "negative",
+            "tooltip": (
+                "Direction of the evoked response. Defaults to negative for "
+                "voltage-clamp (inward currents) and positive for current-clamp "
+                "(depolarising potentials); change it to override."
+            ),
+            "default_by_clamp_mode": {"voltage_clamp": "negative", "current_clamp": "positive"},
             "visible_when": {"param": "event_detection_type", "value": "Events (Template)"},
         },
         {
@@ -926,7 +938,12 @@ def calculate_n_pulse_ratio(  # noqa: C901
             "label": "Peak Polarity:",
             "choices": ["max", "min", "abs"],
             "default": "max",
-            "tooltip": "Direction to search for peak response voltage within the window.",
+            "tooltip": (
+                "Direction to search for the peak response within the window. Defaults "
+                "to min for voltage-clamp (inward currents) and max for current-clamp "
+                "(depolarising potentials); change it to override."
+            ),
+            "default_by_clamp_mode": {"voltage_clamp": "min", "current_clamp": "max"},
         },
         {
             "name": "amplitude_window_ms",
@@ -940,6 +957,19 @@ def calculate_n_pulse_ratio(  # noqa: C901
                 "Window (ms after stimulus onset) used to find the peak response amplitude. "
                 "Independent of the event-detection Response Window. Should be wide enough "
                 "to cover the full response (e.g. 100 ms for slow EPSPs/EPSCs)."
+            ),
+        },
+        {
+            "name": "baseline_window_ms",
+            "type": "float",
+            "label": "Baseline Window (ms):",
+            "default": 5.0,
+            "min": 0.0,
+            "max": 1000.0,
+            "decimals": 2,
+            "tooltip": (
+                "Window immediately before each stimulus onset used as the baseline. "
+                "Reported response amplitudes are peak minus this baseline."
             ),
         },
         {
@@ -1006,6 +1036,7 @@ def run_opto_sync_wrapper(  # noqa: C901
     event_detection_type = kwargs.get("event_detection_type", "Spikes")
     response_polarity = kwargs.get("response_polarity", "max")
     artifact_blanking_ms = float(kwargs.get("artifact_blanking_ms", 1.0))
+    baseline_window_ms = float(kwargs.get("baseline_window_ms", 5.0))
 
     # Build slope-based artifact mask for event detection types if requested.
     _reject_artifacts = kwargs.get("reject_artifacts", False)
@@ -1102,10 +1133,17 @@ def run_opto_sync_wrapper(  # noqa: C901
     # peak search always covers the full response regardless of the narrower
     # event-detection Response Window.  The first artifact_blanking_ms after
     # each stimulus onset are skipped to exclude the stimulus artefact.
+    #
+    # ``_peak_amps`` stays in absolute signal units because the plot draws its
+    # markers in data coordinates; the reported amplitudes are the same peaks
+    # measured against a pre-stimulus baseline, which is the quantity that is
+    # comparable across cells and conditions.
     _peak_times: List[float] = []
     _peak_amps: List[float] = []
+    _response_amps: List[float] = []
     _amp_window_s = amplitude_window_ms / 1000.0
     _blank_s = artifact_blanking_ms / 1000.0
+    _baseline_s = baseline_window_ms / 1000.0
     if result.stimulus_onsets is not None and len(data) > 0:
         for _onset in result.stimulus_onsets:
             _idx_start = int(np.searchsorted(time, _onset + _blank_s, side="left"))
@@ -1113,16 +1151,33 @@ def run_opto_sync_wrapper(  # noqa: C901
             _idx_start = max(0, min(_idx_start, len(data) - 1))
             _idx_end = max(_idx_start + 1, min(_idx_end, len(data)))
             _window_data = data[_idx_start:_idx_end]
-            if len(_window_data) > 0:
-                if response_polarity == "min":
-                    _local_idx = int(np.argmin(_window_data))
-                elif response_polarity == "abs":
-                    _local_idx = int(np.argmax(np.abs(_window_data)))
-                else:
-                    _local_idx = int(np.argmax(_window_data))
-                _abs_idx = _idx_start + _local_idx
-                _peak_times.append(float(time[_abs_idx]))
-                _peak_amps.append(float(data[_abs_idx]))
+            if len(_window_data) == 0:
+                continue
+            if response_polarity == "min":
+                _local_idx = int(np.argmin(_window_data))
+            elif response_polarity == "abs":
+                _local_idx = int(np.argmax(np.abs(_window_data)))
+            else:
+                _local_idx = int(np.argmax(_window_data))
+            _abs_idx = _idx_start + _local_idx
+            _peak_times.append(float(time[_abs_idx]))
+            _peak_amps.append(float(data[_abs_idx]))
+
+            # Baseline over the window immediately preceding the stimulus.
+            _base_start = int(np.searchsorted(time, _onset - _baseline_s, side="left"))
+            _base_end = int(np.searchsorted(time, _onset, side="left"))
+            _base_start = max(0, _base_start)
+            _base_end = max(_base_start + 1, min(_base_end, len(data)))
+            _base_data = data[_base_start:_base_end]
+            if len(_base_data) > 0:
+                _response_amps.append(float(data[_abs_idx] - np.mean(_base_data)))
+
+    if _response_amps:
+        _mean_amp = float(np.mean(_response_amps))
+        _sd_amp = float(np.std(_response_amps, ddof=1)) if len(_response_amps) > 1 else 0.0
+    else:
+        _mean_amp = np.nan
+        _sd_amp = np.nan
 
     # Response probability as a percentage for human-readable reporting.
     resp_prob_pct = round(result.response_probability * 100.0, 2) if result.response_probability is not None else np.nan
@@ -1134,12 +1189,15 @@ def run_opto_sync_wrapper(  # noqa: C901
             "response_probability": result.response_probability,
             "response_probability_pct": resp_prob_pct,
             "spike_jitter_ms": result.spike_jitter_ms,
+            "mean_response_amplitude": _mean_amp,
+            "response_amplitude_sd": _sd_amp,
             "stimulus_count": result.stimulus_count,
             "Success Count": result.success_count,
             "Failure Count": result.failure_count,
             "event_count": len(ap_times),
             "event_times": ap_times.tolist() if hasattr(ap_times, "tolist") else list(ap_times),
             "stimulus_onsets": (result.stimulus_onsets.tolist() if result.stimulus_onsets is not None else []),
+            "response_amplitudes": _response_amps,
             "_peak_times": _peak_times,
             "_peak_amps": _peak_amps,
         },
@@ -1155,27 +1213,44 @@ def _build_stim_onsets(
     time: np.ndarray,
     n_pulses: int,
     kwargs: dict,
+    warnings: Optional[List[str]] = None,
 ) -> "np.ndarray | str":
     """Build stim onset array from TTL or manual parameters.
 
     Returns the onset array on success, or an error string on failure.
+
+    When TTL detection is requested it is never silently replaced by the manual
+    onset spinboxes: a paired-pulse ratio computed from placeholder onsets is
+    indistinguishable from a real measurement in the results table, so a failed
+    detection is reported as an error the caller must surface.
     """
     use_ttl = bool(kwargs.get("use_ttl", False))
     stim_onsets = None
 
     if use_ttl:
         ttl_data = kwargs.get("ttl_data", None)
-        if ttl_data is not None and len(ttl_data) > 0:
-            detected, _ = extract_ttl_epochs(
-                ttl_data,
-                time,
-                float(kwargs.get("ttl_threshold", 2.5)),
+        if ttl_data is None or len(ttl_data) == 0:
+            return (
+                "'Detect Stim from TTL' is enabled but no TTL channel is selected. "
+                "Choose the TTL / stimulus channel above, or disable TTL detection "
+                "to enter stimulus onsets manually."
             )
-            if detected is not None and len(detected) >= 2:
-                stim_onsets = detected[:n_pulses]
-                log.debug("PPR: TTL detected %d onsets, using first %d", len(detected), len(stim_onsets))
-        if stim_onsets is None:
-            log.warning("PPR: TTL detection failed; falling back to manual onsets.")
+        ttl_threshold = float(kwargs.get("ttl_threshold", 2.5))
+        detected, _ = extract_ttl_epochs(ttl_data, time, ttl_threshold)
+        if detected is None or len(detected) < 2:
+            found = 0 if detected is None else len(detected)
+            return (
+                f"TTL detection found {found} stimulus onset(s) above {ttl_threshold:g} V; "
+                "at least 2 are needed. Check the TTL channel and threshold, or "
+                "disable TTL detection to enter onsets manually."
+            )
+        if len(detected) < n_pulses and warnings is not None:
+            warnings.append(
+                f"TTL detection found {len(detected)} onsets but {n_pulses} pulses were "
+                f"requested; analysing {len(detected)} pulses."
+            )
+        stim_onsets = detected[:n_pulses]
+        log.debug("PPR: TTL detected %d onsets, using first %d", len(detected), len(stim_onsets))
 
     if stim_onsets is None:
         s1 = float(kwargs.get("stim1_onset_s", 0.1))
@@ -1184,16 +1259,32 @@ def _build_stim_onsets(
         if isi <= 0:
             return "Stim2 must be after Stim1"
         stim_onsets = np.array([s1 + i * isi for i in range(n_pulses)])
+        if warnings is not None:
+            warnings.append(
+                f"Stimulus onsets entered manually (first at {s1:g} s, ISI {isi * 1000.0:g} ms); "
+                "not verified against a recorded TTL channel."
+            )
 
+    n_requested = len(stim_onsets)
     stim_onsets = stim_onsets[stim_onsets < float(time[-1])]
     if len(stim_onsets) < 2:
         return "Need at least 2 onsets within recording"
+    if len(stim_onsets) < n_requested and warnings is not None:
+        warnings.append(
+            f"{n_requested - len(stim_onsets)} stimulus onset(s) fall beyond the end of "
+            f"the recording ({float(time[-1]):.4g} s) and were dropped."
+        )
     return stim_onsets
 
 
 @AnalysisRegistry.register(
     "paired_pulse_ratio",
     label="Paired-Pulse Ratio",
+    # Unticking "Detect Stim from TTL" hands stimulus timing to the onset
+    # spinboxes below.  That is the user declaring the timing explicitly, so it
+    # satisfies the stimulus-timing requirement the same way a TTL channel does;
+    # the result carries a warning recording that the timing was manual.
+    manual_stimulus_timing={"param": "use_ttl", "manual_value": False},
     requires_secondary_channel={
         "param_name": "ttl_data",
         "label": "TTL / Stimulus Channel:",
@@ -1226,10 +1317,10 @@ def _build_stim_onsets(
             "name": "use_ttl",
             "label": "Detect Stim from TTL:",
             "type": "bool",
-            "default": False,
+            "default": True,
             "tooltip": "When enabled, stimulus onsets are detected automatically "
             "from the TTL channel.  Select the TTL channel in the secondary-channel "
-            "dropdown above.",
+            "dropdown above.  Disable to enter stimulus onsets manually.",
         },
         {
             "name": "ttl_threshold",
@@ -1279,6 +1370,12 @@ def _build_stim_onsets(
             "type": "choice",
             "choices": ["negative", "positive"],
             "default": "negative",
+            "tooltip": (
+                "Direction of the evoked response. Defaults to negative for "
+                "voltage-clamp (inward currents) and positive for current-clamp "
+                "(depolarising potentials); change it to override."
+            ),
+            "default_by_clamp_mode": {"voltage_clamp": "negative", "current_clamp": "positive"},
         },
         {
             "name": "response_window_ms",
@@ -1336,10 +1433,15 @@ def run_ppr_wrapper(  # noqa: C901
     **kwargs,
 ) -> Dict[str, Any]:
     """Wrapper for N-pulse Paired-Pulse Ratio analysis."""
+    warnings: List[str] = []
     n_pulses = int(kwargs.get("n_pulses", 2))
-    stim_onsets = _build_stim_onsets(time, n_pulses, kwargs)
+    stim_onsets = _build_stim_onsets(time, n_pulses, kwargs, warnings)
     if isinstance(stim_onsets, str):
-        return {"module_used": "evoked_responses", "metrics": {"ppr_error": stim_onsets}}
+        return {
+            "module_used": "evoked_responses",
+            "metrics": {"ppr_error": stim_onsets},
+            "warnings": warnings,
+        }
 
     polarity = kwargs.get("polarity", "negative")
     response_window_ms = float(kwargs.get("response_window_ms", 20.0))
@@ -1397,7 +1499,7 @@ def run_ppr_wrapper(  # noqa: C901
     metrics["_ppr_fit_times"] = all_fit_t if all_fit_t else None
     metrics["_ppr_fit_values"] = all_fit_v if all_fit_v else None
 
-    return {"module_used": "evoked_responses", "metrics": metrics}
+    return {"module_used": "evoked_responses", "metrics": metrics, "warnings": warnings}
 
 
 # ---------------------------------------------------------------------------
@@ -1504,6 +1606,9 @@ def calculate_stimulus_train_stp(  # noqa: C901
 @AnalysisRegistry.register(
     "stimulus_train_stp",
     label="Stimulus Train (STP)",
+    # See paired_pulse_ratio: the frequency/start-time parameters are an explicit
+    # manual declaration of stimulus timing.
+    manual_stimulus_timing={"param": "use_ttl", "manual_value": False},
     requires_secondary_channel={
         "param_name": "ttl_data",
         "label": "TTL / Stimulus Channel:",
@@ -1567,6 +1672,12 @@ def calculate_stimulus_train_stp(  # noqa: C901
             "type": "choice",
             "choices": ["negative", "positive"],
             "default": "negative",
+            "tooltip": (
+                "Direction of the evoked response. Defaults to negative for "
+                "voltage-clamp (inward currents) and positive for current-clamp "
+                "(depolarising potentials); change it to override."
+            ),
+            "default_by_clamp_mode": {"voltage_clamp": "negative", "current_clamp": "positive"},
         },
         {
             "name": "response_window_ms",
@@ -1636,19 +1747,44 @@ def run_stimulus_train_stp_wrapper(
 
     # --- Determine stimulus onsets ---
     stim_onsets: Optional[np.ndarray] = None
+    warnings: List[str] = []
 
+    # TTL detection is never silently replaced by the manual frequency
+    # parameters: an STP profile built from a placeholder 10 Hz train looks
+    # exactly like a measured one in the results table.
     if use_ttl:
         ttl_data = kwargs.get("ttl_data", None)
-        if ttl_data is not None and len(ttl_data) > 0:
-            detected, _ = extract_ttl_epochs(ttl_data, time, ttl_threshold)
-            if detected is not None and len(detected) > 0:
-                stim_onsets = detected[:n_pulses]
-                log.debug("STP: TTL detected %d onsets, using first %d", len(detected), len(stim_onsets))
-
-    if stim_onsets is None or len(stim_onsets) == 0:
-        # Fall back to manual frequency + start time.
-        if use_ttl:
-            log.warning("STP: TTL detection yielded no onsets; falling back to manual frequency parameters.")
+        if ttl_data is None or len(ttl_data) == 0:
+            return {
+                "module_used": "evoked_responses",
+                "metrics": {
+                    "stp_error": (
+                        "'Detect Stim from TTL' is enabled but no TTL channel is selected. "
+                        "Choose the TTL / stimulus channel above, or disable TTL detection "
+                        "to use the manual frequency parameters."
+                    )
+                },
+            }
+        detected, _ = extract_ttl_epochs(ttl_data, time, ttl_threshold)
+        if detected is None or len(detected) == 0:
+            return {
+                "module_used": "evoked_responses",
+                "metrics": {
+                    "stp_error": (
+                        f"TTL detection found no stimulus onsets above {ttl_threshold:g} V. "
+                        "Check the TTL channel and threshold, or disable TTL detection "
+                        "to use the manual frequency parameters."
+                    )
+                },
+            }
+        if len(detected) < n_pulses:
+            warnings.append(
+                f"TTL detection found {len(detected)} onsets but {n_pulses} pulses were "
+                f"requested; analysing {len(detected)} pulses."
+            )
+        stim_onsets = detected[:n_pulses]
+        log.debug("STP: TTL detected %d onsets, using first %d", len(detected), len(stim_onsets))
+    else:
         if stim_frequency_hz <= 0.0:
             return {
                 "module_used": "evoked_responses",
@@ -1656,14 +1792,25 @@ def run_stimulus_train_stp_wrapper(
             }
         isi = 1.0 / stim_frequency_hz
         stim_onsets = np.array([stim_start_s + i * isi for i in range(n_pulses)])
+        warnings.append(
+            f"Stimulus onsets generated from manual parameters ({stim_start_s:g} s, "
+            f"{stim_frequency_hz:g} Hz, {n_pulses} pulses); not verified against a "
+            "recorded TTL channel."
+        )
 
     # Clip to recording duration.
+    n_requested = len(stim_onsets)
     stim_onsets = stim_onsets[stim_onsets < float(time[-1])]
     if len(stim_onsets) == 0:
         return {
             "module_used": "evoked_responses",
             "metrics": {"stp_error": "No stimulus onsets lie within the recording duration"},
         }
+    if len(stim_onsets) < n_requested:
+        warnings.append(
+            f"{n_requested - len(stim_onsets)} stimulus onset(s) fall beyond the end of "
+            f"the recording ({float(time[-1]):.4g} s) and were dropped."
+        )
 
     result = calculate_stimulus_train_stp(
         data=data,
@@ -1675,10 +1822,7 @@ def run_stimulus_train_stp_wrapper(
         artifact_blanking_ms=artifact_blanking_ms,
     )
 
-    if "stp_error" in result:
-        return {"module_used": "evoked_responses", "metrics": result}
-
-    return {"module_used": "evoked_responses", "metrics": result}
+    return {"module_used": "evoked_responses", "metrics": result, "warnings": warnings}
 
 
 # ---------------------------------------------------------------------------

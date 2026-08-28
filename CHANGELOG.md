@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Evoked Responses analyses now accept the TTL / stimulus channel selected in
+  the tab as recorded stimulus timing, so optogenetics, paired-pulse, and
+  stimulus-train analyses run on recordings without a hand-built Protocol Map.
+  A run with no stimulus channel selected still stops, now naming the control
+  that fixes it instead of reporting a Protocol Map incompatibility.
+- Paired-Pulse Ratio and Stimulus Train (STP) accept manually entered stimulus
+  onsets as a timing source. Recordings made without a TTL channel could not be
+  analysed at all: unticking "Detect Stim from TTL" and entering the onsets left
+  the tab blocked with no route forward. Manually timed results carry a warning
+  recording that the timing was not verified against a recorded channel.
+- Paired-Pulse Ratio reads stimulus onsets from the selected TTL channel by
+  default instead of measuring at unrelated placeholder onsets.
+- TTL detection no longer falls back silently to manual onsets or to a generated
+  stimulus train; a failed detection is reported instead of producing a full
+  results table measured somewhere the user never asked for.
+- Analysis errors and warnings are shown beside the results table rather than
+  only reaching the exported CSV.
+- Selecting an analysis tab no longer raises a modal "Analysis Error" dialog.
+  An analysis the user has not finished configuring reports what it needs in the
+  tab itself, and an automatic re-run reports failures inline instead of
+  interrupting whatever the user is doing in another tab.
+- A channel whose recorded name identifies it as the stimulus output (TTL, trig,
+  stim, opto, and similar) is preselected as the evoked analyses' stimulus
+  channel when exactly one such channel exists.
+- Evoked Sync reports the baseline-subtracted response amplitude its Amplitude
+  Window parameter describes.
+- Evoked response polarity defaults now follow the recorded channel's clamp
+  mode, so current-clamp traces no longer default to detecting nothing.
+- Switching analysis method clears the previous method's plot overlays and
+  re-runs, instead of leaving stale stimulus lines beside an empty table.
+
 ## [0.1.7] - 2026-07-24
 
 

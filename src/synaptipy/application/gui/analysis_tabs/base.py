@@ -44,6 +44,16 @@ from synaptipy.shared.styling import (
 log = logging.getLogger(__name__)
 
 
+class AnalysisNotConfigured(Exception):
+    """An analysis cannot run yet because the user has not finished setting it up.
+
+    This is not a failure: it is the normal state of a tab the user has only just
+    opened.  It is reported in the tab itself, never as a modal dialog, because
+    an analysis that auto-runs on selection would otherwise greet the user with
+    an error box before they have touched a single control.
+    """
+
+
 # Custom metaclass to resolve Qt/ABC metaclass conflict
 class QABCMeta(type(QtWidgets.QWidget), type(ABC)):
     """Metaclass that combines Qt's metaclass with ABC's metaclass."""
@@ -225,7 +235,16 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if getattr(self, "_pending_update", False):
             self._pending_update = False
             log.debug(f"{self.__class__.__name__}: processing deferred update on showEvent")
-            self._trigger_analysis()
+            # This replays an automatic update that was deferred while hidden, so
+            # it must stay automatic.  Calling _trigger_analysis() directly makes
+            # sender() something other than the debounce timer, which used to
+            # promote the replay to a manual run and let it raise a modal error
+            # box the moment the user selected the tab.
+            self._replaying_deferred_update = True
+            try:
+                self._trigger_analysis()
+            finally:
+                self._replaying_deferred_update = False
 
     # --- ADDED: Method to set global controls (Removed duplicate) ---
     # The actual implementation is further down in the file.
@@ -2542,7 +2561,11 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # the user still gets immediate feedback even if the tab is not
         # currently the active one.
         sender = self.sender()
-        _is_auto = (sender is self._analysis_debounce_timer) or isinstance(sender, QtCore.QTimer)
+        _is_auto = (
+            (sender is self._analysis_debounce_timer)
+            or isinstance(sender, QtCore.QTimer)
+            or getattr(self, "_replaying_deferred_update", False)
+        )
         if _is_auto and not self._is_active_analysis_tab():
             self._pending_update = True
             log.debug(f"{self.__class__.__name__}: tab hidden — deferring auto analysis update")
@@ -2595,16 +2618,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         # --- End Cross-File Average Intercept ---
 
         # Validate data
-        # Validate data
         if not self._current_plot_data:
             log.warning(f"{self.__class__.__name__}: No data available for analysis")
-
-            # Check if triggered automatically (by timer) vs manually (button)
             # We don't want to annoy the user with popups during initialization or reactive updates
-            sender = self.sender()
-            is_auto_triggered = (sender == self._analysis_debounce_timer) or isinstance(sender, QtCore.QTimer)
-
-            if not is_auto_triggered:
+            if not _is_auto:
                 QtWidgets.QMessageBox.warning(self, "No Data", "Please load and plot data before running analysis.")
             return
 
@@ -2646,11 +2663,11 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                     if _dlg is not None and not _dlg_ended:
                         _dlg_ended = True
                         _dlg.end_analysis(success=False, message="Analysis returned no results")
-                    QtWidgets.QMessageBox.warning(
-                        self,
-                        "Analysis Failed",
-                        "Analysis could not be completed. Please check your parameters and data.",
-                    )
+                    message = "Analysis could not be completed. Please check your parameters and data."
+                    if _is_auto:
+                        self._report_analysis_blocked(message)
+                    else:
+                        QtWidgets.QMessageBox.warning(self, "Analysis Failed", message)
                 self._set_save_button_enabled(False)
                 return
 
@@ -2665,17 +2682,46 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
             log.debug(f"{self.__class__.__name__}: Analysis completed successfully")
 
+        except AnalysisNotConfigured as e:
+            # The user has not finished setting the analysis up.  Say so in the
+            # tab and stop; this is the normal state of a freshly opened tab, so
+            # it is never a dialog, not even for a manual run.
+            log.debug(f"{self.__class__.__name__}: analysis not configured yet: {e}")
+            if _dlg is not None and not _dlg_ended:
+                _dlg_ended = True
+                _dlg.end_analysis(success=False, message=str(e))
+            self._report_analysis_blocked(str(e))
+            self._set_save_button_enabled(False)
         except Exception as e:
             log.error(f"{self.__class__.__name__}: Analysis failed: {e}", exc_info=True)
             if _dlg is not None and not _dlg_ended:
                 _dlg_ended = True
                 _dlg.end_analysis(success=False, message=str(e))
-            QtWidgets.QMessageBox.critical(self, "Analysis Error", f"An error occurred during analysis:\n{str(e)}")
+            # An automatic re-run must not steal focus with a modal dialog; the
+            # user did not ask for this run and may be working in another tab.
+            if _is_auto:
+                self._report_analysis_blocked(str(e))
+            else:
+                QtWidgets.QMessageBox.critical(self, "Analysis Error", f"An error occurred during analysis:\n{str(e)}")
             self._set_save_button_enabled(False)
         finally:
             QtWidgets.QApplication.restoreOverrideCursor()
             if _dlg is not None and not _dlg_ended:
                 _dlg.end_analysis(success=True)
+
+    def _report_analysis_blocked(self, message: str) -> None:
+        """Show *message* inside the tab instead of in a dialog.
+
+        Subclasses that have a dedicated message area override this; the base
+        falls back to the status label so the reason is never simply swallowed.
+        """
+        label = getattr(self, "status_label", None)
+        if label is None:
+            return
+        try:
+            label.setText(message)
+        except RuntimeError:
+            pass  # label destroyed during a tab rebuild
 
     # --- PHASE 3: Debounced Parameter Change Handler ---
     @QtCore.Slot()

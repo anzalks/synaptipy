@@ -327,12 +327,22 @@ def resolve_protocols(
     trial_index: int,
     duration: Optional[float],
     analysis_name: str,
+    stimulus_timing_supplied: bool = False,
 ) -> List[ResolvedProtocol]:
     """Resolve executable segments and report requirement gaps without guessing.
 
     Recordings without a map remain executable but are marked ``needs_review``.
     Explicit incompatible assignments are marked ``incompatible`` and should be
     excluded by a batch planner.
+
+    ``stimulus_timing_supplied`` is set by a caller that has been given a
+    recorded stimulus channel for this run — the TTL channel a user picks in the
+    analysis tab, or the ``secondary_channel`` configured for a batch task.  That
+    is recorded timing evidence like any other, so it satisfies
+    ``requires_stimulus_timing`` for callers that have it.  It is never inferred
+    here: a caller that cannot name a stimulus channel leaves it False and the
+    requirement stands, which is what keeps a signal trace from standing in for a
+    TTL channel that was never recorded.
     """
     protocol_map = getattr(recording, "protocol_map", None)
     # Readers and third-party callers may provide Recording-like objects without
@@ -363,9 +373,17 @@ def resolve_protocols(
             and assignment.verified
             and bool(assignment.parameters.get("stimulus_times"))
         )
-        if requirement.requires_stimulus_timing and not (recorded_timing or verified_manual_timing):
+        timing_gap = requirement.requires_stimulus_timing and not (
+            recorded_timing or verified_manual_timing or stimulus_timing_supplied
+        )
+        if timing_gap:
             missing.append("requires stimulus timing")
-        if missing and (explicit or requirement.requires_stimulus_timing):
+        # A declared assignment that does not match is always a hard block, and so
+        # is a missing stimulus timing source — that is what stops a signal trace
+        # from standing in for a TTL channel.  Once timing has been supplied, a
+        # residual gap against the implicit "no map yet" placeholder is a review
+        # state like any other, not a block.
+        if missing and (explicit or timing_gap):
             status = "incompatible"
         elif missing:
             status = "needs_review"

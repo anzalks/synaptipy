@@ -134,6 +134,14 @@ class ParameterWidgetGenerator:
         self.widgets: Dict[str, QtWidgets.QWidget] = {}
         self.callbacks: List[callable] = []
         self.visibility_map: Dict[str, Dict[str, Any]] = {}
+        # name -> {context_value: default}, from a param's "default_by_clamp_mode"
+        self.context_defaults: Dict[str, Dict[str, Any]] = {}
+        # Last value this generator itself wrote for each of those params, so a
+        # value that no longer matches can only have come from the user.
+        self._context_written: Dict[str, Any] = {}
+        # Params the user has set by hand; their context-derived default is
+        # never re-applied over an explicit choice.
+        self._user_edited: set = set()
 
     def generate_widgets(self, ui_params: List[Dict[str, Any]], callback: Optional[callable] = None):
         """
@@ -168,6 +176,9 @@ class ParameterWidgetGenerator:
         self.widgets.clear()
         self.visibility_map.clear()
         self.callbacks.clear()
+        self.context_defaults.clear()
+        self._context_written.clear()
+        self._user_edited.clear()
 
     def _create_widget_for_param(self, param: Dict[str, Any]):
         """Create and add a widget for a single parameter."""
@@ -251,6 +262,13 @@ class ParameterWidgetGenerator:
         self.layout.addRow(label, widget)
         self.widgets[name] = widget
 
+        # Record a clamp-mode-dependent default, applied by apply_context_defaults()
+        # once the recording's channel units are known.
+        context_default = param.get("default_by_clamp_mode")
+        if isinstance(context_default, dict):
+            self.context_defaults[name] = dict(context_default)
+            self._context_written[name] = param.get("default")
+
         # Store visibility rule if present
         if "visible_when" in param:
             self.visibility_map[name] = {
@@ -259,6 +277,65 @@ class ParameterWidgetGenerator:
                 "label": label if isinstance(label, QtWidgets.QWidget) else None,
                 "rule": param["visible_when"],
             }
+
+    @staticmethod
+    def _widget_value(widget: QtWidgets.QWidget) -> Any:
+        """Return a widget's current value, or None for an unsupported type."""
+        if isinstance(widget, QtWidgets.QComboBox):
+            return widget.currentText()
+        if isinstance(widget, QtWidgets.QCheckBox):
+            return widget.isChecked()
+        if isinstance(widget, (QtWidgets.QDoubleSpinBox, QtWidgets.QSpinBox)):
+            return widget.value()
+        if isinstance(widget, (QtWidgets.QLineEdit, FileBrowseWidget)):
+            return widget.text()
+        return None
+
+    def apply_context_defaults(self, context: Dict[str, Any]):
+        """Re-default params declaring ``default_by_clamp_mode`` for this recording.
+
+        A polarity that is right for voltage clamp is wrong for current clamp,
+        and a stale default silently detects zero responses.  A param is left
+        alone once its value differs from the last one written here, which is
+        the only way it can hold a value the user chose.  The comparison is used
+        instead of listening for change signals because the generator's own
+        change callback runs first and would re-apply the default before an
+        edit could be recorded.
+        """
+        clamp_mode = context.get("clamp_mode")
+        if not clamp_mode:
+            return
+
+        for name, mapping in self.context_defaults.items():
+            if clamp_mode not in mapping:
+                continue
+            widget = self.widgets.get(name)
+            if widget is None:
+                continue
+            try:
+                current = self._widget_value(widget)
+                written = self._context_written.get(name)
+                if current is not None and written is not None and str(current) != str(written):
+                    self._user_edited.add(name)
+                if name in self._user_edited:
+                    continue
+
+                value = mapping[clamp_mode]
+                blocked = widget.blockSignals(True)
+                if isinstance(widget, QtWidgets.QComboBox):
+                    widget.setCurrentText(str(value))
+                elif isinstance(widget, QtWidgets.QCheckBox):
+                    widget.setChecked(bool(value))
+                elif isinstance(widget, QtWidgets.QSpinBox):
+                    widget.setValue(int(value))
+                elif isinstance(widget, QtWidgets.QDoubleSpinBox):
+                    widget.setValue(float(value))
+                elif isinstance(widget, (QtWidgets.QLineEdit, FileBrowseWidget)):
+                    widget.setText(str(value))
+                widget.blockSignals(blocked)
+                self._context_written[name] = self._widget_value(widget)
+            except RuntimeError:
+                continue  # widget deleted during a rebuild
 
     def update_visibility(self, context: Dict[str, Any]):  # noqa: C901
         """

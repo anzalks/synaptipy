@@ -664,6 +664,18 @@ class BatchAnalysisEngine:
             groups: Dict[Tuple[str, str, str], Dict[str, Dict[str, Any]]] = {}
             excluded: Dict[Tuple[str, str, str], List[str]] = {}
 
+            # A named secondary channel is recorded stimulus timing supplied by
+            # the task, the same evidence the analysis tab's TTL dropdown gives.
+            secondary_meta = AnalysisRegistry.get_metadata(analysis_name).get("requires_secondary_channel")
+            secondary_key = (
+                str(secondary_meta.get("param_name", "secondary_data")) if isinstance(secondary_meta, dict) else ""
+            )
+            timing_supplied = bool(secondary_key) and bool(
+                task.get("secondary_channel")
+                or params.get("secondary_channel")
+                or params.get(secondary_key) is not None
+            )
+
             for file_name, file_path, source_key, recording in loaded:
                 for channel_key, channel in recording.channels.items():
                     if channel_filter and channel_key not in channel_filter and str(channel_key) not in channel_filter:
@@ -704,7 +716,13 @@ class BatchAnalysisEngine:
                         if data is None or time is None:
                             continue
                         duration = float(time[-1]) if len(time) else None
-                        for protocol in resolve_protocols(recording, trial_index, duration, analysis_name):
+                        for protocol in resolve_protocols(
+                            recording,
+                            trial_index,
+                            duration,
+                            analysis_name,
+                            stimulus_timing_supplied=timing_supplied,
+                        ):
                             key = (channel_name, units, protocol.protocol_fingerprint)
                             if protocol.status == "incompatible":
                                 excluded.setdefault(key, []).append(
@@ -1188,13 +1206,26 @@ class BatchAnalysisEngine:
         sampling_rate = channel.sampling_rate
         protocol_enabled = isinstance(getattr(recording, "protocol_map", None), ProtocolMap)
 
+        # A task that names a secondary channel (or passes its payload directly)
+        # has supplied recorded stimulus timing for this run, the batch equivalent
+        # of picking the TTL channel in the analysis tab.
+        stimulus_timing_supplied = bool(secondary_param_name) and (
+            secondary_channel is not None or secondary_param_name in params
+        )
+
         def protocols_for_trial(trial_idx: int, trial_time: Any) -> List[ResolvedProtocol]:
             """Resolve protocol context without making incomplete maps invisible."""
             if not protocol_enabled:
                 return []
             try:
                 duration = float(np.asarray(trial_time)[-1]) if trial_time is not None and len(trial_time) else None
-                return resolve_protocols(recording, trial_idx, duration, analysis_name)
+                return resolve_protocols(
+                    recording,
+                    trial_idx,
+                    duration,
+                    analysis_name,
+                    stimulus_timing_supplied=stimulus_timing_supplied,
+                )
             except Exception as exc:  # noqa: BLE001 - a bad map must not crash a batch
                 log.warning("Could not resolve protocol for %s trial %d: %s", file_path.name, trial_idx, exc)
                 return []

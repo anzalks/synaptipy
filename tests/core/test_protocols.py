@@ -533,3 +533,42 @@ def test_cross_file_protocol_planner_reports_analysis_and_load_errors(monkeypatc
     )
     assert result.empty
     assert progress[-1][-1] == "Cross-file average complete."
+
+
+def test_a_supplied_stimulus_channel_satisfies_the_timing_requirement():
+    """Selecting the recorded TTL channel is timing evidence, not a guess.
+
+    Timing-dependent analyses are blocked on an unmapped recording so a signal
+    trace can never stand in for a TTL channel.  A caller that has actually been
+    given the stimulus channel — the tab's TTL dropdown, or a batch task's
+    ``secondary_channel`` — has that evidence and must not be blocked by it.
+    """
+    recording = _recording(-65.0, "opto_unmapped.abf")
+    assert not recording.protocol_map.assignments
+
+    blocked = resolve_protocols(recording, 0, 0.1, "optogenetic_sync")[0]
+    assert blocked.status == "incompatible"
+    assert "requires stimulus timing" in blocked.missing
+
+    supplied = resolve_protocols(recording, 0, 0.1, "optogenetic_sync", stimulus_timing_supplied=True)[0]
+    assert supplied.status == "needs_review"
+    assert "requires stimulus timing" not in supplied.missing
+
+
+def test_a_supplied_stimulus_channel_does_not_excuse_a_wrong_protocol_family():
+    """Timing evidence answers the timing gap only; a declared mismatch still blocks."""
+    recording = _recording(-65.0, "current_step.abf")
+    recording.protocol_map.add(
+        ProtocolAssignment(
+            "current_step",
+            (0,),
+            source=ProtocolSource.RECORDED,
+            parameters={"command": "recorded"},
+            verified=True,
+        )
+    )
+
+    resolved = resolve_protocols(recording, 0, 0.1, "paired_pulse_ratio", stimulus_timing_supplied=True)[0]
+
+    assert resolved.status == "incompatible"
+    assert any("requires protocol family" in item for item in resolved.missing)
