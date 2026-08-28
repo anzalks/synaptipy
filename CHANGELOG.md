@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-08-28
+
+
 ### Fixed
 
 - Restored the documentation link check. Two DOI links whose publishers refuse
@@ -961,6 +964,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Examples need further development
 - No support for all possible Neo file formats (depends on installed backends)
 
-[Unreleased]: https://github.com/anzalks/synaptipy/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/anzalks/synaptipy/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/anzalks/synaptipy/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/anzalks/synaptipy/compare/v0.1.6.1...v0.1.7
 [0.1.6.1]: https://github.com/anzalks/synaptipy/releases/tag/v0.1.6.1
