@@ -82,7 +82,7 @@ dev = [
     "nbval",
     "flake8",
     "black~=26.1",
-    "isort~=8.0",
+    "isort>=8,<10",
     "pyinstaller>=6.5.0",
     "pillow>=10.2.0",
     "icnsutil>=1.1.0",
