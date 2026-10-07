@@ -1,6 +1,5 @@
 import os
 import sys
-import time
 from pathlib import Path
 
 import matplotlib
@@ -11,17 +10,15 @@ import matplotlib.pyplot as plt
 
 # Add parent scripts directory to path to import plot_utils
 sys.path.append(str(Path(__file__).resolve().parent.parent))
+from figure_01_panel_a import draw_panel_a, save_panel_a_svg
 from plot_utils import (
-    add_figure_suptitle,
     add_panel_label,
     add_panel_title,
     create_paper_figure,
-    save_paper_figure,
     set_paper_styles,
 )
 
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
-from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 # Mock message boxes
@@ -35,7 +32,6 @@ app = QApplication.instance() or QApplication(sys.argv)
 repo_root = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(repo_root / "src"))
 from synaptipy.application.gui.main_window import MainWindow
-from synaptipy.infrastructure.file_readers import NeoAdapter
 
 
 def main():
@@ -43,6 +39,7 @@ def main():
     abf_path = repo_root / "examples" / "data" / "2023_04_11_0021.abf"
     out_dir = repo_root / "paper" / "figures"
     out_dir.mkdir(parents=True, exist_ok=True)
+    save_panel_a_svg(out_dir / "figure_01_panel_a.svg")
 
     win = MainWindow()
     win._offer_session_restore = lambda: None
@@ -52,9 +49,7 @@ def main():
     win.resize(1200, 800)
     win.show()
 
-    print(f"Loading data synchronously: {abf_path}")
-    adapter = NeoAdapter()
-    recording = adapter.read_recording(str(abf_path))
+    print(f"Loading data: {abf_path}")
     win._load_in_explorer(abf_path, [abf_path], 0, False)
     app.processEvents()
 
@@ -87,30 +82,17 @@ def main():
     pm_d = win.exporter_tab.grab()
     pm_d.save(str(out_dir / "temp_d.png"))
 
-    print("UI grabs successful. Stitching composite image using unified Matplotlib styling...")
+    print(
+        "UI grabs successful. Stitching composite image using unified Matplotlib styling..."
+    )
 
     set_paper_styles()
-
-    # Overview is used for Panel A!
-    img_a_path = out_dir / "synaptipy_overview.png"
-    if not img_a_path.exists():
-        # Copy it from docs or create a dummy one
-        overview_src = repo_root / "docs" / "_build" / "html" / "_images" / "synaptipy_overview.png"
-        if overview_src.exists():
-            import shutil
-
-            shutil.copy(overview_src, img_a_path)
-        else:
-            import numpy as np
-
-            dummy = np.ones((800, 1280, 3)) * 0.9  # Light gray
-            plt.imsave(img_a_path, dummy)
+    plt.rcParams["svg.fonttype"] = "none"
 
     img_b_path = out_dir / "temp_b.png"
     img_c_path = out_dir / "temp_c.png"
     img_d_path = out_dir / "temp_d.png"
 
-    img_a = mpimg.imread(str(img_a_path))
     img_b = mpimg.imread(str(img_b_path))
     img_c = mpimg.imread(str(img_c_path))
     img_d = mpimg.imread(str(img_d_path))
@@ -119,16 +101,16 @@ def main():
     fig = create_paper_figure(0, 0)
     gs = fig.add_gridspec(2, 2, height_ratios=[1, 1], width_ratios=[1, 1])
 
-    # Top-left: img_a
+    # Top-left: draw the architecture as vectors in the composite figure.
     ax1 = fig.add_subplot(gs[0, 0])
-    ax1.imshow(img_a)
-    ax1.axis("off")
+    draw_panel_a(ax1, font_scale=0.78)
     add_panel_title(ax1, "Overview & Project Architecture")
     add_panel_label(ax1, "A")
 
     # Top-right: img_b
     ax2 = fig.add_subplot(gs[0, 1])
     ax2.imshow(img_b)
+    ax2.set_anchor("N")
     ax2.axis("off")
     add_panel_title(ax2, "Data Explorer & Metadata View")
     add_panel_label(ax2, "B")
@@ -150,8 +132,12 @@ def main():
     # Removed suptitle to comply with eNeuro publishing guidelines
 
     final_path = out_dir / "figure_01.png"
-    save_paper_figure(fig, final_path)
-    print(f"Figure 1 saved to {final_path}")
+    vector_path = out_dir / "figure_01.svg"
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
+    fig.savefig(final_path, dpi=300, bbox_inches="tight")
+    fig.savefig(vector_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Figure 1 saved to {final_path} and {vector_path}")
 
     # Cleanup temporary screenshots
     for temp_img in [img_b_path, img_c_path, img_d_path]:
@@ -159,7 +145,9 @@ def main():
             temp_img.unlink()
     print("Cleaned up temporary screenshot files.")
 
-    # Safe exit to prevent Qt crash
+    # MainWindow.closeEvent stops its worker thread and cleans up the tabs.
+    win.close()
+    app.processEvents()
     app.quit()
 
 

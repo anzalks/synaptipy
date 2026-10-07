@@ -16,6 +16,16 @@ The `paper/` directory is strictly organized into the following semantic folders
 
 ## Usage
 
+Figure 1A is drawn from editable Matplotlib shapes and text. Its standalone
+vector file is `figures/figure_01_panel_a.svg`; the complete
+`figures/figure_01.svg` keeps panel A vector and embeds the GUI screenshots in
+panels B–D. The manuscript uses `figures/figure_01.png` for Markdown preview.
+To regenerate just panel A, run:
+
+```bash
+python paper/scripts/paper_figures/figure_01_panel_a.py
+```
+
 First validate that all paper scripts and the dataset manifest are present:
 
 ```bash
