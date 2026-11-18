@@ -72,64 +72,66 @@ For active properties, SynaptiPy utilized a standard dynamic derivative-crossing
 
 | Metric | SynaptiPy vs IPFX Pearson *r* | Mean bias vs IPFX | LoA vs IPFX | SynaptiPy vs eFEL Pearson *r* | Mean bias vs eFEL | LoA vs eFEL |
 |--------|-------------------------------|-------------------|-------------|-------------------------------|-------------------|-------------|
-| AP threshold (mV) | 0.9277 (*p* = 3.76e-19)<sup>a</sup> | +0.052 mV | [-1.58, +1.68] mV | 0.9330 (*p* = 8.50e-20)<sup>b</sup> | +0.001 mV | [-1.51, +1.52] mV |
-| AP amplitude (mV) | 0.9952 (*p* = 4.53e-43)<sup>c</sup> | -0.052 mV | [-1.68, +1.58] mV | 0.9902 (*p* = 1.11e-36)<sup>d</sup> | +0.706 mV | [-1.83, +3.24] mV |
-| AP half-width (ms) | 0.9873 (*p* = 2.08e-34)<sup>e</sup> | -0.094 ms | [-0.19, +0.00] ms | 0.9949 (*p* = 1.66e-42)<sup>f</sup> | -0.012 ms | [-0.06, +0.03] ms |
-| Max dV/dt (V/s) | 0.9884 (*p* = 3.17e-35)<sup>g</sup> | -6.352 V/s | [-21.84, +9.13] V/s | 0.7056 (*p* = 1.26e-07)<sup>h</sup> | +79.539 V/s | [+3.61, +155.47] V/s |
-| AP Delay (Time to first spike) (ms) | 1.0000 (*p* = 0.00e+00)<sup>i</sup> | -0.000 ms | [-0.00, +0.00] ms | 1.0000 (*p* = 1.51e-98)<sup>j</sup> | -0.002 ms | [-0.06, +0.05] ms |
-| Upstroke/Downstroke Ratio | 0.9998 (*p* = 1.41e-72)<sup>k</sup> | -0.070 Ratio | [-0.15, +0.01] Ratio | 0.9971 (*p* = 1.23e-47)<sup>l</sup> | +0.519 Ratio | [+0.22, +0.81] Ratio |
-| Fast AHP depth (mV) | 0.9807 (*p* = 1.15e-30)<sup>m</sup> | +0.725 mV | [-3.79, +5.24] mV | 0.9513 (*p* = 6.00e-19)<sup>n</sup> | -1.884 mV | [-5.13, +1.36] mV |
-| ADP amplitude (mV) | -0.3867 (*p* = 0.5203)<sup>o</sup> | -6.561 mV | [-13.62, +0.49] mV | 0.5881 (*p* = 3.37e-05)<sup>p</sup> | +2.929 mV | [-14.78, +20.64] mV |
-| Mean Firing Frequency (Hz) | 1.0000 (*p* = 0.00e+00)<sup>q</sup> | +0.000 Hz | [-0.00, +0.00] Hz | 0.5951 (*p* = 2.57e-05)<sup>r</sup> | +23.921 Hz | [-50.78, +98.62] Hz |
-| Spike Frequency Adaptation | 1.0000 (*p* = 1.31e-82)<sup>s</sup> | -0.000 Ratio | [-0.00, +0.00] Ratio | 0.7569 (*p* = 3.14e-06)<sup>t</sup> | +0.014 Ratio | [-0.03, +0.05] Ratio |
+| AP threshold (mV) | 0.9132 (*p* = 1.41e-17, *n* = 43)<sup>a</sup> | -0.007 mV | [-1.79, +1.77] mV | 0.9252 (*p* = 7.43e-19, *n* = 43)<sup>b</sup> | -0.607 mV | [-2.23, +1.02] mV |
+| AP amplitude (mV) | 0.9942 (*p* = 2.24e-41, *n* = 43)<sup>c</sup> | +0.027 mV | [-1.76, +1.82] mV | 0.9959 (*p* = 1.93e-44, *n* = 43)<sup>d</sup> | +0.578 mV | [-0.98, +2.13] mV |
+| AP half-width (ms) | 0.9878 (*p* = 1.01e-34, *n* = 43)<sup>e</sup> | -0.094 ms | [-0.19, -0.00] ms | 0.9995 (*p* = 2.21e-62, *n* = 43)<sup>f</sup> | +0.002 ms | [-0.01, +0.02] ms |
+| Max dV/dt (V/s) | 0.9918 (*p* = 2.66e-38, *n* = 43)<sup>g</sup> | -6.488 V/s | [-19.53, +6.55] V/s | 0.9879 (*p* = 7.89e-35, *n* = 43)<sup>h</sup> | -34.340 V/s | [-65.71, -2.97] V/s |
+| AP Delay (Time to first spike) (ms) | 1.0000 (*p* = 0.00e+00, *n* = 43)<sup>i</sup> | -0.000 ms | [-0.00, +0.00] ms | 1.0000 (*p* = 1.51e-153, *n* = 43)<sup>j</sup> | -0.002 ms | [-0.01, +0.01] ms |
+| Upstroke/Downstroke Ratio | 0.9996 (*p* = 6.03e-66, *n* = 43)<sup>k</sup> | -0.073 Ratio | [-0.16, +0.02] Ratio | 0.9988 (*p* = 2.06e-55, *n* = 43)<sup>l</sup> | -0.211 Ratio | [-0.34, -0.09] Ratio |
+| Fast AHP depth (mV) | 0.9802 (*p* = 1.75e-30, *n* = 43)<sup>m</sup> | +0.718 mV | [-3.79, +5.22] mV | 0.9820 (*p* = 3.35e-26, *n* = 36)<sup>n</sup> | +0.844 mV | [-3.91, +5.59] mV |
+| ADP amplitude (mV) | 0.9061 (*p* = 0.0939, *n* = 4)<sup>o</sup> | -0.110 mV | [-0.25, +0.03] mV | 0.6555 (*p* = 0.0017, *n* = 20)<sup>p</sup> | +5.768 mV | [-10.94, +22.48] mV |
+| Mean Firing Frequency (Hz) | 1.0000 (*p* = 6.93e-92, *n* = 43)<sup>q</sup> | -0.047 Hz | [-0.46, +0.37] Hz | 0.4501 (*p* = 0.0025, *n* = 43)<sup>r</sup> | -22.496 Hz | [-111.15, +66.16] Hz |
+| Spike Frequency Adaptation | 0.9999 (*p* = 1.97e-52, *n* = 30)<sup>s</sup> | -0.000 Ratio | [-0.00, +0.00] Ratio | 0.8215 (*p* = 8.43e-08, *n* = 28)<sup>t</sup> | +0.012 Ratio | [-0.02, +0.04] Ratio |
 
-*All correlations are Pearson's r (two-sided) with exact *p*-values reported. Data reflects *n* = 43 sweeps where all three pipelines detected at least one action potential. Bias = mean signed difference (SynaptiPy minus benchmark, per-sweep means). LoA = 95% Bland-Altman limits of agreement. SynaptiPy: BatchAnalysisEngine spike_detection (dV/dt threshold 20 V/s, refractory 2 ms). eFEL: BlueBrain eFEL defaults. IPFX: Allen IPFX SpikeFeatureExtractor, 9.9 kHz Bessel filter. Superscript letters refer to the statistical table. N/A = no direct benchmark equivalent.*
+*All correlations are Pearson's r (two-sided) with exact *p*-values and valid pair counts reported across *n* = 43 sweeps nested within *N* = 6 independent cells (cell-clustered mean correlations and non-parametric Spearman *rho* are reported in the Statistical Table). Bias = mean signed difference (SynaptiPy minus benchmark, per-sweep means). LoA = 95% Bland-Altman limits of agreement. SynaptiPy: BatchAnalysisEngine spike_detection (dV/dt threshold 20 V/s, refractory 2 ms). eFEL: BlueBrain eFEL (dV/dt threshold 20 V/s, >= 0.02 ms resampling step). IPFX: Allen IPFX SpikeFeatureExtractor, 9.9 kHz Bessel filter. Superscript letters refer to the statistical table. N/A = no direct benchmark equivalent.*
 
 **Table 2-2: Subthreshold passive properties benchmark on hyperpolarizing steps (Allen Dataset).**
 
-| Metric | Valid *N* | SynaptiPy vs eFEL Pearson *r* | Mean bias vs eFEL | LoA vs eFEL | SynaptiPy vs IPFX Pearson *r* | Mean bias vs IPFX | LoA vs IPFX |
-|--------|-----------|-------------------------------|-------------------|-------------|-------------------------------|-------------------|-------------|
-| Resting Membrane Potential (mV) | 34 | 0.9825 (*p* = 6.24e-25)<sup>u</sup> | -2.224 mV | [-3.06, -1.39] mV | 0.9999 (*p* = 6.54e-61)<sup>v</sup> | -0.125 mV | [-0.18, -0.06] mV |
-| Input Resistance — Steady-State (MΩ) † | 34 | 0.9995 (*p* = 8.98e-50)<sup>w</sup> | +0.258 MΩ | [-2.76, +3.28] MΩ | N/A | N/A | N/A |
-| Input Resistance — Peak (MΩ) ‡ | 34 | N/A | N/A | N/A | 0.5065 (*p* = 0.0022)<sup>x</sup> | -6.561 MΩ | [-126.09, +112.97] MΩ |
-| Membrane Time Constant (ms) | 34 | 0.2547 (*p* = 0.1461)<sup>y</sup> | -18.485 ms | [-92.86, +55.89] ms | 0.9013 (*p* = 0.0056)<sup>z</sup> | -2.126 ms | [-10.43, +6.17] ms |
-| Sag Percentage (%) | 34 | -0.9894 (*p* = 2.09e-28)<sup>aa</sup> | -87.285 % | [-109.62, -64.95] % | 0.9558 (*p* = 1.44e-18)<sup>bb</sup> | +3.820 % | [-2.96, +10.60] % |
+| Metric | Valid *N* (eFEL / IPFX) | SynaptiPy vs eFEL Pearson *r* | Mean bias vs eFEL | LoA vs eFEL | SynaptiPy vs IPFX Pearson *r* | Mean bias vs IPFX | LoA vs IPFX |
+|--------|-------------------------|-------------------------------|-------------------|-------------|-------------------------------|-------------------|-------------|
+| Resting Membrane Potential (mV) | 34 | 0.9997 (*p* = 3.38e-52)<sup>u</sup> | +0.010 mV | [-0.10, +0.12] mV | 1.0000 (*p* = 3.76e-91)<sup>v</sup> | -0.001 mV | [-0.01, +0.01] mV |
+| Input Resistance - Steady-State (MOhm) | 34 | 0.9985 (*p* = 4.11e-42)<sup>w</sup> | -1.232 MOhm | [-8.01, +5.55] MOhm | 0.9777 (*p* = 2.97e-23)<sup>x</sup> | -14.390 MOhm | [-38.71, +9.93] MOhm |
+| Input Resistance - Peak (MOhm) | 34 | 0.9988 (*p* = 1.34e-43)<sup>y</sup> | +4.203 MOhm | [-1.88, +10.28] MOhm | 0.9809 (*p* = 2.56e-24)<sup>z</sup> | -10.337 MOhm | [-32.61, +11.93] MOhm |
+| Membrane Time Constant (ms) | 34 | 0.9861 (*p* = 1.64e-26)<sup>aa</sup> | -1.053 ms | [-4.43, +2.32] ms | 0.9873 (*p* = 3.62e-27)<sup>ab</sup> | -0.496 ms | [-3.47, +2.48] ms |
+| Sag Percentage (%) | 34 | 0.9961 (*p* = 2.60e-35)<sup>ac</sup> | -0.848 % | [-2.00, +0.30] % | 0.9969 (*p* = 6.01e-37)<sup>ad</sup> | +0.217 % | [-0.79, +1.23] % |
 
-*All correlations are Pearson's r (two-sided) with exact *p*-values reported. LoA = 95% Bland-Altman limits of agreement (mean ± 1.96 SD of sweep-level differences). † SS-Rin: mean voltage in last 100 ms of step (matches eFEL ohmic_input_resistance). ‡ Peak-Rin: maximum hyperpolarization deflection (matches IPFX voltage_deflection). Superscript letters refer to the statistical table. N/A = no direct benchmark equivalent.*
+*All correlations are Pearson's r (two-sided) with exact *p*-values reported across sweeps from *N* = 6 independent cells (cell-clustered mean correlations and Spearman *rho* are reported in the Statistical Table). LoA = 95% Bland-Altman limits of agreement (mean +/- 1.96 SD of sweep-level differences). Steady-State Rin uses the terminal step steady-state deflection; Peak Rin uses maximum hyperpolarizing deflection. Superscript letters refer to the statistical table. N/A = no direct benchmark equivalent.*
 
 
 **Statistical Table**
 
 | | Data structure | Type of test | Statistical value |
 |---|---|---|---|
-| a | Non-normal distribution | Pearson correlation (two-sided, *n* = 43) | N/A |
-| b | Non-normal distribution | Pearson correlation (two-sided, *n* = 43) | N/A |
-| c | Normal distribution | Pearson correlation (two-sided, *n* = 43) | N/A |
-| d | Normal distribution | Pearson correlation (two-sided, *n* = 43) | N/A |
-| e | Non-normal distribution | Pearson correlation (two-sided, *n* = 43) | N/A |
-| f | Non-normal distribution | Pearson correlation (two-sided, *n* = 43) | N/A |
-| g | Normal distribution | Pearson correlation (two-sided, *n* = 43) | N/A |
-| h | Normal distribution | Pearson correlation (two-sided, *n* = 43) | N/A |
-| i | Normal distribution | Pearson correlation (two-sided, *n* = 36) | N/A |
-| j | Normal distribution | Pearson correlation (two-sided, *n* = 36) | N/A |
-| k | Non-normal distribution | Pearson correlation (two-sided, *n* = 43) | N/A |
-| l | Non-normal distribution | Pearson correlation (two-sided, *n* = 43) | N/A |
-| m | Non-normal distribution | Pearson correlation (two-sided, *n* = 43) | N/A |
-| n | Non-normal distribution | Pearson correlation (two-sided, *n* = 36) | N/A |
-| o | Non-normal distribution | Pearson correlation (two-sided, *n* = 5) | N/A |
-| p | Non-normal distribution | Pearson correlation (two-sided, *n* = 43) | N/A |
-| q | Non-normal distribution | Pearson correlation (two-sided, *n* = 43) | N/A |
-| r | Non-normal distribution | Pearson correlation (two-sided, *n* = 43) | N/A |
-| s | Non-normal distribution | Pearson correlation (two-sided, *n* = 30) | N/A |
-| t | Non-normal distribution | Pearson correlation (two-sided, *n* = 28) | N/A |
-| u | Non-normal distribution | Pearson correlation (two-sided, *n* = 34) | N/A |
-| v | Non-normal distribution | Pearson correlation (two-sided, *n* = 34) | N/A |
-| w | Normal distribution | Pearson correlation (two-sided, *n* = 34) | N/A |
-| x | Normal distribution | Pearson correlation (two-sided, *n* = 34) | N/A |
-| y | Non-normal distribution | Pearson correlation (two-sided, *n* = 34) | N/A |
-| z | Non-normal distribution | Pearson correlation (two-sided, *n* = 7) | N/A |
-| aa | Non-normal distribution | Pearson correlation (two-sided, *n* = 34) | N/A |
-| bb | Non-normal distribution | Pearson correlation (two-sided, *n* = 34) | N/A |
+| a | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9132 (*p* = 1.41e-17); Spearman *rho* = 0.8647 (*p* = 7.85e-14); Shapiro-Wilk *W* = 0.7255 (*p* = 1.25e-07); cell-mean *r* = 0.9422 |
+| b | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9252 (*p* = 7.43e-19); Spearman *rho* = 0.8748 (*p* = 1.74e-14); Shapiro-Wilk *W* = 0.6277 (*p* = 3.29e-09); cell-mean *r* = 0.9441 |
+| c | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9942 (*p* = 2.24e-41); Spearman *rho* = 0.9929 (*p* = 1.52e-39); Shapiro-Wilk *W* = 0.7400 (*p* = 2.29e-07); cell-mean *r* = 0.9983 |
+| d | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9959 (*p* = 1.93e-44); Spearman *rho* = 0.9971 (*p* = 1.37e-47); Shapiro-Wilk *W* = 0.6657 (*p* = 1.25e-08); cell-mean *r* = 0.9988 |
+| e | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9878 (*p* = 1.01e-34); Spearman *rho* = 0.9825 (*p* = 1.46e-31); Shapiro-Wilk *W* = 0.8281 (*p* = 1.54e-05); cell-mean *r* = 0.9878 |
+| f | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9995 (*p* = 2.21e-62); Spearman *rho* = 0.9971 (*p* = 1.38e-47); Shapiro-Wilk *W* = 0.7127 (*p* = 7.44e-08); cell-mean *r* = 0.9999 |
+| g | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9918 (*p* = 2.66e-38); Spearman *rho* = 0.9908 (*p* = 3.13e-37); Shapiro-Wilk *W* = 0.7978 (*p* = 3.23e-06); cell-mean *r* = 0.9995 |
+| h | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9879 (*p* = 7.89e-35); Spearman *rho* = 0.9869 (*p* = 4.37e-34); Shapiro-Wilk *W* = 0.8750 (*p* = 0.0002); cell-mean *r* = 0.9920 |
+| i | Zero-variance paired differences | Pearson correlation (two-sided, *n* = 43 sweeps) | *r* = 1.0000 (*p* = 0.00e+00); Spearman *rho* = 1.0000 (*p* = 0.00e+00); Shapiro-Wilk N/A (exact identity); cell-mean *r* = 1.0000 |
+| j | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 1.0000 (*p* = 1.51e-153); Spearman *rho* = 1.0000 (*p* = 0.00e+00); Shapiro-Wilk *W* = 0.8358 (*p* = 2.34e-05); cell-mean *r* = 1.0000 |
+| k | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9996 (*p* = 6.03e-66); Spearman *rho* = 0.9938 (*p* = 9.35e-41); Shapiro-Wilk *W* = 0.8733 (*p* = 0.0002); cell-mean *r* = 1.0000 |
+| l | Normal paired differences | Pearson correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9988 (*p* = 2.06e-55); Spearman *rho* = 0.9881 (*p* = 6.12e-35); Shapiro-Wilk *W* = 0.9777 (*p* = 0.5593); cell-mean *r* = 0.9993 |
+| m | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9802 (*p* = 1.75e-30); Spearman *rho* = 0.9444 (*p* = 2.02e-21); Shapiro-Wilk *W* = 0.9121 (*p* = 0.0030); cell-mean *r* = 0.9905 |
+| n | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 36 sweeps) | *r* = 0.9820 (*p* = 3.35e-26); Spearman *rho* = 0.9207 (*p* = 1.87e-15); Shapiro-Wilk *W* = 0.9395 (*p* = 0.0489); cell-mean *r* = 0.9774 |
+| o | Small sample (*n* < 8) | Pearson correlation (two-sided, *n* = 4 sweeps) | *r* = 0.9061 (*p* = 0.0939); Spearman *rho* = 0.4000 (*p* = 0.6000); Shapiro-Wilk N/A |
+| p | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 20 sweeps) | *r* = 0.6555 (*p* = 0.0017); Spearman *rho* = 0.5188 (*p* = 0.0191); Shapiro-Wilk *W* = 0.8608 (*p* = 0.0081); cell-mean *r* = 0.9309 |
+| q | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 1.0000 (*p* = 6.93e-92); Spearman *rho* = 0.9997 (*p* = 1.37e-67); Shapiro-Wilk *W* = 0.2189 (*p* = 8.68e-14); cell-mean *r* = 1.0000 |
+| r | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.4501 (*p* = 0.0025); Spearman *rho* = 0.4187 (*p* = 0.0052); Shapiro-Wilk *W* = 0.5265 (*p* = 1.40e-10); cell-mean *r* = 0.9373 |
+| s | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 30 sweeps) | *r* = 0.9999 (*p* = 1.97e-52); Spearman *rho* = 0.9991 (*p* = 4.76e-40); Shapiro-Wilk *W* = 0.2343 (*p* = 2.05e-11); cell-mean *r* = 1.0000 |
+| t | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 28 sweeps) | *r* = 0.8215 (*p* = 8.43e-08); Spearman *rho* = 0.8084 (*p* = 1.95e-07); Shapiro-Wilk *W* = 0.8261 (*p* = 0.0003); cell-mean *r* = 0.8755 |
+| u | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 34 sweeps) | *r* = 0.9997 (*p* = 3.38e-52); Spearman *rho* = 0.9976 (*p* = 1.47e-38); Shapiro-Wilk *W* = 0.9189 (*p* = 0.0150); cell-mean *r* = 0.9999 |
+| v | Normal paired differences | Pearson correlation (two-sided, *n* = 34 sweeps) | *r* = 1.0000 (*p* = 3.76e-91); Spearman *rho* = 0.9997 (*p* = 5.29e-53); Shapiro-Wilk *W* = 0.9696 (*p* = 0.4497); cell-mean *r* = 1.0000 |
+| w | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 34 sweeps) | *r* = 0.9985 (*p* = 4.11e-42); Spearman *rho* = 0.9972 (*p* = 9.63e-38); Shapiro-Wilk *W* = 0.7639 (*p* = 5.51e-06); cell-mean *r* = 0.9999 |
+| x | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 34 sweeps) | *r* = 0.9777 (*p* = 2.97e-23); Spearman *rho* = 0.9844 (*p* = 9.94e-26); Shapiro-Wilk *W* = 0.8092 (*p* = 3.87e-05); cell-mean *r* = 0.9786 |
+| y | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 34 sweeps) | *r* = 0.9988 (*p* = 1.34e-43); Spearman *rho* = 0.9979 (*p* = 1.74e-39); Shapiro-Wilk *W* = 0.8716 (*p* = 0.0009); cell-mean *r* = 0.9999 |
+| z | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 34 sweeps) | *r* = 0.9809 (*p* = 2.56e-24); Spearman *rho* = 0.9872 (*p* = 4.54e-27); Shapiro-Wilk *W* = 0.7745 (*p* = 8.53e-06); cell-mean *r* = 0.9804 |
+| aa | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 34 sweeps) | *r* = 0.9861 (*p* = 1.64e-26); Spearman *rho* = 0.9737 (*p* = 3.94e-22); Shapiro-Wilk *W* = 0.9059 (*p* = 0.0066); cell-mean *r* = 0.9903 |
+| ab | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 34 sweeps) | *r* = 0.9873 (*p* = 3.62e-27); Spearman *rho* = 0.9948 (*p* = 2.49e-33); Shapiro-Wilk *W* = 0.6481 (*p* = 8.62e-08); cell-mean *r* = 0.9902 |
+| ac | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 34 sweeps) | *r* = 0.9961 (*p* = 2.60e-35); Spearman *rho* = 0.9786 (*p* = 1.51e-23); Shapiro-Wilk *W* = 0.8277 (*p* = 9.22e-05); cell-mean *r* = 0.9986 |
+| ad | Normal paired differences | Pearson correlation (two-sided, *n* = 34 sweeps) | *r* = 0.9969 (*p* = 6.01e-37); Spearman *rho* = 0.9587 (*p* = 4.81e-19); Shapiro-Wilk *W* = 0.9734 (*p* = 0.5601); cell-mean *r* = 0.9996 |
 
 <!-- TABLES_END -->
 
@@ -182,7 +184,7 @@ Virtanen P, Gommers R, Oliphant TE, Haberland M, Reddy T, Cournapeau D, Burovski
 
 **Figure 1.** SynaptiPy architectural workflow and graphical user interface. **(A)** Vector schematic of recording import, visual parameter selection, shared analysis routines (built-in and plugin), and CSV/NWB export. The traces and table entries in A are illustrative. The same parameter set and analysis functions serve interactive inspection and headless batch processing. **(B)** The Data Explorer interface, enabling hierarchical file navigation and interactive inspection of raw electrophysiological sweeps. **(C)** The Analysis Pipeline Builder, configuring modular analysis workflows for intrinsic and active properties. **(D)** The Data Exporter module for consolidating and exporting batch results.
 
-**Figure 2.** Algorithmic parity against established computational benchmarks. **(A–D)** Scatter plots comparing SynaptiPy feature extractions against eFEL (blue circles) and IPFX (red squares) for core action potential metrics: Peak Voltage (A), Half-Width (B), Maximum dV/dt (C), and Minimum dV/dt (D). Black triangles represent SynaptiPy plotted against itself to define the unity line of perfect agreement. Pearson correlation coefficients ($r$) and mean biases are provided in each panel.
+**Figure 2.** Algorithmic parity against established computational benchmarks. **(A-D)** Scatter plots comparing SynaptiPy feature extractions against eFEL (blue circles) and IPFX (red squares) for core action potential metrics: Peak Voltage (A), Half-Width (B), Maximum dV/dt (C), and Minimum dV/dt (D). Black triangles represent SynaptiPy plotted against itself to define the unity line of perfect agreement. Pearson correlation coefficients ($r$) and mean biases are provided in each panel.
 
 **Figure 3.** Computational scaling and UI rendering benchmarks. **(A, B)** Multi-core scaling efficiency of the `BatchAnalysisEngine`, resolving execution times into active compute (blue bars) versus I/O overhead (grey bars) for a lightweight spike detection task (A) and a CPU-bound event detection task (B). **(C, D)** Rendering latency as a function of overlaid experimental sweeps. Latency is compared between the raw `pyqtgraph` rendering layer (black circles) and the full end-to-end application GUI loop (blue squares) under both software (C) and OpenGL-accelerated (D) modes. The 16.6 ms latency threshold required to maintain 60 FPS interactivity is indicated by the horizontal dashed line.
 

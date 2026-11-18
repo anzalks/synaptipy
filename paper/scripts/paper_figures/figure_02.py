@@ -7,7 +7,6 @@ import pandas as pd
 from scipy.stats import pearsonr
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
 
 # Add parent scripts directory to path to import plot_utils
 sys.path.append(str(Path(__file__).resolve().parent.parent))
@@ -64,23 +63,29 @@ def main():
         r_i, p_i = pearsonr(x_ipfx, y_syn)
         mb_i = np.mean(y_syn - x_ipfx)
 
+        # Graded concentric marker areas ensure eFEL (outer circle, D~11.7pt), IPFX (middle square, L~6.7pt),
+        # and SynaptiPy (inner triangle) remain simultaneously visible even when all three coincide.
         ax.scatter(
             x_efel,
             y_syn,
             color=COLORS["blue"],
-            s=SCATTER_AREA,
+            s=SCATTER_AREA * 1.8,
+            alpha=0.85,
             edgecolors=COLORS["white"],
             linewidths=SCATTER_EDGE_WIDTH,
+            marker="o",
             label=f"eFEL\nr={r_e:.4f}, p{format_p(p_e)}\nBias: {mb_e:+.2f}",
+            zorder=2,
         )
 
         ax.scatter(
             x_ipfx,
             y_syn,
             color=COLORS["red"],
-            s=SCATTER_AREA,
+            s=SCATTER_AREA * 0.75,
+            alpha=0.85,
             edgecolors=COLORS["white"],
-            linewidths=SCATTER_EDGE_WIDTH,
+            linewidths=SCATTER_EDGE_WIDTH * 0.85,
             marker="s",
             label=f"IPFX\nr={r_i:.4f}, p{format_p(p_i)}\nBias: {mb_i:+.2f}",
             zorder=3,
@@ -90,9 +95,10 @@ def main():
             y_syn,
             y_syn,
             color=COLORS["black"],
-            s=SCATTER_AREA,
+            s=SCATTER_AREA * 0.45,
+            alpha=0.95,
             edgecolors=COLORS["white"],
-            linewidths=SCATTER_EDGE_WIDTH,
+            linewidths=SCATTER_EDGE_WIDTH * 0.7,
             marker="^",
             label="SynaptiPy",
             zorder=4,
@@ -103,10 +109,15 @@ def main():
         margin = (max_val - min_val) * 0.1
         lims = [min_val - margin, max_val + margin]
 
-        # Apply standard typography
+        # Apply standard typography (before style_scatter_axis so legend lists eFEL, IPFX, SynaptiPy)
         add_panel_title(ax, title)
         add_panel_label(ax, panel_label)
-        add_legend(ax, loc="best", markerscale=0.7)
+        add_legend(ax, loc="best")
+        leg = ax.get_legend()
+        if leg is not None:
+            for handle in getattr(leg, "legend_handles", getattr(leg, "legendHandles", [])):
+                if hasattr(handle, "set_sizes"):
+                    handle.set_sizes([SCATTER_AREA * 0.75])
 
         # Use plot_utils style_scatter_axis with the unity line
         xlabel = f"Benchmark Value ({unit})"

@@ -15,9 +15,9 @@ Two recording types are benchmarked separately:
   Dataset B  2023_04_11_0022.abf  event_detection_threshold, all_trials,
              threshold=2.0 mV.  Four channels, 3 trials x 20 000 samples @ 20 kHz.
 
-100 copies of each file are written to a temporary directory.
+10 copies of each file are written to a temporary directory.
 Wall-clock time is measured for max_workers in [1, 2, 4, 6, 8] with 3 timed
-repeats per configuration; the median is reported.
+repeats per configuration; both mean +/- SEM and median wall-clock time are reported.
 
 Results are written to paper/results/benchmark_results.csv and
 paper/results/benchmark_scaling.png by default.
@@ -172,21 +172,25 @@ def _run_dataset(label: str, file_list: list, pipeline: list) -> list:
             print(f"rep{rep + 1}={elapsed['wall_time']:.1f}s", end=" ", flush=True)
         import numpy as np
 
-        mean_time = np.mean(times)
-        sem_time = np.std(times, ddof=1) / np.sqrt(len(times)) if len(times) > 1 else 0.0
+        mean_time = float(np.mean(times))
+        median_time = float(np.median(times))
+        sem_time = float(np.std(times, ddof=1) / np.sqrt(len(times))) if len(times) > 1 else 0.0
 
-        mean_io = np.mean(io_times)
-        sem_io = np.std(io_times, ddof=1) / np.sqrt(len(io_times)) if len(io_times) > 1 else 0.0
+        mean_io = float(np.mean(io_times))
+        sem_io = float(np.std(io_times, ddof=1) / np.sqrt(len(io_times))) if len(io_times) > 1 else 0.0
 
-        mean_compute = np.mean(compute_times)
-        sem_compute = np.std(compute_times, ddof=1) / np.sqrt(len(compute_times)) if len(compute_times) > 1 else 0.0
+        mean_compute = float(np.mean(compute_times))
+        sem_compute = (
+            float(np.std(compute_times, ddof=1) / np.sqrt(len(compute_times))) if len(compute_times) > 1 else 0.0
+        )
 
-        print(f"-> mean={mean_time:.2f}s ± {sem_time:.3f}s")
+        print(f"-> mean={mean_time:.2f}s +/- {sem_time:.3f}s (median={median_time:.2f}s)")
         results.append(
             {
                 "dataset": label,
                 "max_workers": workers,
                 "mean_time_s": round(mean_time, 3),
+                "median_time_s": round(median_time, 3),
                 "sem_time_s": round(sem_time, 3),
                 "mean_io_s": round(mean_io, 3),
                 "sem_io_s": round(sem_io, 3),
@@ -205,6 +209,7 @@ def _save_csv(results: list, output_path: Path) -> None:
         "dataset",
         "max_workers",
         "mean_time_s",
+        "median_time_s",
         "sem_time_s",
         "mean_io_s",
         "sem_io_s",
@@ -260,7 +265,7 @@ def _save_plot(results: list, output_path: Path) -> None:
             capsize=5,
             linewidth=2,
             markersize=7,
-            label="Median wall-clock time",
+            label="Mean wall-clock time (+/- SEM)",
         )
         baseline = times[0]
         ideal_time = [baseline / w for w in workers]
@@ -336,11 +341,15 @@ def main(output_dir: Path) -> None:
     pass
 
     print("\nSummary:")
-    print(f"  {'Dataset':<28}  {'Workers':>7}  {'Median (s)':>10}  {'I/O (s)':>7}  {'Compute (s)':>11}")
+    print(
+        f"  {'Dataset':<28}  {'Workers':>7}  {'Mean (s)':>10}  "
+        f"{'Median (s)':>10}  {'I/O (s)':>7}  {'Compute (s)':>11}"
+    )
     for r in all_results:
         print(
             f"  {r['dataset']:<28}  {r['max_workers']:>7}  "
-            f"{r['mean_time_s']:>10.3f}  {r.get('mean_io_s', 0):>7.3f}  {r.get('mean_compute_s', 0):>11.3f}"
+            f"{r['mean_time_s']:>10.3f}  {r.get('median_time_s', r['mean_time_s']):>10.3f}  "
+            f"{r.get('mean_io_s', 0):>7.3f}  {r.get('mean_compute_s', 0):>11.3f}"
         )
 
 

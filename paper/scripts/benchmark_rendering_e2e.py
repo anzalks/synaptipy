@@ -141,9 +141,10 @@ def _child_raw_rendering(mode: str) -> None:
         chan_id = src_channel.id
         plot_item = canvas.channel_plots.get(chan_id)
         data_items = []
+        alpha = 255 if force_opaque else 80
         if plot_item is not None:
             for i in range(n_trials):
-                pen = pg.mkPen((i * 30) % 255, 100, 200, 80)
+                pen = pg.mkPen((i * 30) % 255, 100, 200, alpha)
                 curve = plot_item.plot(trial_pool[0][i % len(all_trials)], pen=pen)
                 data_items.append(curve)
         for _ in range(5):
