@@ -295,36 +295,20 @@ def compute_local_pre_event_baseline(
     sample_rate: float,
     pre_event_window_ms: float = 2.0,
     polarity: str = "negative",
+    baseline_method: str = "local_extrema",
 ) -> np.ndarray:
-    """
-    Compute a local pre-event baseline voltage for each detected event.
+    """Compute a local pre-event baseline voltage/current for each detected event.
 
-    For summ ating synaptic events that ride on the decay of a previous event,
-    the global resting potential is a poor amplitude reference. This function
-    searches the `pre_event_window_ms` immediately preceding each event peak
-    and returns the local "foot" voltage:
-
-    - Negative polarity: the maximum (most depolarised) voltage in the search
-      window - i.e. the point before the hyperpolarising/inward current event
-      begins to deflect the trace.
-    - Positive polarity: the minimum (most hyperpolarised) voltage.
-
-    Args:
-        data: 1D voltage/current array.
-        event_indices: Integer indices of detected event peaks.
-        sample_rate: Sampling rate in Hz.
-        pre_event_window_ms: Duration (ms) of the search window before each
-            peak (default 2.0 ms, valid range 1-3 ms recommended).
-        polarity: "negative" or "positive".
-
-    Returns:
-        1D float array of local baseline values, one per event.
+    ``baseline_method="local_extrema"`` preserves historical foot-of-event
+    behaviour; ``baseline_method="mean"`` computes the unbiased window mean to
+    avoid order-statistic noise bias on small quantal events.
     """
     if len(event_indices) == 0:
         return np.array([], dtype=float)
 
     search_samples = max(1, int(pre_event_window_ms / 1000.0 * sample_rate))
     local_baselines = np.empty(len(event_indices), dtype=float)
+    use_mean = str(baseline_method or "").strip().lower() == "mean"
 
     for k, idx in enumerate(event_indices):
         win_start = max(0, int(idx) - search_samples)
@@ -332,11 +316,11 @@ def compute_local_pre_event_baseline(
         segment = data[win_start:win_end]
         if segment.size == 0:
             local_baselines[k] = float(data[max(0, int(idx))])
+        elif use_mean:
+            local_baselines[k] = float(np.mean(segment))
         elif polarity == "negative":
-            # Foot of a negative event: highest voltage before the downswing.
             local_baselines[k] = float(np.max(segment))
         else:
-            # Foot of a positive event: lowest voltage before the upswing.
             local_baselines[k] = float(np.min(segment))
 
     return local_baselines
@@ -691,8 +675,8 @@ def detect_events_threshold(  # noqa: C901
         num_events = len(event_indices)
         duration = time[-1] - time[0] if len(time) > 0 else 0
         frequency = num_events / duration if duration > 0 else 0.0
-        mean_amplitude = float(np.mean(event_amplitudes)) if num_events > 0 else 0.0
-        std_amplitude = float(np.std(event_amplitudes)) if num_events > 0 else 0.0
+        mean_amplitude = float(np.mean(event_amplitudes)) if num_events > 0 else float("nan")
+        std_amplitude = float(np.std(event_amplitudes)) if num_events > 0 else float("nan")
 
         return EventDetectionResult(
             value=frequency,
@@ -840,7 +824,7 @@ def run_event_detection_threshold_wrapper(
         lb = float(local_baselines[k]) if k < len(local_baselines) else float(np.mean(data))
         charge = calculate_event_charge_dynamic(data, idx, sampling_rate, lb, polarity=direction)
         event_charges.append(charge)
-    mean_charge = float(np.mean(event_charges)) if event_charges else 0.0
+    mean_charge = float(np.mean(event_charges)) if event_charges else float("nan")
 
     # Bi-exponential decay kinetics (aggregate over all detected events)
     tau_fast_list = []
@@ -868,7 +852,7 @@ def run_event_detection_threshold_wrapper(
             "frequency_hz": result.frequency_hz,
             "mean_amplitude": result.mean_amplitude,
             "amplitude_sd": result.amplitude_sd,
-            "mean_local_amplitude": float(np.mean(local_amplitudes)) if local_amplitudes.size > 0 else 0.0,
+            "mean_local_amplitude": float(np.mean(local_amplitudes)) if local_amplitudes.size > 0 else float("nan"),
             "mean_event_charge": mean_charge,
             "tau_mono_ms": mean_tau_mono,
             "tau_fast_ms": mean_tau_fast,
@@ -1005,18 +989,28 @@ def detect_events_template(  # noqa: C901
         # tau_decay (×2 for the largest multiplier kernel) as the half-window ensures the
         # search always brackets the true amplitude maximum even with template mismatch.
         refine_radius = max(20, int(tau_decay * sampling_rate * max(_multipliers)))
-        # Search raw data (polarity-adjusted) so rolling-baseline distortion cannot
-        # shift the detected peak away from the true signal maximum.
-        _refine_search = -data if is_negative else data
+        # Search baseline-corrected work_data within a bounded radius (at most half the
+        # distance to adjacent candidate peaks) so slow drift or nearby larger events
+        # cannot merge two distinct events onto the same sample.
+        _refine_search = baseline_corrected_data
 
         if len(peak_indices) > 0:
             corrected_indices = np.empty_like(peak_indices)
             for i, idx in enumerate(peak_indices):
                 shifted = idx + template_offset
-                win_start = max(0, shifted - refine_radius)
-                win_end = min(n_points, shifted + refine_radius + 1)
-                local_peak = np.argmax(_refine_search[win_start:win_end])
-                corrected_indices[i] = win_start + local_peak
+                left_lim = max(0, (int(peak_indices[i - 1]) + int(idx)) // 2 + template_offset) if i > 0 else 0
+                right_lim = (
+                    min(n_points, (int(idx) + int(peak_indices[i + 1])) // 2 + template_offset + 1)
+                    if i + 1 < len(peak_indices)
+                    else n_points
+                )
+                win_start = max(left_lim, max(0, shifted - refine_radius))
+                win_end = min(right_lim, min(n_points, shifted + refine_radius + 1))
+                if win_end <= win_start:
+                    corrected_indices[i] = np.clip(shifted, 0, n_points - 1)
+                else:
+                    local_peak = int(np.argmax(_refine_search[win_start:win_end]))
+                    corrected_indices[i] = win_start + local_peak
             peak_indices = np.unique(corrected_indices)
 
         if artifact_mask is not None and len(peak_indices) > 0:
@@ -1034,12 +1028,19 @@ def detect_events_template(  # noqa: C901
         else:
             time_axis = np.arange(n_points) * dt
         event_times = time_axis[event_indices] if event_count > 0 else np.array([])
+        duration = float(time_axis[-1] - time_axis[0]) if len(time_axis) > 1 else 0.0
+        freq_hz = (event_count / duration) if duration > 0 else 0.0
+        mean_amp = float(np.mean(event_amplitudes)) if event_count > 0 else float("nan")
+        amp_sd = float(np.std(event_amplitudes)) if event_count > 0 else float("nan")
 
         return EventDetectionResult(
             value=event_count,
             unit="counts",
             is_valid=True,
             event_count=event_count,
+            frequency_hz=freq_hz,
+            mean_amplitude=mean_amp,
+            amplitude_sd=amp_sd,
             event_indices=event_indices,
             event_times=event_times,
             event_amplitudes=event_amplitudes,
@@ -1221,10 +1222,15 @@ def run_event_detection_template_wrapper(
         "module_used": "synaptic_events",
         "metrics": {
             "event_count": result.event_count,
+            "frequency_hz": result.frequency_hz,
+            "mean_amplitude": result.mean_amplitude,
+            "amplitude_sd": result.amplitude_sd,
+            "template_tau_rise_ms": result.tau_rise_ms,
+            "template_tau_decay_ms": result.tau_decay_ms,
             "tau_rise_ms": result.tau_rise_ms,
             "tau_decay_ms": result.tau_decay_ms,
             "threshold_sd": result.threshold_sd,
-            "mean_local_amplitude": float(np.mean(local_amplitudes)) if local_amplitudes.size > 0 else 0.0,
+            "mean_local_amplitude": float(np.mean(local_amplitudes)) if local_amplitudes.size > 0 else float("nan"),
             "_event_times": time[_idx].tolist() if len(_idx) > 0 else [],
             "_event_peaks": data[_idx].tolist() if len(_idx) > 0 else [],
             "_local_baselines": local_baselines.tolist() if local_baselines.size > 0 else [],

@@ -470,7 +470,7 @@ def build_averaged_recording(
         ch = Channel(
             id=ref_ch_id,
             name=ref_ch.name,
-            units=ref_ch.units,
+            units=report.canonical_units or ref_ch.units,
             sampling_rate=sampling_rate_from_timebase(time_arr) or ref_ch.sampling_rate,
             data_trials=[avg_arr],
         )

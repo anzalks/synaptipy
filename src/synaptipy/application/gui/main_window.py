@@ -1079,7 +1079,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
         try:
             # nwb_exporter is already instantiated and available via self
-            self.nwb_exporter.export(current_recording, output_filepath, nwb_metadata)
+            saved_results = getattr(self, "saved_analysis_results", None) or None
+            self.nwb_exporter.export(
+                current_recording,
+                output_filepath,
+                nwb_metadata,
+                analysis_results=saved_results,
+            )
             log.debug(f"Successfully exported NWB file: {output_filepath}")
             self.status_bar.showMessage(f"Export successful: {output_filepath.name}", 5000)
             QtWidgets.QMessageBox.information(

@@ -238,6 +238,17 @@ class PluginManager:
         registry._original_metadata.update(original_metadata_before)
         sys.modules.pop(module_name, None)
 
+    @staticmethod
+    def _fingerprint_plugin_files(user_plugin_files: List[Path]) -> str:
+        """Compute a deterministic SHA-256 content digest across sorted plugin files."""
+        hasher = hashlib.sha256()
+        for p in sorted(user_plugin_files, key=lambda f: f.name):
+            try:
+                hasher.update(p.read_bytes())
+            except OSError as exc:
+                log.warning("Could not read plugin file for fingerprinting: %s (%s)", p, exc)
+        return hasher.hexdigest()
+
     @classmethod
     def _warn_user_plugins(cls, user_plugin_files: List[Path]) -> bool:
         """Show a one-time security warning when user plugins are about to be loaded.
@@ -256,22 +267,16 @@ class PluginManager:
         if not user_plugin_files:
             return True
 
-        # Compute a content-based SHA-256 fingerprint of all user plugin files.
-        # Hashing *file contents* (not paths) ensures the user is re-prompted
-        # whenever a plugin script is modified, even if its filename is unchanged.
-        hasher = hashlib.sha256()
-        for p in sorted(user_plugin_files, key=lambda f: f.name):
-            try:
-                hasher.update(p.read_bytes())
-            except OSError as exc:
-                log.warning("Could not read plugin file for fingerprinting: %s (%s)", p, exc)
-        fingerprint = hasher.hexdigest()
+        fingerprint = cls._fingerprint_plugin_files(user_plugin_files)
 
         settings = _get_settings()
         acknowledged_key = "plugin_security_acknowledged"
         last_ack = settings.value(acknowledged_key, "", type=str)
         if last_ack == fingerprint:
             return True  # already acknowledged this exact set
+        if last_ack == f"DECLINED:{fingerprint}":
+            log.info("Skipping external user plugins previously declined by user.")
+            return False
 
         try:
             from PySide6.QtWidgets import QApplication, QMessageBox
@@ -280,13 +285,12 @@ class PluginManager:
             _offscreen = getattr(app, "platformName", lambda: "")() == "offscreen"
             _testing = bool(os.environ.get("PYTEST_CURRENT_TEST"))
             if app is None or _offscreen or _testing:
-                # No QApplication yet, headless platform, or pytest session -
-                # skip the interactive dialog and proceed automatically.
+                # No interactive GUI session: proceed for CLI/test automation, but NEVER
+                # write permanent QSettings acknowledgement without explicit user consent.
                 log.warning(
                     "Plugin security dialog skipped (no interactive session). "
-                    "User plugins will be loaded without confirmation."
+                    "User plugins loaded for this non-interactive process without persisting consent."
                 )
-                settings.setValue(acknowledged_key, fingerprint)
                 return True
 
             msg = QMessageBox()
@@ -306,6 +310,7 @@ class PluginManager:
             choice = msg.exec()
             if choice != QMessageBox.StandardButton.Ok:
                 log.info("User declined to load external plugins.")
+                settings.setValue(acknowledged_key, f"DECLINED:{fingerprint}")
                 return False
         except Exception as exc:
             # No display available (headless / CI) - log and proceed.

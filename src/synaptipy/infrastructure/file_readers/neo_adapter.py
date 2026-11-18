@@ -1124,14 +1124,17 @@ class NeoAdapter:
 
             # Extract Data/Ref
             if lazy:
-                # We don't need to append refs anymore for loading, but we need to ensure the list exists
-                # for the Channel object to know how many trials there are?
-                # Channel object infers num_trials from data_trials length or metadata.
-                # If lazy, data_trials is empty.
-                # We should update metadata with the number of segments ideally.
                 if "num_trials" not in channel_metadata_map[map_key]:
                     channel_metadata_map[map_key]["num_trials"] = 0
                 channel_metadata_map[map_key]["num_trials"] += 1
+                if "_rescaled_unit" not in channel_metadata_map[map_key] and hasattr(anasig, "units"):
+                    for target_u in ("mV", "pA"):
+                        try:
+                            (1.0 * anasig.units).rescale(target_u)
+                            channel_metadata_map[map_key]["_rescaled_unit"] = target_u
+                            break
+                        except Exception:
+                            continue
             else:
                 # --- Data unit standardization via Neo's native rescale() ---
                 # Electrophysiology convention: voltage in mV, current in pA.
@@ -1180,23 +1183,24 @@ class NeoAdapter:
                 try:
                     raw_fs = float(anasig.sampling_rate)
 
+                    signal_units = channel_metadata_map[map_key].get(
+                        "_rescaled_unit",
+                        str(anasig.units.dimensionality),
+                    )
                     if force_kHz_to_Hz:
-                        # Apply Correction
+                        # Apply Correction (keep legacy metadata_map['units'] == 'Hz' contract while
+                        # preserving true amplitude units in '_signal_units' for Channel construction).
                         fs = raw_fs * 1000.0
-                        units_dim = "Hz"  # Explicitly corrected
+                        units_dim = "Hz"
                         log.info(f"Applying Unit Correction: {raw_fs} -> {fs} Hz for Channel {anasig_id}")
                     else:
                         fs = raw_fs
-                        # Use rescaled unit if data was standardized,
-                        # otherwise keep the original Neo dimensionality.
-                        units_dim = channel_metadata_map[map_key].get(
-                            "_rescaled_unit",
-                            str(anasig.units.dimensionality),
-                        )
+                        units_dim = signal_units
 
                     channel_metadata_map[map_key].update(
                         {
                             "units": units_dim,
+                            "_signal_units": signal_units,
                             "sampling_rate": fs,
                             "t_start": float(anasig.t_start),
                         }
@@ -1250,10 +1254,16 @@ class NeoAdapter:
                 if isinstance(handle, NeoSourceHandle):
                     loader = create_loader(meta["id"], handle)
 
+            resolved_units = meta.get("units", "unknown")
+            if resolved_units == "Hz" and meta.get("_signal_units"):
+                resolved_units = meta["_signal_units"]
+            elif meta.get("_rescaled_unit") and resolved_units in ("unknown", "V", "A", "volt", "ampere"):
+                resolved_units = meta["_rescaled_unit"]
+
             channel = Channel(
                 id=meta["id"],
                 name=meta["name"],
-                units=meta.get("units", "unknown"),
+                units=resolved_units,
                 sampling_rate=meta.get("sampling_rate", 0.0),
                 data_trials=meta["data_trials"] if not lazy else [],
                 loader=loader,

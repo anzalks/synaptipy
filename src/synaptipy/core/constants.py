@@ -105,8 +105,8 @@ BURST_ISI_FRACTION = 0.3
 # ===========================================================================
 # SYNAPTIC EVENT DETECTION
 # ===========================================================================
-# Bhatt, McLean, Bhatt & Bhatt (2009) "Bhatt et al." J Physiol methodology
-# for noise floor estimation in miniature synaptic event detection.
+# Clements & Bekkers (1997) Biophys J 73:220-229 and Hampel (1974) robust
+# quiescent baseline RMS/MAD noise-floor estimation for miniature synaptic events.
 
 # Minimum RMS noise floor to prevent zero-noise division when the trace is
 # completely flat (e.g., digital zeros or saturated amplifier).

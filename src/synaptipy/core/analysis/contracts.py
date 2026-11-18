@@ -26,6 +26,24 @@ class AnalysisResult:
     schema_version: int = ANALYSIS_RESULT_SCHEMA_VERSION
 
     @classmethod
+    def _merge_nested_extras(
+        cls,
+        raw_dict: Dict[str, Any],
+        metrics_out: Dict[str, Any],
+        plot_payload: Dict[str, Any],
+    ) -> None:
+        """Preserve top-level 'error' and private '_' overlay keys from plugin dicts."""
+        reserved = {"module_used", "analysis_name", "warnings", "provenance", "schema_version"}
+        if "error" in raw_dict and "error" not in metrics_out:
+            metrics_out["error"] = raw_dict["error"]
+        for extra_k, extra_v in raw_dict.items():
+            if extra_k in reserved:
+                continue
+            if str(extra_k).startswith("_"):
+                metrics_out.setdefault(extra_k, extra_v)
+                plot_payload.setdefault(extra_k, extra_v)
+
+    @classmethod
     def from_raw(cls, analysis_name: str, raw: Any) -> "AnalysisResult":
         """Make one canonical result from an analysis implementation's output.
 
@@ -37,14 +55,19 @@ class AnalysisResult:
             return raw
         if isinstance(raw, Mapping):
             raw_dict = dict(raw)
+            has_nested_metrics = "metrics" in raw_dict
             metrics = raw_dict.pop("metrics", raw_dict)
             if not isinstance(metrics, Mapping):
                 metrics = {"result": metrics}
+            metrics_out = dict(metrics)
+            plot_payload = dict(raw_dict.pop("plot_payload", {}))
+            if has_nested_metrics:
+                cls._merge_nested_extras(raw_dict, metrics_out, plot_payload)
             return cls(
                 analysis_name=str(raw_dict.pop("analysis_name", analysis_name)),
-                metrics=dict(metrics),
+                metrics=metrics_out,
                 warnings=list(raw_dict.pop("warnings", [])),
-                plot_payload=dict(raw_dict.pop("plot_payload", {})),
+                plot_payload=plot_payload,
                 provenance=dict(raw_dict.pop("provenance", {})),
                 schema_version=int(raw_dict.pop("schema_version", ANALYSIS_RESULT_SCHEMA_VERSION)),
             )

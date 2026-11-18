@@ -215,7 +215,10 @@ def run_miniml_detection(
 
     try:
         sampling_interval = 1.0 / sampling_rate  # seconds per sample
-        trace = MiniTrace(data=data, sampling_interval=sampling_interval)
+        try:
+            trace = MiniTrace(data=data, sampling_interval=sampling_interval)
+        except TypeError:
+            trace = MiniTrace(data=data, sampling=sampling_interval)
         log.info(
             "miniML: trace - %.3f s at %.0f Hz (%d samples)",
             float(time[-1] - time[0]),

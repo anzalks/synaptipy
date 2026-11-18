@@ -175,30 +175,68 @@ def check_trace_quality(data: np.ndarray, sampling_rate: float) -> Dict[str, Any
     return results
 
 
+def _compute_sos_zi_safe(sos: np.ndarray) -> np.ndarray:
+    """Compute exact steady-state SOS initial conditions without numpy.linalg.solve.
+
+    Avoids the misaligned BLAS matrix call inside scipy.signal.sosfilt_zi on
+    macOS ARM64 by solving each Direct-Form II Transposed biquad analytically.
+    """
+    n_sections = sos.shape[0]
+    zi = np.zeros((n_sections, 2), dtype=np.float64)
+    scale = 1.0
+    for idx in range(n_sections):
+        b0, b1, b2, a0, a1, a2 = sos[idx]
+        if abs(a0) > 1e-15 and a0 != 1.0:
+            b0, b1, b2 = b0 / a0, b1 / a0, b2 / a0
+            a1, a2 = a1 / a0, a2 / a0
+        denom = 1.0 + a1 + a2
+        if abs(denom) > 1e-12:
+            y_ss = scale * (b0 + b1 + b2) / denom
+            z1 = b2 * scale - a2 * y_ss
+            z0 = b1 * scale - a1 * y_ss + z1
+            zi[idx, 0] = z0
+            zi[idx, 1] = z1
+            scale = y_ss
+        else:
+            scale = 0.0
+    return zi
+
+
 def _sosfiltfilt_safe(sos: np.ndarray, data: np.ndarray) -> np.ndarray:
     """Zero-phase SOS filter that avoids numpy.linalg.solve (SIGBUS on macOS ARM).
 
-    scipy.signal.sosfiltfilt calls sosfilt_zi → lfilter_zi → numpy.linalg.solve
-    to compute initial conditions.  With scipy >= 1.14.0 (array_api_compat path)
-    and numpy 1.26.x on macOS ARM, that intermediate matrix passed to BLAS is
-    misaligned → SIGBUS.
-
-    This implementation performs the same forward+reverse double-pass using
-    sosfilt, which never calls lfilter_zi.  The result is zero-phase filtered
-    output with very small edge transients (identical to sosfiltfilt with
-    padtype=None).
+    Uses analytical biquad steady-state initial conditions and odd-reflection
+    boundary padding around ``scipy.signal.sosfilt`` so non-zero DC resting
+    potentials (e.g., -70 mV) produce zero boundary step transients without
+    invoking BLAS ``linalg.solve``.
     """
     scipy_signal, _, has_scipy = _get_scipy()
     if not has_scipy:
         return data
-    # Force C-contiguous float64 for both arrays to avoid any downstream BLAS issues.
-    data = np.ascontiguousarray(data, dtype=np.float64)
-    sos = np.ascontiguousarray(sos, dtype=np.float64)
-    # Forward pass
-    y = scipy_signal.sosfilt(sos, data)
-    # Backward pass on reversed signal, then re-reverse
-    y = scipy_signal.sosfilt(sos, y[::-1])[::-1]
-    return np.ascontiguousarray(y, dtype=np.float64)
+    x = np.ascontiguousarray(data, dtype=np.float64)
+    n_samples = x.shape[0]
+    if n_samples <= 1:
+        return x.copy()
+    sos_arr = np.ascontiguousarray(sos, dtype=np.float64)
+    zi_base = _compute_sos_zi_safe(sos_arr)
+
+    padlen = min(3 * (2 * sos_arr.shape[0] + 1), n_samples - 1)
+    if padlen > 0:
+        left_ext = 2.0 * x[0] - x[padlen:0:-1]
+        right_ext = 2.0 * x[-1] - x[-2 : -padlen - 2 : -1]
+        x_pad = np.ascontiguousarray(np.concatenate((left_ext, x, right_ext)), dtype=np.float64)
+    else:
+        x_pad = x
+
+    y_fwd, _ = scipy_signal.sosfilt(sos_arr, x_pad, zi=zi_base * x_pad[0])
+    y_rev = np.ascontiguousarray(y_fwd[::-1], dtype=np.float64)
+    y_bwd, _ = scipy_signal.sosfilt(sos_arr, y_rev, zi=zi_base * y_rev[0])
+    y_full = y_bwd[::-1]
+    if padlen > 0:
+        y_out = y_full[padlen : padlen + n_samples]
+    else:
+        y_out = y_full
+    return np.ascontiguousarray(y_out, dtype=np.float64)
 
 
 def _validate_filter_input(data: np.ndarray, fs: float, order: int = 5) -> tuple:
@@ -239,20 +277,25 @@ def _validate_filter_input(data: np.ndarray, fs: float, order: int = 5) -> tuple
     return True, data
 
 
-def bandpass_filter(data: np.ndarray, lowcut: float, highcut: float, fs: float, order: int = 5) -> np.ndarray:
+def _design_iir_sos(signal_mod: Any, order: int, wn: Any, btype: str, filter_type: str) -> np.ndarray:
+    """Design a Butterworth or phase-matched Bessel SOS filter."""
+    ftype = str(filter_type or "butterworth").strip().lower()
+    if ftype == "bessel":
+        return signal_mod.bessel(order, wn, btype=btype, analog=False, output="sos", norm="phase")
+    return signal_mod.butter(order, wn, btype=btype, analog=False, output="sos")
+
+
+def bandpass_filter(
+    data: np.ndarray,
+    lowcut: float,
+    highcut: float,
+    fs: float,
+    order: int = 5,
+    filter_type: str = "butterworth",
+) -> np.ndarray:
     """
-    Apply a Butterworth bandpass filter to the data.
+    Apply a zero-phase bandpass filter (Butterworth or Bessel) to the data.
     Uses Second Order Sections (SOS) for numerical stability.
-
-    Args:
-        data: Input signal array
-        lowcut: Low cutoff frequency in Hz
-        highcut: High cutoff frequency in Hz
-        fs: Sampling frequency in Hz
-        order: Filter order (1-10, default 5)
-
-    Returns:
-        Filtered data, or original data if filtering fails
     """
     signal, _, has_scipy = _get_scipy()
     if not has_scipy:
@@ -283,28 +326,23 @@ def bandpass_filter(data: np.ndarray, lowcut: float, highcut: float, fs: float, 
         return data
 
     try:
-        # Use SOS format for numerical stability
-        sos = signal.butter(order, [low, high], btype="band", output="sos")
-        y = _sosfiltfilt_safe(sos, data)
-        return y
+        sos = _design_iir_sos(signal, order, [low, high], "band", filter_type)
+        return _sosfiltfilt_safe(sos, data)
     except Exception as e:
         log.error(f"Bandpass filter failed: {e}")
         return data
 
 
-def lowpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) -> np.ndarray:
+def lowpass_filter(
+    data: np.ndarray,
+    cutoff: float,
+    fs: float,
+    order: int = 5,
+    filter_type: str = "butterworth",
+) -> np.ndarray:
     """
-    Apply a Butterworth lowpass filter.
-    Uses Second Order Sections (SOS) for numerical stability.
-
-    Args:
-        data: Input signal array
-        cutoff: Cutoff frequency in Hz
-        fs: Sampling frequency in Hz
-        order: Filter order (1-10, default 5)
-
-    Returns:
-        Filtered data, or original data if filtering fails
+    Apply a zero-phase lowpass filter (Butterworth, Bessel, or Gaussian).
+    Uses Second Order Sections (SOS) for IIR numerical stability.
     """
     signal, _, has_scipy = _get_scipy()
     if not has_scipy:
@@ -322,34 +360,34 @@ def lowpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) -
     nyq = 0.5 * fs
     normal_cutoff = cutoff / nyq
 
-    # Bounds check (was missing!)
     if normal_cutoff <= 0 or normal_cutoff >= 1:
         log.warning(f"Cutoff {cutoff} Hz out of bounds for fs={fs} Hz. Returning original.")
         return data
 
     try:
-        # Use SOS format for numerical stability
-        sos = signal.butter(order, normal_cutoff, btype="low", analog=False, output="sos")
-        y = _sosfiltfilt_safe(sos, data)
-        return y
+        if str(filter_type or "").strip().lower() == "gaussian":
+            import scipy.ndimage as ndimage
+
+            # -3 dB Gaussian sigma in samples: sigma_f = cutoff / sqrt(2 * ln(2))
+            sigma_samples = float(fs) / (2.0 * np.pi * float(cutoff)) * np.sqrt(np.log(2.0))
+            return ndimage.gaussian_filter1d(np.asarray(data, dtype=np.float64), sigma=max(sigma_samples, 1e-6))
+        sos = _design_iir_sos(signal, order, normal_cutoff, "low", filter_type)
+        return _sosfiltfilt_safe(sos, data)
     except Exception as e:
         log.error(f"Lowpass filter failed: {e}")
         return data
 
 
-def highpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) -> np.ndarray:
+def highpass_filter(
+    data: np.ndarray,
+    cutoff: float,
+    fs: float,
+    order: int = 5,
+    filter_type: str = "butterworth",
+) -> np.ndarray:
     """
-    Apply a Butterworth highpass filter.
+    Apply a zero-phase highpass filter (Butterworth, Bessel, or Gaussian).
     Uses Second Order Sections (SOS) for numerical stability.
-
-    Args:
-        data: Input signal array
-        cutoff: Cutoff frequency in Hz
-        fs: Sampling frequency in Hz
-        order: Filter order (1-10, default 5)
-
-    Returns:
-        Filtered data, or original data if filtering fails
     """
     signal, _, has_scipy = _get_scipy()
     if not has_scipy:
@@ -373,10 +411,11 @@ def highpass_filter(data: np.ndarray, cutoff: float, fs: float, order: int = 5) 
         return data
 
     try:
-        # Use SOS format for numerical stability
-        sos = signal.butter(order, normal_cutoff, btype="high", analog=False, output="sos")
-        y = _sosfiltfilt_safe(sos, data)
-        return y
+        if str(filter_type or "").strip().lower() == "gaussian":
+            lp = lowpass_filter(data, cutoff=cutoff, fs=fs, order=order, filter_type="gaussian")
+            return np.asarray(data, dtype=np.float64) - lp
+        sos = _design_iir_sos(signal, order, normal_cutoff, "high", filter_type)
+        return _sosfiltfilt_safe(sos, data)
     except Exception as e:
         log.error(f"Highpass filter failed: {e}")
         return data
@@ -679,18 +718,21 @@ def find_artifact_windows(data: np.ndarray, fs: float, slope_threshold: float, p
     if data is None or len(data) == 0:
         return np.array([], dtype=bool)
 
+    # Convert per-sample gradient to physical units/ms (invariant across sampling rates;
+    # at fs=1000 Hz, scale_to_ms == 1.0 so legacy unit tests remain identical).
+    scale_to_ms = (float(fs) / 1000.0) if (fs is not None and fs > 0) else 1.0
+
     # Lazily import scipy
     _, _, has_scipy = _get_scipy()
     if not has_scipy:
         log.warning("Scipy not available. Cannot perform artifact dilation.")
-        # Fallback: just return thresholded gradient without dilation
-        grad = np.abs(np.gradient(data))
+        grad = np.abs(np.gradient(data)) * scale_to_ms
         return grad > slope_threshold
 
     import scipy.ndimage as ndimage
 
-    # 1. Gradient
-    grad = np.abs(np.gradient(data))
+    # 1. Gradient in physical units/ms
+    grad = np.abs(np.gradient(data)) * scale_to_ms
 
     # 2. Threshold
     mask = grad > slope_threshold

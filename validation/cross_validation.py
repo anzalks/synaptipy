@@ -16,7 +16,7 @@ Reference Data Sources:
 
 - Allen Cell Types Database: https://celltypes.brain-map.org/
 - NeuroElectro: https://neuroelectro.org/
-- Bhatt et al. 2009 supplementary data (event detection benchmark)
+- Clements & Bekkers (1997) / Pernia-Andrade et al. (2012) (event detection benchmark)
 
 The framework generates synthetic traces with known ground-truth properties
 and evaluates Synaptipy's detection performance across multiple SNR levels.
@@ -33,7 +33,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 from scipy.stats import pearsonr
 
-from synaptipy.core.analysis.passive_properties import calculate_rmp
+from synaptipy.core.analysis.passive_properties import calculate_rin, calculate_rmp
 from synaptipy.core.analysis.single_spike import detect_spikes_threshold
 
 # ---------------------------------------------------------------------------
@@ -357,15 +357,18 @@ def run_passive_properties_benchmark(
             # Add noise
             voltage += np.random.normal(0, noise_sd, n_samples)
 
-            # Measure with Synaptipy
-            rmp_result = calculate_rmp(voltage[:step_start], time[:step_start])
+            # Measure with Synaptipy core functions (RMP and Rin)
+            rmp_result = calculate_rmp(voltage, time, baseline_window=(0.0, baseline_dur))
             measured_rmp = rmp_result.value if rmp_result.is_valid else np.nan
 
-            # Rin: use steady-state voltage
-            ss_start = step_end - int(0.05 * sampling_rate)
-            measured_ss_v = np.mean(voltage[ss_start:step_end])
-            measured_delta_v = measured_ss_v - measured_rmp
-            measured_rin = abs(measured_delta_v / (current_step_pa / 1000.0))  # MOhm
+            rin_result = calculate_rin(
+                voltage_trace=voltage,
+                time_vector=time,
+                current_amplitude=current_step_pa,
+                baseline_window=(0.0, baseline_dur),
+                response_window=(baseline_dur + step_dur - 0.05, baseline_dur + step_dur),
+            )
+            measured_rin = rin_result.value if (rin_result.is_valid and rin_result.value is not None) else np.nan
 
             rmp_errors.append(abs(measured_rmp - true_rmp_mv))
             rin_errors.append(abs(measured_rin - true_rin_mohm) / true_rin_mohm * 100)

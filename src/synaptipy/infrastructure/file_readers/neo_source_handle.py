@@ -34,6 +34,35 @@ class NeoSourceHandle(SourceHandle):
         """
         self._channel_map = channel_map
 
+    @staticmethod
+    def _extract_1d_channel_array(analog_signal: Any, ch_offset: int) -> Optional[np.ndarray]:
+        """Materialize proxy if needed, select *ch_offset*, rescale real Neo signals to mV/pA, and flatten."""
+        proxy_cls = getattr(getattr(neo, "io", None), "proxyobjects", None)
+        proxy_type = getattr(proxy_cls, "AnalogSignalProxy", ()) if proxy_cls is not None else ()
+        if proxy_type and isinstance(analog_signal, proxy_type):
+            try:
+                analog_signal = analog_signal.load(channel_indexes=[ch_offset])
+                ch_offset = 0
+            except TypeError:
+                analog_signal = analog_signal.load()
+
+        shape = getattr(analog_signal, "shape", ())
+        n_cols = shape[1] if len(shape) > 1 else 1
+        if n_cols <= ch_offset:
+            return None
+
+        col = analog_signal[:, ch_offset] if len(shape) > 1 else analog_signal
+        col_mod = type(col).__module__
+        if (col_mod.startswith("neo") or col_mod.startswith("quantities")) and hasattr(col, "rescale"):
+            for target_unit in ("mV", "pA"):
+                try:
+                    return np.asarray(col.rescale(target_unit).magnitude, dtype=float).ravel()
+                except ValueError:
+                    continue
+        if hasattr(col, "magnitude") and isinstance(col.magnitude, np.ndarray):
+            return np.asarray(col.magnitude).ravel()
+        return np.asarray(col).ravel()
+
     def load_channel_data(self, channel_id: str, trial_index: int) -> Optional[np.ndarray]:
         """
         Loads data using the Neo Block structure and the pre-computed channel map.
@@ -61,16 +90,7 @@ class NeoSourceHandle(SourceHandle):
             log.debug(f"NeoSourceHandle: Signal index {sig_idx} invalid for " f"segment {trial_index}.")
             return None
 
-        analog_signal = segment.analogsignals[sig_idx]
-
-        # Retrieve specific channel column
-        if analog_signal.shape[1] > ch_offset:
-            data = analog_signal[:, ch_offset]
-            if hasattr(data, "magnitude"):
-                return data.magnitude
-            return np.array(data)
-
-        return None
+        return self._extract_1d_channel_array(segment.analogsignals[sig_idx], ch_offset)
 
     def get_metadata(self) -> Dict[str, Any]:
         meta: Dict[str, Any] = {}

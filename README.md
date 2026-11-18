@@ -88,7 +88,7 @@ pipeline = [
     {
         "analysis": "spike_detection",
         "scope": "all_trials",
-        "params": {"threshold": -20.0, "refractory_ms": 2.0},
+        "params": {"threshold": -20.0, "refractory_period": 0.002},
     }
 ]
 results = engine.run_batch([Path("recording.abf")], pipeline)

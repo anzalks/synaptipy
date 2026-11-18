@@ -340,8 +340,8 @@ def calculate_paired_pulse_ratio(  # noqa: C901
         segment = data[i0:i1]
         return float(np.mean(segment)) if segment.size > 0 else float(data[_nearest_idx(stim_onset_s)])
 
-    def _response_peak(stim_onset_s: float, baseline: float) -> Tuple[float, float]:
-        """Return (peak_amplitude, raw_peak_value) relative to baseline.
+    def _response_peak(stim_onset_s: float, baseline: float) -> Tuple[float, float, float]:
+        """Return (peak_amplitude, raw_peak_value, peak_time_s) relative to baseline.
 
         Data within ``artifact_blanking_ms`` of the stimulus onset are excluded
         so that the stimulus artefact is never mistaken for the biological peak.
@@ -350,18 +350,19 @@ def calculate_paired_pulse_ratio(  # noqa: C901
         win_start = _nearest_idx(stim_onset_s + blank_s)
         win_end = min(_nearest_idx(stim_onset_s + response_window_ms / 1000.0) + 1, len(data))
         if win_end <= win_start:
-            return 0.0, baseline
+            return 0.0, baseline, float(stim_onset_s)
         segment = data[win_start:win_end]
         if polarity == "negative":
-            peak_raw = float(np.min(segment))
-            return baseline - peak_raw, peak_raw
-        else:
-            peak_raw = float(np.max(segment))
-            return peak_raw - baseline, peak_raw
+            rel_idx = int(np.argmin(segment))
+            peak_raw = float(segment[rel_idx])
+            return baseline - peak_raw, peak_raw, float(time[win_start + rel_idx])
+        rel_idx = int(np.argmax(segment))
+        peak_raw = float(segment[rel_idx])
+        return peak_raw - baseline, peak_raw, float(time[win_start + rel_idx])
 
     # --- R1 ---
     bl1 = _local_baseline(stim1_onset_s)
-    r1_amp, _ = _response_peak(stim1_onset_s, bl1)
+    r1_amp, _, _ = _response_peak(stim1_onset_s, bl1)
     out["r1_amplitude"] = r1_amp
 
     if r1_amp <= 0:
@@ -381,7 +382,7 @@ def calculate_paired_pulse_ratio(  # noqa: C901
     if i_fit1 - i_fit0 < 4:
         # Fallback: no residual correction
         bl2 = _local_baseline(stim2_onset_s)
-        r2_amp_raw, _ = _response_peak(stim2_onset_s, bl2)
+        r2_amp_raw, _, _ = _response_peak(stim2_onset_s, bl2)
         out["r2_amplitude_raw"] = r2_amp_raw
         out["r2_amplitude_corrected"] = r2_amp_raw
         out["residual_at_stim2"] = 0.0
@@ -478,38 +479,31 @@ def calculate_paired_pulse_ratio(  # noqa: C901
 
     # --- R2 ---
     bl2 = _local_baseline(stim2_onset_s)
-    r2_amp_raw, r2_peak_raw = _response_peak(stim2_onset_s, bl2)
+    r2_amp_raw, r2_peak_raw, r2_peak_time_s = _response_peak(stim2_onset_s, bl2)
     out["r2_amplitude_raw"] = r2_amp_raw
 
-    # Compute the corrected R2 amplitude measured from bl1 (the true resting
-    # baseline before any stimulation), not from bl2 (the local baseline just
-    # before stim2 which may be contaminated by the R1 decay tail).
-    #
-    # Scientific rationale (Zucker & Regehr 2002, Regehr 2012):
-    #   The "raw" amplitude r2_amp_raw is measured from bl2.  When the R1 decay
-    #   has not fully returned to baseline by stim2, bl2 < bl1 (for inward/
-    #   negative events) or bl2 > bl1 (for outward/positive events).  Using bl2
-    #   as reference therefore underestimates the true R2 amplitude.  The
-    #   corrected amplitude is obtained by using bl1 as the reference, which
-    #   directly captures the contamination without relying on a potentially
-    #   poor extrapolation of the decay fit.
-    #
-    #   Derivation:
-    #     r2_peak_raw = actual peak value (returned by _response_peak)
-    #     Negative: r2_corrected = bl1 - r2_peak_raw
-    #     Positive: r2_corrected = r2_peak_raw - bl1
-    #
-    #   When residual is negligible (bl2 ≈ bl1): r2_corrected ≈ r2_amp_raw.
-    #   When residual is significant: r2_corrected uses bl1 as reference.
-    if polarity == "negative":
-        r2_corrected = bl1 - r2_peak_raw
+    # Subtract the extrapolated R1 decay tail evaluated at R2's peak timestamp
+    # (Zucker & Regehr 2002; Thanawala & Regehr 2013):
+    #   v_tail_at_r2 = bl1 + residual(t_peak2)
+    #   Negative polarity: r2_corrected = v_tail_at_r2 - r2_peak_raw
+    #   Positive polarity: r2_corrected = r2_peak_raw - v_tail_at_r2
+    if "_fit_func" in locals() and _fit_func is not None and _popt is not None:
+        t_at_r2_peak_ms = (r2_peak_time_s - float(time[i_fit0])) * 1000.0
+        v_tail_at_r2 = float(_fit_func(t_at_r2_peak_ms, *_popt))
     else:
-        r2_corrected = r2_peak_raw - bl1
+        v_tail_at_r2 = bl1 + residual_at_stim2
+
+    if polarity == "negative":
+        r2_corrected = v_tail_at_r2 - r2_peak_raw
+    else:
+        r2_corrected = r2_peak_raw - v_tail_at_r2
 
     out["r2_amplitude_corrected"] = float(r2_corrected)
 
     if r1_amp > 0:
-        out["paired_pulse_ratio"] = float(r2_corrected) / r1_amp
+        ppr_val = float(r2_corrected) / r1_amp
+        out["paired_pulse_ratio"] = ppr_val
+        out["ppr"] = ppr_val
 
     return out
 
@@ -534,7 +528,7 @@ def calculate_n_pulse_ratio(  # noqa: C901
 
     For each pulse *i* the cumulative residual from all prior pulses'
     fitted decays is subtracted before measuring amplitude and fitting
-    the current pulse's isolated decay (Thanawala & Bhatt 2013;
+    the current pulse's isolated decay (Thanawala & Regehr 2013;
     Wesseling & Lo 2002).
 
     Algorithm:
@@ -1579,22 +1573,29 @@ def calculate_stimulus_train_stp(  # noqa: C901
     n = len(amplitudes)
     pulse_numbers = list(range(1, n + 1))
     r1 = amplitudes[0] if amplitudes else 1.0
-    amplitudes_norm = [a / r1 if r1 != 0.0 else float("nan") for a in amplitudes]
+    amplitudes_norm = [a / r1 if abs(r1) > 1e-12 else float("nan") for a in amplitudes]
 
     ratios: Dict[str, Any] = {}
     for i in range(1, n):
-        ratios[f"R{i + 1}/R1"] = round(amplitudes_norm[i], 4)
+        ratios[f"R{i + 1}/R1"] = float(amplitudes_norm[i])
+
+    steady_tail = amplitudes_norm[-min(3, n) :] if n >= 2 else []
+    steady_state_ratio = float(np.nanmean(steady_tail)) if steady_tail else float("nan")
 
     stp_type = "none"
     if n >= 2:
-        stp_type = "facilitation" if amplitudes[1] > amplitudes[0] else "depression"
+        if n >= 4 and (amplitudes[1] > amplitudes[0]) != (amplitudes[-1] > amplitudes[0]):
+            stp_type = "biphasic"
+        else:
+            stp_type = "facilitation" if amplitudes[1] > amplitudes[0] else "depression"
 
     return {
         "pulse_count": n,
-        "r1_amplitude": round(amplitudes[0], 4) if amplitudes else None,
+        "r1_amplitude": float(amplitudes[0]) if amplitudes else None,
+        "steady_state_ratio": steady_state_ratio,
         "stp_type": stp_type,
         **ratios,
-        "amplitudes": [round(a, 4) for a in amplitudes],
+        "amplitudes": [float(a) for a in amplitudes],
         "amplitudes_norm": amplitudes_norm,
         "pulse_numbers": pulse_numbers,
         "_stim_onsets": stim_onsets.tolist(),

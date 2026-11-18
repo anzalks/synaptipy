@@ -208,6 +208,7 @@ def calculate_opto_jitter(
     name="opto_jitter",
     label="Opto Latency Jitter",
     expects_list=True,
+    requires_multi_trial=True,
     requires_secondary_channel={
         "param_name": "secondary_data",
         "label": "TTL / Stimulus Channel:",

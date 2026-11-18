@@ -26,6 +26,7 @@ from . import epoch_manager  # noqa: F401 - EpochManager for TTL and manual epoc
 from . import evoked_responses  # noqa: F401 - registers: optogenetic_sync
 from . import firing_dynamics  # noqa: F401 - registers: excitability_analysis, burst_analysis, train_dynamics
 from . import passive_properties  # noqa: F401 - registers passive-property analyses
+from . import preprocessing  # noqa: F401 - registers batch signal preprocessors
 from . import single_spike  # noqa: F401 - registers: spike_detection, phase_plane_analysis
 from . import synaptic_events  # noqa: F401 - registers event-detection analyses
 from .contracts import ANALYSIS_RESULT_SCHEMA_VERSION, AnalysisResult  # noqa: F401

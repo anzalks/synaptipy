@@ -31,55 +31,80 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 _SIG_FIGS = 6
+_TIME_SIG_FIGS = 10
 _MAX_ARRAY_PREVIEW = 10
+_HIGH_PRECISION_TIME_SUFFIXES = (
+    "_time",
+    "_time_s",
+    "_times",
+    "_times_s",
+    "_onset",
+    "_onset_s",
+    "_onsets",
+    "_latency_s",
+    "_latency_ms",
+    "_delay",
+    "_delay_s",
+    "_delay_ms",
+    "isi_s",
+    "isi_ms",
+)
 
 
 def _round_sig(x: float, sig: int = _SIG_FIGS) -> float:
-    """Round *x* to *sig* significant figures.  Returns *x* unchanged if not finite."""
-    if x == 0.0:
-        return 0.0
+    """Round *x* to *sig* significant figures. Returns *x* unchanged if not finite."""
     import math
 
-    magnitude = math.floor(math.log10(abs(x)))
-    factor = 10 ** (sig - 1 - magnitude)
-    return round(x * factor) / factor
+    try:
+        val = float(x)
+    except (TypeError, ValueError):
+        return x
+    if not math.isfinite(val):
+        return val
+    if val == 0.0:
+        return 0.0
+    sig_clamped = max(1, int(sig))
+    return float(f"{val:.{sig_clamped}g}")
 
 
-def _sanitize_elem(val: Any) -> Any:
+def _sanitize_elem(val: Any, sig: int = _SIG_FIGS) -> Any:
     """Convert a single scalar *val* to a CSV-safe Python native type."""
     if isinstance(val, (np.floating,)):
         f = float(val)
-        return _round_sig(f) if np.isfinite(f) else f
+        return _round_sig(f, sig=sig) if np.isfinite(f) else f
     if isinstance(val, (np.integer,)):
         return int(val)
     if isinstance(val, float):
-        return _round_sig(val) if np.isfinite(val) else val
+        return _round_sig(val, sig=sig) if np.isfinite(val) else val
     return val
 
 
-def _sanitize_csv_value(val: Any) -> Any:
-    """Convert *val* to a CSV-safe Python scalar or compact string.
+def _is_high_precision_time_key(key: Optional[str]) -> bool:
+    """Return True if *key* represents a timestamp or latency requiring >=10 sig figs."""
+    if not key:
+        return False
+    k_low = key.lower()
+    if k_low in ("time", "time_s", "spike_times", "event_times", "peak_times", "ap_delay"):
+        return True
+    return k_low.endswith(_HIGH_PRECISION_TIME_SUFFIXES)
 
-    Rules:
-    * ``None`` → ``np.nan``
-    * numpy scalars → native Python float/int, rounded to ``_SIG_FIGS`` sig-figs
-    * plain ``float`` → rounded to ``_SIG_FIGS`` sig-figs
-    * numpy arrays / lists → cleaned string, no ``np.float32(…)`` wrappers;
-      arrays longer than ``_MAX_ARRAY_PREVIEW`` are truncated with a count note
-    * everything else → unchanged
-    """
+
+def _sanitize_csv_value(val: Any, key: Optional[str] = None) -> Any:
+    """Convert *val* to a CSV-safe Python scalar or compact string."""
     if val is None:
         return np.nan
 
+    sig = _TIME_SIG_FIGS if _is_high_precision_time_key(key) else _SIG_FIGS
+
     # numpy scalar
     if isinstance(val, (np.floating, np.integer)):
-        return _sanitize_elem(val)
+        return _sanitize_elem(val, sig=sig)
 
     # plain Python float
     if isinstance(val, float):
-        return _sanitize_elem(val)
+        return _sanitize_elem(val, sig=sig)
 
-    # numpy array → convert to list then fall through
+    # numpy array -> convert to list then fall through
     if isinstance(val, np.ndarray):
         val = val.tolist()
 
@@ -87,7 +112,7 @@ def _sanitize_csv_value(val: Any) -> Any:
     if isinstance(val, (list, tuple)):
         if len(val) == 0:
             return np.nan
-        clean = [_sanitize_elem(v) for v in val]
+        clean = [_sanitize_elem(v, sig=sig) for v in val]
         if len(clean) > _MAX_ARRAY_PREVIEW:
             preview = clean[:_MAX_ARRAY_PREVIEW]
             return f"{preview} ... ({len(clean)} total)"
@@ -162,9 +187,14 @@ _TIDY_UNIT_MAP: Dict[str, str] = {
     "rin_mohm": "MOhm",
     "rin_peak_mohm": "MOhm",
     "rin_steady_state_mohm": "MOhm",
+    "rin_aggregate_mohm": "MOhm",
     "rs_mohm": "MOhm",
     "rs_cc_mohm": "MOhm",
+    "series_resistance_mohm": "MOhm",
+    "conductance_us": "uS",
     "cm_pf": "pF",
+    "capacitance_pf": "pF",
+    "capacitance_charge_pf": "pF",
     "cm_fit_pf": "pF",
     "cm_derived_pf": "pF",
     "sag_ratio": "ratio",
@@ -177,18 +207,36 @@ _TIDY_UNIT_MAP: Dict[str, str] = {
     "decay_time_90_10": "ms",
     "fahp_depth": "mV",
     "mahp_depth": "mV",
+    "adp_amplitude": "mV",
     "max_dvdt": "V/s",
     "min_dvdt": "V/s",
     "absolute_peak_mv": "mV",
     "overshoot_mv": "mV",
     "ppr": "ratio",
+    "paired_pulse_ratio": "ratio",
     "ppr_naive": "ratio",
+    "rectification_index": "ratio",
+    "response_probability": "ratio",
+    "response_probability_pct": "%",
     "tau_p1_ms": "ms",
     "interpulse_interval_ms": "ms",
     "event_amplitude": "pA",
     "event_frequency_hz": "Hz",
+    "frequency_hz": "Hz",
+    "mean_frequency": "Hz",
+    "window_frequency_hz": "Hz",
     "tau_mono_ms": "ms",
     "adaptation_index": "ratio",
+    "spike_count": "",
+    "burst_count": "",
+    "event_count": "",
+    "pulse_count": "",
+    "cv": "",
+    "cv2": "",
+    "lv": "",
+    "r_squared": "",
+    "iv_r_squared": "",
+    "tau_r_squared": "",
 }
 
 
@@ -202,18 +250,44 @@ def _prism_get_group(row: Dict[str, Any], fallbacks: List[str]) -> str:
 
 
 def _prism_get_value(row: Dict[str, Any], metric: str) -> Optional[float]:
-    """Extract a scalar *metric* value from *row*, flattening nested 'metrics' dicts."""
+    """Extract a finite scalar *metric* value from *row*, flattening nested 'metrics' dicts."""
+    import math
+
     flat: Dict[str, Any] = dict(row)
     if isinstance(flat.get("metrics"), dict):
         for k, v in flat.pop("metrics").items():
             flat.setdefault(k, v)
     raw = flat.get(metric)
-    if raw is None:
+    if raw is None or isinstance(raw, bool):
         return None
     try:
-        return float(raw)
+        val = float(raw)
     except (TypeError, ValueError):
         return None
+    return val if math.isfinite(val) else None
+
+
+def _resolve_tidy_unit(metric: str, units_chan: str) -> str:
+    """Resolve physical unit for *metric*, respecting channel clamp units on generic amplitude keys."""
+    if metric in ("event_amplitude", "mean_amplitude", "mean_local_amplitude", "amplitude"):
+        if units_chan:
+            return units_chan
+    if metric in _TIDY_UNIT_MAP:
+        return _TIDY_UNIT_MAP[metric]
+    m_low = metric.lower()
+    if m_low.endswith(("_count", "_index", "_ratio", "r_squared")):
+        return ""
+    if m_low.endswith("_hz"):
+        return "Hz"
+    if m_low.endswith("_ms"):
+        return "ms"
+    if m_low.endswith("_s"):
+        return "s"
+    if m_low.endswith("_mv"):
+        return "mV"
+    if m_low.endswith("_pa"):
+        return "pA"
+    return units_chan
 
 
 def _build_tidy_row(
@@ -236,7 +310,7 @@ def _build_tidy_row(
             continue
         if metric in ("error", "debug_trace"):
             continue
-        unit = _TIDY_UNIT_MAP.get(metric, units_chan)
+        unit = _resolve_tidy_unit(metric, units_chan)
         rows.append(
             {
                 "File": file_val,
@@ -304,15 +378,17 @@ class CSVExporter:
         source_stem = recording.source_file.stem.replace("::", "_")
 
         for chan_id, channel in recording.channels.items():
-            if not channel.data_trials:
+            n_trials = getattr(channel, "num_trials", len(channel.data_trials or []))
+            if n_trials <= 0:
                 continue
 
             chan_name_safe = str(chan_id).replace(" ", "_").replace("/", "-")
 
-            for trial_idx, trial_data in enumerate(channel.data_trials):
+            for trial_idx in range(n_trials):
                 try:
+                    trial_data = channel.get_data(trial_idx)
                     time_vec = channel.get_relative_time_vector(trial_idx)
-                    if time_vec is None or time_vec.shape != trial_data.shape:
+                    if trial_data is None or time_vec is None or time_vec.shape != trial_data.shape:
                         log.error(f"Time/Data mismatch for {chan_id} trial {trial_idx}")
                         error_count += 1
                         continue
@@ -323,7 +399,7 @@ class CSVExporter:
                     filepath = output_dir / filename
 
                     header = f"Time (s),Data ({channel.units or 'unknown'})"
-                    np.savetxt(filepath, data_to_save, delimiter=",", header=header, comments="")
+                    np.savetxt(filepath, data_to_save, delimiter=",", header=header, comments="", fmt="%.10g")
 
                     success_count += 1
 
@@ -478,10 +554,10 @@ class CSVExporter:
                         for nested_key, nested_value in value.items():
                             flat_key = f"{key}.{nested_key}"
                             if flat_key in ordered_fields:
-                                flat_result[flat_key] = _sanitize_csv_value(nested_value)
+                                flat_result[flat_key] = _sanitize_csv_value(nested_value, key=nested_key)
                     else:
                         if key in ordered_fields:
-                            flat_result[key] = _sanitize_csv_value(value)
+                            flat_result[key] = _sanitize_csv_value(value, key=key)
 
                 flat_results.append(flat_result)
 
@@ -535,9 +611,21 @@ class CSVExporter:
         """
         provenance_path = csv_path.with_name(csv_path.stem + "_provenance.json")
 
-        # Collect unique source file names and analysis types
-        source_files = sorted({str(r.get("source_file_name", "")) for r in results if r.get("source_file_name")})
-        analysis_types = sorted({str(r.get("analysis_type", "")) for r in results if r.get("analysis_type")})
+        # Collect unique source file names and analysis types across GUI and Batch schemas
+        source_files = sorted(
+            {
+                str(r.get("source_file_name") or r.get("file_name") or r.get("file") or "")
+                for r in results
+                if isinstance(r, dict) and (r.get("source_file_name") or r.get("file_name") or r.get("file"))
+            }
+        )
+        analysis_types = sorted(
+            {
+                str(r.get("analysis_type") or r.get("analysis") or "")
+                for r in results
+                if isinstance(r, dict) and (r.get("analysis_type") or r.get("analysis"))
+            }
+        )
 
         provenance: Dict[str, Any] = {
             "synaptipy_version": _SYNAPTIPY_VERSION,
@@ -722,77 +810,63 @@ class CSVExporter:
             log.error("export_events failed: %s", exc, exc_info=True)
             return False
 
+    @staticmethod
+    def _collect_prism_groups(
+        results: List[Dict[str, Any]],
+        metric: str,
+        fallbacks: List[str],
+        aggregate_by_file: bool,
+    ) -> Tuple[List[str], Dict[str, List[float]]]:
+        """Collect finite metric values grouped by condition (optionally averaged per file)."""
+        from collections import defaultdict
+
+        groups: Dict[str, List[float]] = defaultdict(list)
+        file_buckets: Dict[str, Dict[str, List[float]]] = defaultdict(lambda: defaultdict(list))
+        group_order: List[str] = []
+        for idx, row in enumerate(results):
+            grp = _prism_get_group(row, fallbacks)
+            val = _prism_get_value(row, metric)
+            if val is None:
+                continue
+            if grp not in group_order:
+                group_order.append(grp)
+            if aggregate_by_file:
+                f_id = str(row.get("source_file_name") or row.get("file_name") or row.get("file") or f"row_{idx}")
+                file_buckets[grp][f_id].append(val)
+            else:
+                groups[grp].append(val)
+        if aggregate_by_file:
+            for grp in group_order:
+                groups[grp] = [float(np.mean(vals)) for vals in file_buckets[grp].values() if vals]
+        return group_order, groups
+
     def export_to_prism_format(
         self,
         results: List[Dict[str, Any]],
         output_path: Path,
         metric: str,
         group_by_key: str = "Condition",
+        aggregate_by_file: bool = False,
     ) -> bool:
         """Export one scalar metric in GraphPad Prism grouped-column format.
 
-        Prism expects data tables where **each column is one experimental
-        group** and each row under a column is an individual observation (cell,
-        sweep, or replicate).  Groups of unequal size are padded with empty
-        cells so that all columns share the same length.
-
-        The function writes two files:
-
-        * ``<stem>_prism_<metric>.csv`` - the data table (one column per group,
-          one row per replicate, header = group label).
-        * ``<stem>_prism_<metric>_provenance.json`` - provenance record.
-
-        Parameters
-        ----------
-        results:
-            Wide-format result rows as returned by
-            ``BatchAnalysisEngine.run_batch`` or
-            ``CSVExporter.export_analysis_results``.
-        output_path:
-            Base path; the prism file is placed next to it with the metric
-            name embedded in the stem.
-        metric:
-            The result key whose value should be exported (e.g.
-            ``"event_count"``, ``"rin_mohm"``).  Values that cannot be
-            coerced to ``float`` are silently skipped.
-        group_by_key:
-            Key in each result row that identifies the experimental group
-            (default ``"Condition"``; falls back to ``"group"`` then
-            ``"source_file_name"``).
-
-        Returns
-        -------
-        bool
-            ``True`` on success, ``False`` on failure or when no data is
-            found for the requested metric.
+        When *aggregate_by_file* is True, sweeps belonging to the same source
+        recording within each group are averaged into a single biological-replicate
+        mean prior to export to avoid sweep-level pseudoreplication.
         """
         if not results:
             log.warning("export_to_prism_format: no results provided.")
             return False
 
         import csv as _csv
-        from collections import defaultdict
 
-        # Resolve the group label for every result row.
         _group_fallbacks = [group_by_key, "group", "source_file_name", "file_name", "file"]
-
-        # Accumulate values per group, preserving insertion order.
-        groups: Dict[str, List[float]] = defaultdict(list)
-        group_order: List[str] = []
-        for row in results:
-            grp = _prism_get_group(row, _group_fallbacks)
-            val = _prism_get_value(row, metric)
-            if val is not None:
-                if grp not in groups:
-                    group_order.append(grp)
-                groups[grp].append(val)
+        group_order, groups = self._collect_prism_groups(results, metric, _group_fallbacks, aggregate_by_file)
 
         if not group_order:
             log.warning("export_to_prism_format: metric '%s' not found in any result row.", metric)
             return False
 
-        # Pad columns to equal length with empty strings (Prism ignores blank
-        # cells when computing statistics).
         max_n = max(len(groups[g]) for g in group_order)
         padded: Dict[str, List[Any]] = {}
         for g in group_order:
@@ -821,7 +895,11 @@ class CSVExporter:
             self._write_provenance(
                 csv_path=prism_path,
                 results=results,
-                analysis_config={"metric": metric, "group_by_key": group_by_key},
+                analysis_config={
+                    "metric": metric,
+                    "group_by_key": group_by_key,
+                    "aggregate_by_file": aggregate_by_file,
+                },
             )
             return True
 

@@ -30,6 +30,7 @@ class PlotDataPackage:
     # Metadata for the widget state
     channel_id: str
     data_source: Union[int, str]
+    raw_main_data: Optional[np.ndarray] = None
 
 
 class AnalysisPlotManager:
@@ -70,6 +71,8 @@ class AnalysisPlotManager:
         if main_data is None or main_time is None:
             return None
 
+        unfiltered_main = main_data.copy()
+
         # 3. Apply Preprocessing
         if preprocessing_settings and process_callback:
             main_data = AnalysisPlotManager._apply_preprocessing(
@@ -86,6 +89,7 @@ class AnalysisPlotManager:
             context_traces=context_traces,
             channel_id=channel_id,
             data_source=data_source,
+            raw_main_data=unfiltered_main,
         )
 
     @staticmethod

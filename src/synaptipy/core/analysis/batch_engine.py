@@ -106,7 +106,7 @@ class BatchAnalysisEngine:
             {
                 'analysis': 'spike_detection',
                 'scope': 'all_trials',
-                'params': {'threshold': -15.0, 'refractory_ms': 2.0}
+                'params': {'threshold': -15.0, 'refractory_period': 0.002}
             },
             {
                 'analysis': 'rmp_analysis',
@@ -445,6 +445,7 @@ class BatchAnalysisEngine:
         progress_callback: Optional[Callable[[int, int, str], None]],
         channel_filter: Optional[List[str]],
         worker_count: Optional[int] = None,
+        rs_tolerance: float = 0.20,
     ) -> pd.DataFrame:
         """Distribute file-level processing across :attr:`max_workers` worker processes.
 
@@ -486,6 +487,7 @@ class BatchAnalysisEngine:
                     str(file_path),
                     pipeline_config,
                     channel_filter,
+                    rs_tolerance,
                 )
                 future_to_idx[future] = orig_idx
 
@@ -526,7 +528,9 @@ class BatchAnalysisEngine:
             if progress_callback:
                 progress_callback(completed_count, total_files, f"Processing {file_name}...")
             try:
-                df_inline = self._run_batch_sequential([recording], pipeline_config, None, channel_filter)
+                df_inline = self._run_batch_sequential(
+                    [recording], pipeline_config, None, channel_filter, rs_tolerance=rs_tolerance
+                )
                 all_rows[orig_idx] = df_inline.to_dict("records") if not df_inline.empty else []
             except Exception as exc:  # noqa: BLE001
                 log.error("Inline recording failed: %s", exc, exc_info=True)
@@ -596,7 +600,12 @@ class BatchAnalysisEngine:
                 "BatchAnalysisEngine: starting parallel batch (%d workers, %d files).", effective_workers, total_files
             )
             return self._run_batch_parallel(
-                files, pipeline_config, progress_callback, channel_filter, worker_count=effective_workers
+                files,
+                pipeline_config,
+                progress_callback,
+                channel_filter,
+                worker_count=effective_workers,
+                rs_tolerance=rs_tolerance,
             )
 
         return self._run_batch_sequential(files, pipeline_config, progress_callback, channel_filter, rs_tolerance)
@@ -648,6 +657,7 @@ class BatchAnalysisEngine:
                 log.warning("Cross-file planner could not load %r: %s", item, exc)
 
         results: List[Dict[str, Any]] = []
+        active_preprocessors: List[Tuple[Callable, Dict[str, Any]]] = []
         for task in pipeline_config:
             if self._cancelled:
                 break
@@ -657,6 +667,9 @@ class BatchAnalysisEngine:
             params = dict(task.get("params", {}))
             if analysis_func is None:
                 results.append({"analysis": analysis_name, "scope": scope, "error": "Analysis is not registered"})
+                continue
+            if AnalysisRegistry.get_metadata(analysis_name).get("type") == "preprocessing":
+                active_preprocessors.append((analysis_func, params))
                 continue
 
             # Key: (channel display name, canonical unit, protocol fingerprint).
@@ -745,8 +758,13 @@ class BatchAnalysisEngine:
                                     "protocol": protocol,
                                 },
                             )
-                            bucket["traces"].append(np.asarray(segment_data, dtype=float) * scale)
-                            bucket["times"].append(np.asarray(segment_time, dtype=float))
+                            scaled_seg = np.asarray(segment_data, dtype=float) * scale
+                            seg_t = np.asarray(segment_time, dtype=float)
+                            fs_ch = float(getattr(channel, "sampling_rate", 0.0) or 0.0)
+                            for prep_fn, prep_params in active_preprocessors:
+                                scaled_seg = np.asarray(prep_fn(scaled_seg, seg_t, fs_ch, **prep_params), dtype=float)
+                            bucket["traces"].append(scaled_seg)
+                            bucket["times"].append(seg_t)
 
             for (channel_name, units, fingerprint), contributors in groups.items():
                 per_file_traces: List[np.ndarray] = []
@@ -963,7 +981,15 @@ class BatchAnalysisEngine:
                             # than rs_tolerance relative to Sweep 1, flag the row with
                             # a warning so analysts can exclude unstable patches.
                             for res in task_results:
-                                rs_val = res.get("rs_mohm")
+                                rs_val = (
+                                    res.get("rs_mohm")
+                                    if res.get("rs_mohm") is not None
+                                    else (
+                                        res.get("series_resistance_mohm")
+                                        if res.get("series_resistance_mohm") is not None
+                                        else res.get("rs_cc_mohm")
+                                    )
+                                )
                                 if rs_val is None:
                                     continue
                                 try:
@@ -1106,7 +1132,8 @@ class BatchAnalysisEngine:
         # Check metadata for type and batch-dispatch flags
         meta = AnalysisRegistry.get_metadata(analysis_name)
         is_preprocessing = meta.get("type") == "preprocessing"
-        expects_list = meta.get("expects_list", False)
+        batch_cfg = meta.get("batch_config") if isinstance(meta.get("batch_config"), dict) else {}
+        expects_list = bool(meta.get("expects_list", False) or batch_cfg.get("expects_list", False))
         supported_units = tuple(meta.get("supported_channel_units", ()))
         channel_units = str(getattr(channel, "units", ""))
         if supported_units and channel_units not in supported_units:
@@ -1405,6 +1432,21 @@ class BatchAnalysisEngine:
                         channel_name,
                         exc,
                     )
+
+            elif context["scope"] == "all_trials" and scope == "channel_set":
+                data = context["data"]
+                time = context["time"]
+
+            elif context["scope"] == "all_trials" and scope == "first_trial":
+                if len(context["data"]) > 0:
+                    data = context["data"][0]
+                    time = context["time"][0]
+
+            elif context["scope"] == "all_trials" and scope == "specific_trial":
+                t_idx = int(params.get("trial_index", 0))
+                if 0 <= t_idx < len(context["data"]):
+                    data = context["data"][t_idx]
+                    time = context["time"][t_idx]
 
         # If data is still None, load from channel
         if data is None:
@@ -1862,6 +1904,7 @@ def _worker_process_file(
     file_path_str: str,
     pipeline_config: List[Dict[str, Any]],
     channel_filter: Optional[List[str]],
+    rs_tolerance: float = 0.20,
 ) -> List[Dict[str, Any]]:
     """Process a single file in an isolated worker process.
 
@@ -1900,6 +1943,7 @@ def _worker_process_file(
             pipeline_config,
             None,  # progress_callback not serialisable across processes
             channel_filter,
+            rs_tolerance=rs_tolerance,
         )
         return df.to_dict("records") if not df.empty else []
     finally:

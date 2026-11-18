@@ -72,6 +72,7 @@ def calculate_fi_curve(  # noqa: C901
 
     spike_counts = []
     frequencies = []
+    window_frequencies = []
     adaptation_ratios = []
     broadening_indices = []  # Width_last / Width_first within each sweep
 
@@ -81,9 +82,24 @@ def calculate_fi_curve(  # noqa: C901
         refractory_samples = int((refractory_ms / 1000.0) * sampling_rate)
         result = detect_spikes_threshold(data, time, threshold, refractory_samples)
         count = len(result.spike_indices) if result.spike_indices is not None else 0
+        sweep_dur = float(time[-1] - time[0]) if len(time) > 1 else 0.0
+        win_freq = (count / sweep_dur) if sweep_dur > 0 else 0.0
         freq = result.mean_frequency if result.mean_frequency is not None else 0.0
+        # Guard F-I curves against single-spike censorship and onset-doublet depolarization block:
+        # if 1 spike occurred, or spikes ceased within the first 25% of the window (<=3 spikes),
+        # report true sustained window firing rate (count / sweep_dur).
+        if count == 1 and sweep_dur > 0:
+            freq = win_freq
+        elif (
+            2 <= count <= 3
+            and sweep_dur > 0
+            and result.spike_times is not None
+            and (result.spike_times[-1] - result.spike_times[0]) < 0.25 * sweep_dur
+        ):
+            freq = win_freq
         spike_counts.append(count)
         frequencies.append(freq)
+        window_frequencies.append(win_freq)
         if count >= 3 and result.spike_times is not None:
             isis = np.diff(result.spike_times)
             # Guard against tiny or zero first ISI (< 1 µs is artifact)
@@ -156,6 +172,7 @@ def calculate_fi_curve(  # noqa: C901
         "max_freq": float(np.max(frequencies)) if frequencies else 0.0,
         "spike_counts": spike_counts,
         "frequencies": frequencies,
+        "window_frequencies": window_frequencies,
         "adaptation_ratios": adaptation_ratios,
         "broadening_indices": broadening_indices,
         "current_steps": current_steps,
@@ -166,6 +183,7 @@ def calculate_fi_curve(  # noqa: C901
     "excitability_analysis",
     label="Excitability",
     requires_multi_trial=True,
+    expects_list=True,
     plots=[
         {
             "type": "popup_xy",
@@ -227,11 +245,11 @@ def calculate_fi_curve(  # noqa: C901
             "name": "analysis_end_s",
             "label": "Analysis End (s):",
             "type": "float",
-            "default": 0.5,
+            "default": 0.0,
             "min": 0.0,
             "max": 1e9,
             "decimals": 4,
-            "tooltip": "Clip each sweep to this end time before counting spikes.",
+            "tooltip": "Clip each sweep to this end time before counting spikes (0.0 = full sweep).",
         },
     ],
 )
@@ -245,7 +263,7 @@ def run_excitability_analysis_wrapper(  # noqa: C901
         step_current = kwargs.get("step_current", 10.0)
         refractory_ms = kwargs.get("refractory_ms", 2.0)
         analysis_start_s = float(kwargs.get("analysis_start_s", 0.0))
-        analysis_end_s = float(kwargs.get("analysis_end_s", 0.5))
+        analysis_end_s = float(kwargs.get("analysis_end_s", 0.0))
 
         if isinstance(data_list, np.ndarray):
             if data_list.ndim == 1:
@@ -397,7 +415,10 @@ def calculate_bursts_logic(
 
     spikes_per_burst = [len(b) for b in bursts]
     burst_durations = [b[-1] - b[0] for b in bursts]
-    duration = spike_times[-1] - spike_times[0] if len(spike_times) > 0 else 0
+    if time is not None and len(time) > 1:
+        duration = float(time[-1] - time[0])
+    else:
+        duration = float(spike_times[-1] - spike_times[0]) if len(spike_times) > 0 else 0.0
     burst_freq = num_bursts / duration if duration > 0 else 0.0
 
     intra_burst_freqs = []
@@ -523,11 +544,11 @@ def analyze_spikes_and_bursts(
             "name": "analysis_end_s",
             "label": "Analysis End (s):",
             "type": "float",
-            "default": 0.5,
+            "default": 0.0,
             "min": 0.0,
             "max": 1e9,
             "decimals": 4,
-            "tooltip": "Clip the trace to this end time before detecting spikes.",
+            "tooltip": "Clip the trace to this end time before detecting spikes (0.0 = full trace).",
         },
     ],
     plots=[{"type": "brackets", "data": "bursts", "color": "r"}],
@@ -540,7 +561,7 @@ def run_burst_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate
     dynamic_burst = kwargs.get("dynamic_burst", False)
     burst_isi_fraction = float(kwargs.get("burst_isi_fraction", 0.3))
     analysis_start_s = float(kwargs.get("analysis_start_s", 0.0))
-    analysis_end_s = float(kwargs.get("analysis_end_s", 0.5))
+    analysis_end_s = float(kwargs.get("analysis_end_s", 0.0))
 
     # Clip to analysis window when a valid window is specified.
     if analysis_end_s > analysis_start_s:
@@ -729,11 +750,11 @@ def calculate_train_dynamics(spike_times: np.ndarray, analysis_start_s: float = 
             "name": "analysis_end_s",
             "label": "Analysis End (s):",
             "type": "float",
-            "default": 0.5,
+            "default": 0.0,
             "min": 0.0,
             "max": 1e9,
             "decimals": 4,
-            "tooltip": "Clip the trace to this end time before detecting spikes.",
+            "tooltip": "Clip the trace to this end time before detecting spikes (0.0 = full trace).",
         },
     ],
     plots=[
@@ -757,7 +778,7 @@ def run_train_dynamics_wrapper(  # noqa: C901
     ap_threshold = kwargs.get("spike_threshold", 0.0)
     ap_times = kwargs.get("action_potential_times", None)
     analysis_start_s = float(kwargs.get("analysis_start_s", 0.0))
-    analysis_end_s = float(kwargs.get("analysis_end_s", 0.5))
+    analysis_end_s = float(kwargs.get("analysis_end_s", 0.0))
     spike_indices = None
     # start_idx tracks the offset of the clipped window within the original
     # time array.  spike_indices returned by detect_spikes_threshold are
@@ -787,7 +808,20 @@ def run_train_dynamics_wrapper(  # noqa: C901
 
     result = calculate_train_dynamics(ap_times, analysis_start_s=analysis_start_s)
     if not result.is_valid:
-        return {"module_used": "firing_dynamics", "metrics": {"train_dynamics_error": result.error_message}}
+        delay_ms = (
+            float(result.first_spike_delay_s * 1000.0)
+            if result.first_spike_delay_s is not None and not np.isnan(result.first_spike_delay_s)
+            else float(np.nan)
+        )
+        return {
+            "module_used": "firing_dynamics",
+            "metrics": {
+                "spike_count": result.spike_count,
+                "first_spike_delay_s": result.first_spike_delay_s,
+                "first_spike_delay_ms": delay_ms,
+                "train_dynamics_error": result.error_message,
+            },
+        }
 
     isi_ms = (result.isis * 1000.0).tolist() if result.isis is not None and len(result.isis) > 0 else []
     isi_numbers = list(range(1, len(isi_ms) + 1))

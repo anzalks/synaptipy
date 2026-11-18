@@ -26,7 +26,7 @@ dependencies:
   - scipy=1.14.1
   - pandas=2.3.0
   - matplotlib=3.9.2
-  - h5py=3.12.1
+  - h5py>=3.14.0
   - pip
   - setuptools
   - wheel

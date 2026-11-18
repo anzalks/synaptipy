@@ -495,20 +495,39 @@ class AnalysisResultFormatter:
         return "N/A"
 
 
+def _extract_result_parameters(result: Any) -> Dict[str, Any]:
+    """Extract parameters dict from a Result dataclass, boundary AnalysisResult, or raw dict."""
+    if hasattr(result, "parameters") and isinstance(getattr(result, "parameters"), dict):
+        return dict(result.parameters)
+    if hasattr(result, "metrics") and isinstance(getattr(result, "metrics"), dict):
+        m_params = result.metrics.get("parameters")
+        if isinstance(m_params, dict):
+            return dict(m_params)
+        if hasattr(result, "provenance") and isinstance(getattr(result, "provenance"), dict):
+            p_params = result.provenance.get("parameters")
+            if isinstance(p_params, dict):
+                return dict(p_params)
+    if isinstance(result, dict):
+        if isinstance(result.get("parameters"), dict):
+            return dict(result["parameters"])
+        if isinstance(result.get("metrics"), dict) and isinstance(result["metrics"].get("parameters"), dict):
+            return dict(result["metrics"]["parameters"])
+    return {}
+
+
 def generate_methods_text(result: Any) -> str:
     """
     Generate a natural language description of the analysis performed.
 
     Args:
-        result: The result object (e.g. SpikeTrainResult) containing parameters.
+        result: The result object, boundary AnalysisResult, or dict containing parameters.
 
     Returns:
         String description suitable for a paper's Methods section.
     """
-    if not hasattr(result, "parameters") or not result.parameters:
+    params = _extract_result_parameters(result)
+    if not params:
         return "Analysis was performed using default parameters."
-
-    params = result.parameters
 
     if isinstance(result, SpikeTrainResult):
         threshold = params.get("threshold", "unknown")

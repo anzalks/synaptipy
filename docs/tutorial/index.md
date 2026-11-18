@@ -1217,7 +1217,7 @@ Event markers on signal trace; cyan dashed vertical lines at TTL onsets.
 **Optional secondary TTL channel** (when "Detect Stim from TTL" is enabled).
 
 Quantifies short-term synaptic plasticity across N stimulus pulses using
-iterative cumulative decay subtraction (Thanawala & Bhatt, 2013).  Each
+iterative cumulative decay subtraction (Thanawala & Regehr, 2013).  Each
 pulse's amplitude is corrected by subtracting the cumulative residual from
 all prior pulses' fitted decays.  All ratios are normalised to R1.
 

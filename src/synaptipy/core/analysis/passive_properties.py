@@ -213,42 +213,73 @@ def calculate_baseline_stats(
 
 
 def find_stable_baseline(
-    data: np.ndarray, sample_rate: float, window_duration_s: float = 0.5, step_duration_s: float = 0.1
+    data: np.ndarray,
+    sample_rate: float,
+    window_duration_s: float = 0.5,
+    step_duration_s: float = 0.1,
+    t_start: float = 0.0,
 ) -> Tuple[Optional[float], Optional[float], Optional[Tuple[float, float]]]:
     """Find the most stable (lowest variance) baseline segment by sliding window."""
-    if len(data) == 0:
+    if len(data) == 0 or sample_rate <= 0:
         return None, None, None
 
     n_points = len(data)
-    window_samples = int(window_duration_s * sample_rate)
-    step_samples = int(step_duration_s * sample_rate)
-
-    window_samples = max(2, window_samples)
-    step_samples = max(1, step_samples)
+    window_samples = max(2, int(window_duration_s * sample_rate))
+    step_samples = max(1, int(step_duration_s * sample_rate))
 
     if window_samples >= n_points:
         segment_data = data
-        return float(np.mean(segment_data)), float(np.std(segment_data)), (0.0, n_points / sample_rate)
+        return (
+            float(np.mean(segment_data)),
+            float(np.std(segment_data)),
+            (float(t_start), float(t_start + n_points / sample_rate)),
+        )
 
-    min_variance = np.inf
-    best_start_idx = None
-    best_mean = None
-    best_sd = None
+    finite_vals = data[np.isfinite(data)]
+    if finite_vals.size == 0:
+        return None, None, None
+    trace_median = float(np.median(finite_vals))
+
+    # First pass: check whether genuine low-noise physiological membrane signal exists
+    has_physiological_noise = False
+    for i in range(0, n_points - window_samples + 1, step_samples):
+        seg = data[i : i + window_samples]
+        if np.all(np.isfinite(seg)):
+            v = float(np.var(seg))
+            if 1e-15 < v <= 4.0:
+                has_physiological_noise = True
+                break
+
+    min_valid_var = np.inf
+    best_valid_idx = None
+    min_any_var = np.inf
+    best_any_idx = None
 
     for i in range(0, n_points - window_samples + 1, step_samples):
         segment = data[i : i + window_samples]
-        variance = np.var(segment)
-        if variance < min_variance:
-            min_variance = variance
-            best_start_idx = i
-            best_mean = np.mean(segment)
-            best_sd = np.sqrt(variance)
+        if not np.all(np.isfinite(segment)):
+            continue
+        variance = float(np.var(segment))
+        if variance < min_any_var:
+            min_any_var = variance
+            best_any_idx = i
+        seg_val = float(segment[0])
+        is_clipped_rail = variance <= 1e-15 and (
+            abs(seg_val) >= 95.0 or (has_physiological_noise and abs(seg_val - trace_median) > 20.0)
+        )
+        if not is_clipped_rail and variance < min_valid_var:
+            min_valid_var = variance
+            best_valid_idx = i
 
-    if best_start_idx is None:
+    chosen_idx = best_valid_idx if best_valid_idx is not None else best_any_idx
+    if chosen_idx is None:
         return None, None, None
 
-    start_time = best_start_idx / sample_rate
-    end_time = (best_start_idx + window_samples) / sample_rate
+    chosen_seg = data[chosen_idx : chosen_idx + window_samples]
+    best_mean = float(np.mean(chosen_seg))
+    best_sd = float(np.std(chosen_seg))
+    start_time = float(t_start + chosen_idx / sample_rate)
+    end_time = float(t_start + (chosen_idx + window_samples) / sample_rate)
     return best_mean, best_sd, (start_time, end_time)
 
 
@@ -844,14 +875,26 @@ def calculate_iv_curve(
     valid_currents = [current_steps[i] for i in valid_indices]
     valid_delta_vs = [delta_vs[i] for i in valid_indices]
 
+    # Subthreshold Ohmic regression: exclude suprathreshold spiking sweeps (> -15 mV)
+    # when at least two subthreshold sweeps exist so active APs do not distort Rin.
+    subthresh_indices = [
+        i
+        for i in valid_indices
+        if np.nanmax(sweeps[i][(time_vectors[i] >= response_window[0]) & (time_vectors[i] < response_window[1])])
+        < -15.0
+    ]
+    reg_indices = subthresh_indices if len(subthresh_indices) >= 2 else valid_indices
+    reg_currents = [current_steps[i] for i in reg_indices]
+    reg_delta_vs = [delta_vs[i] for i in reg_indices]
+
     rin_mohm = None
     r_squared = None
     iv_intercept = None
 
-    if len(valid_currents) >= 2:
+    if len(reg_currents) >= 2:
         try:
-            currents_na = np.array(valid_currents) / 1000.0
-            slope, intercept, r_value, p_value, std_err = linregress(currents_na, valid_delta_vs)
+            currents_na = np.array(reg_currents) / 1000.0
+            slope, intercept, r_value, p_value, std_err = linregress(currents_na, reg_delta_vs)
             rin_mohm = slope
             iv_intercept = intercept
             r_squared = r_value**2
@@ -1478,8 +1521,14 @@ def calculate_capacitance_vc(
         i_decay = np.abs(delta_i[i_peak_idx:])
 
         cm_pf = _fit_cm_from_transient(t_decay, i_decay, delta_i, t_trans, rs_mohm, voltage_step_amplitude_mv)
+        charge_coulombs = float(np.trapezoid(np.abs(delta_i) * 1e-12, t_trans)) if len(t_trans) >= 2 else 0.0
+        cm_charge_pf = (charge_coulombs / (abs(float(voltage_step_amplitude_mv)) * 1e-3)) * 1e12
 
-        return {"capacitance_pf": float(cm_pf), "series_resistance_mohm": float(rs_mohm)}
+        return {
+            "capacitance_pf": float(cm_pf),
+            "capacitance_charge_pf": float(cm_charge_pf),
+            "series_resistance_mohm": float(rs_mohm),
+        }
     except Exception as e:
         log.error(f"Error calculating VC capacitance: {e}")
         return None
@@ -1524,8 +1573,13 @@ def _resolve_sweep_baseline(
     """Return the (effective_start, effective_end) baseline window for one sweep."""
     bl_start, bl_end = baseline_start, baseline_end
     if auto_detect:
+        t0 = float(sweep_time[0]) if len(sweep_time) > 0 else 0.0
         _, _, window = find_stable_baseline(
-            sweep_data, sampling_rate, window_duration_s=window_duration, step_duration_s=step_duration
+            sweep_data,
+            sampling_rate,
+            window_duration_s=window_duration,
+            step_duration_s=step_duration,
+            t_start=t0,
         )
         if window:
             bl_start, bl_end = window
@@ -1921,36 +1975,47 @@ def run_rin_analysis_wrapper(  # noqa: C901
         is_voltage_clamp = current_amplitude == 0 and voltage_step != 0
 
         if auto_detect_pulse:
+            cmd_trace = kwargs.get("command_data")
+            probe_src = (
+                np.asarray(cmd_trace, dtype=float)
+                if cmd_trace is not None and len(cmd_trace) == len(data)
+                else (
+                    np.clip(data, -200.0, -15.0)
+                    if (not is_voltage_clamp and current_amplitude < 0 and np.max(data) > -10.0)
+                    else data
+                )
+            )
             window_size = max(3, int(0.005 * sampling_rate))
             if window_size % 2 == 0:
                 window_size += 1
             kernel = np.ones(window_size) / window_size
-            smoothed_data = np.convolve(data, kernel, mode="same")
+            smoothed_data = np.convolve(probe_src, kernel, mode="same")
 
             dv = np.diff(smoothed_data)
             is_negative_step = (current_amplitude < 0) or (current_amplitude == 0 and voltage_step < 0)
 
             if is_negative_step:
-                start_idx = np.argmin(dv)
-                end_idx = start_idx + np.argmax(dv[start_idx:])
+                start_idx = int(np.argmin(dv))
+                end_idx = start_idx + int(np.argmax(dv[start_idx:]))
             else:
-                start_idx = np.argmax(dv)
-                end_idx = start_idx + np.argmin(dv[start_idx:])
+                start_idx = int(np.argmax(dv))
+                end_idx = start_idx + int(np.argmin(dv[start_idx:]))
 
             auto_start_time = time[start_idx]
             auto_end_time = time[end_idx]
-            auto_baseline_end = auto_start_time - 0.005
-            auto_baseline_start = max(time[0], auto_baseline_end - 0.1)
-            auto_response_end = auto_end_time - 0.005
-            auto_response_start = max(auto_start_time, auto_response_end - 0.1)
+            if (auto_end_time - auto_start_time) >= 0.02:
+                auto_baseline_end = auto_start_time - 0.005
+                auto_baseline_start = max(time[0], auto_baseline_end - 0.1)
+                auto_response_end = auto_end_time - 0.005
+                auto_response_start = max(auto_start_time, auto_response_end - 0.1)
 
-            bl_mask = (time >= auto_baseline_start) & (time < auto_baseline_end)
-            resp_mask = (time >= auto_response_start) & (time < auto_response_end)
-            if np.sum(bl_mask) >= 2 and np.sum(resp_mask) >= 2:
-                baseline_start = auto_baseline_start
-                baseline_end = auto_baseline_end
-                response_start = auto_response_start
-                response_end = auto_response_end
+                bl_mask = (time >= auto_baseline_start) & (time < auto_baseline_end)
+                resp_mask = (time >= auto_response_start) & (time < auto_response_end)
+                if np.sum(bl_mask) >= 2 and np.sum(resp_mask) >= 2:
+                    baseline_start = auto_baseline_start
+                    baseline_end = auto_baseline_end
+                    response_start = auto_response_start
+                    response_end = auto_response_end
 
         params = {
             "current_amplitude": current_amplitude,
@@ -2176,6 +2241,8 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
                     {
                         "tau_ms": result["tau_ms"],
                         "r_squared": result["r_squared"],
+                        "tau_ci_95_low": result.get("tau_ci_95_low"),
+                        "tau_ci_95_high": result.get("tau_ci_95_high"),
                         "tau_model": model,
                         "tau_decay_after_stimulus_ms": tau_decay_ms,
                         "parameters": params,
@@ -2205,6 +2272,7 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
     "iv_curve_analysis",
     label="I-V Curve",
     requires_multi_trial=True,
+    expects_list=True,
     plots=[
         {"name": "Trace", "type": "trace"},
         {
@@ -2301,7 +2369,11 @@ def run_iv_curve_wrapper(
             time_list = [time_list]
 
         num_sweeps = len(data_list)
-        current_steps = [start_current + i * step_current for i in range(num_sweeps)]
+        explicit_steps = kwargs.get("current_steps")
+        if isinstance(explicit_steps, (list, tuple, np.ndarray)) and len(explicit_steps) == num_sweeps:
+            current_steps = [float(c) for c in explicit_steps]
+        else:
+            current_steps = [start_current + i * step_current for i in range(num_sweeps)]
 
         results = calculate_iv_curve(
             sweeps=data_list,

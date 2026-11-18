@@ -798,7 +798,7 @@ relative to the neighboring baseline band identifies mains interference.
 
 ### Spike detection and AP threshold
 
-- **Sekerli, M., Del Negro, C. A., Lee, R. H., & Bhatt, D. L. (2004).** Estimating
+- **Sekerli, M., Del Negro, C. A., Lee, R. H., & Butera, R. J. (2004).** Estimating
   action potential thresholds from neuronal time-series: new metrics and evaluation of
   methodologies. *IEEE Transactions on Biomedical Engineering*, 51(9), 1665-1672.
   - **Referenced in:** §15.2 — methodological background for the second-derivative
@@ -1153,7 +1153,7 @@ to re-tune $\tau_{\text{decay}}$ for distal inputs.
 
 ### 15.5 N-Pulse PPR with Iterative Cumulative Decay Subtraction
 
-*(Zucker & Regehr, 2002; Regehr, 2012; Thanawala & Bhatt, 2013;
+*(Zucker & Regehr, 2002; Regehr, 2012; Thanawala & Regehr, 2013;
 Wesseling & Lo, 2002)*
 
 The Paired-Pulse Ratio (PPR) analysis supports $N \ge 2$ stimulus pulses.

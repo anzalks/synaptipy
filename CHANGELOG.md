@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Registered standard trace preprocessing stages (`baseline_subtraction`, `lowpass_filter`, `highpass_filter`, `bandpass_filter`, `notch_filter`, `comb_filter`, and `detrend_filter`) in `AnalysisRegistry` so GUI preprocessing pipelines execute identically in `BatchAnalysisEngine` and `synaptipy-batch`.
+- Added `"bessel"` and `"gaussian"` filter topologies alongside `"butterworth"` in `lowpass_filter`, `highpass_filter`, and `bandpass_filter` to support zero-overshoot kinetic measurements.
+- Added charge-integration membrane capacitance (`capacitance_charge_pf`) to `calculate_capacitance_vc` and exposed 95% confidence bounds (`tau_ci_95_low`, `tau_ci_95_high`) in `tau_analysis`.
+- Added optional file-level mean aggregation (`aggregate_by_file=True`) to `CSVExporter.export_to_prism_format` to guard against sweep-level pseudoreplication.
+- Exported scalar analysis metrics as a `scalar_metrics` `DynamicTable` in NWB `/processing/analysis` alongside event-level arrays, and recorded LJP and filter provenance in NWB session notes.
+
+### Fixed
+
+- Fixed NWB SI double-scaling in `NWBExporter`: traces already scaled to `volts` or `amperes` now set `conversion=1.0` instead of re-applying `1e-3` or `1e-12`, and ABF ramp epochs (`nEpochType == 2`), holding levels, pre-epoch baselines, and clamp-aware units are reconstructed accurately.
+- Fixed lazy multi-trial sweep access in `Channel.get_data(trial_index)` and materialized `AnalogSignalProxy` sweeps in `NeoSourceHandle` with proper `mV`/`pA` unit scaling and 1D flattening.
+- Eliminated zero-phase IIR edge transients in `_sosfiltfilt_safe` on resting membrane potentials (`-70 mV`) using closed-form biquad steady-state initial conditions (`zi`) and odd-reflection boundary padding without invoking `numpy.linalg.solve` (preserving macOS ARM64 Accelerate `SIGBUS` immunity).
+- Made `apply_trace_corrections` unit-aware so liquid junction potential offsets scale `V`/`uV` channels properly and skip current-clamp / voltage-clamp current traces (`pA`/`nA`/`A`).
+- Normalized `find_artifact_windows` gradient by `fs / 1000.0` so `slope_threshold` is invariant to sampling rate (`units/ms`).
+- Fixed `calculate_paired_pulse_ratio` (`subtract_residual_decay=True`) to evaluate and subtract R1's fitted exponential decay tail at R2's peak timestamp, and added biphasic classification and steady-state ratios to `calculate_stimulus_train_stp`.
+- Hardened `calculate_spike_features` (`adp_amplitude` Savitzky-Golay smoothing and local-peak criteria, `detect_threshold_kink` inter-spike windowing and `kink_slope`), `detect_spikes_threshold` subthreshold peak rejection, and `phase_plane_analysis` spike-locked `max_dvdt`.
+- Fixed `find_stable_baseline` (`t_start` offset and zero-variance clipped-rail rejection), excluded suprathreshold spiking sweeps from Ohmic `calculate_iv_curve` regression, guarded `calculate_fi_curve` against single-spike censorship and depolarization block, changed default `analysis_end_s` from `0.5 s` to `0.0` (full trace), and changed zero-event synaptic amplitude summaries from `0.0` to `NaN`.
+- Preserved 10 significant figures for exported CSV timestamps, hardened `_round_sig` for `NaN`/`Inf`/subnormals, fixed `AnalysisPlotManager` raw-trace caching to prevent double-filtering, extracted `dict`/`AnalysisResult` parameters in `generate_methods_text`, and prevented headless runs from writing `plugin_security_acknowledged` in `PluginManager`.
+- Replaced synthetic tautologies with real Synaptipy algorithm assertions across `tests/core/analysis/test_scientific_accuracy.py` and `validation/*.py`, corrected reference citations, aligned sustained-step stimulus windowing and sag/Rin definitions in `paper/scripts/generate_paper_tables.py`, and regenerated the Allen Cell Types benchmark tables in `paper/paper.md` and `paper/figures/figure_02.png`.
+
 ## [0.1.8] - 2026-08-28
 
 

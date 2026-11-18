@@ -349,8 +349,16 @@ class ExporterTab(QtWidgets.QWidget):
         self.nwb_export_button.setEnabled(False)
         self._status_bar.showMessage(f"Exporting NWB to '{output_filepath.name}'...", 0)
 
+        main_window = self.window()
+        saved_results = getattr(main_window, "saved_analysis_results", None) or None
+
         self._nwb_worker = NwbExportWorker(
-            self._nwb_exporter, current_recording, output_filepath, nwb_metadata, parent=self
+            self._nwb_exporter,
+            current_recording,
+            output_filepath,
+            nwb_metadata,
+            parent=self,
+            analysis_results=saved_results,
         )
         self._nwb_worker.export_finished.connect(self._on_nwb_export_finished)
         self._nwb_worker.export_error.connect(self._on_nwb_export_error)

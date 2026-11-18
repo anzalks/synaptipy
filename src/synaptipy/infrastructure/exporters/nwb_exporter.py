@@ -13,7 +13,7 @@ __email__ = "anzalks@ncbs.res.in"
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -193,18 +193,21 @@ class NWBExporter:
         epochs: Any,
         trial_idx: int,
         n_samples: int,
+        holding_level: float = 0.0,
+        pre_epoch_samples: int = 0,
     ) -> Optional[np.ndarray]:
-        """Synthesize a step-current waveform (pA) from ABF EpochSections metadata.
+        """Synthesize a command waveform from ABF EpochSections metadata.
 
-        Epoch types: 1 = step, 2 = ramp (ramp not yet implemented, treated as step).
+        Epoch types: 1 = step, 2 = linear ramp.
         Returns a float64 array of length *n_samples*, or None when the epoch
         data cannot produce a non-zero waveform.
         """
         try:
-            if not isinstance(epochs, (list, np.ndarray)) or len(epochs) == 0:
+            if not isinstance(epochs, (list, np.ndarray)) or len(epochs) == 0 or n_samples <= 0:
                 return None
-            waveform = np.zeros(n_samples, dtype=np.float64)
-            cursor = 0
+            waveform = np.full(n_samples, float(holding_level), dtype=np.float64)
+            cursor = max(0, min(int(pre_epoch_samples), n_samples))
+            prev_level = float(holding_level)
             for ep in epochs:
                 ep_dict = ep if isinstance(ep, dict) else {}
                 ep_type = int(ep_dict.get("nEpochType", 0))
@@ -214,14 +217,34 @@ class NWBExporter:
                     float(ep_dict.get("fEpochInitLevel", 0.0)) + float(ep_dict.get("fEpochLevelInc", 0.0)) * trial_idx
                 )
                 dur = int(ep_dict.get("lEpochInitDuration", 0)) + int(ep_dict.get("lEpochDurationInc", 0)) * trial_idx
+                if dur <= 0:
+                    continue
                 end = min(cursor + dur, n_samples)
-                waveform[cursor:end] = level
+                seg_len = end - cursor
+                if seg_len <= 0:
+                    break
+                if ep_type == 2 and seg_len > 1:
+                    waveform[cursor:end] = np.linspace(prev_level, level, seg_len, dtype=np.float64)
+                else:
+                    waveform[cursor:end] = level
+                prev_level = level
                 cursor = end
                 if cursor >= n_samples:
                     break
             return waveform if np.any(waveform != 0.0) else None
         except Exception:
             return None
+
+    @staticmethod
+    def _resolve_trial_t_start(channel: Any, trial_idx: int) -> float:
+        """Return per-trial start time when available, falling back to channel.t_start."""
+        t_starts = getattr(channel, "t_starts", None)
+        if isinstance(t_starts, (list, tuple, np.ndarray)) and 0 <= trial_idx < len(t_starts):
+            try:
+                return float(t_starts[trial_idx])
+            except (TypeError, ValueError):
+                pass
+        return float(getattr(channel, "t_start", 0.0) or 0.0)
 
     @staticmethod
     def _resolve_stimulus_series(
@@ -235,20 +258,16 @@ class NWBExporter:
     ) -> "Tuple[Optional[Any], str]":
         """Resolve the stimulus series for one trial using a 3-step fallback.
 
-        Attempt 1 — raw digitized command waveform from
+        Attempt 1 - raw digitized command waveform from
             ``channel.current_data_trials[trial_idx]``.
-        Attempt 2 — synthetic step waveform reconstructed from ABF epoch
+        Attempt 2 - synthetic step/ramp waveform reconstructed from ABF epoch
             metadata stored in ``recording.metadata["abf_epochs"]``.
-        Attempt 3 — ``(None, warning_string)`` noting that no waveform is
+        Attempt 3 - ``(None, warning_string)`` noting that no waveform is
             available; the caller should append the warning to the response
             trace description.
-
-        Returns:
-            ``(stim_series, stim_note)`` where *stim_note* is an empty string
-            on success or a human-readable warning on failure.
         """
         stim_name_base = f"{channel.name}_stim_trial_{trial_idx:03d}"
-        t_start = float(getattr(channel, "t_start", 0.0))
+        t_start = NWBExporter._resolve_trial_t_start(channel, trial_idx)
 
         # ------ Attempt 1: raw digitized command waveform ------
         raw_trials = getattr(channel, "current_data_trials", None)
@@ -271,14 +290,26 @@ class NWBExporter:
 
         # ------ Attempt 2: synthetic from ABF epoch metadata ------
         abf_epochs = None
+        holding_level = 0.0
+        pre_epoch_samples = 0
         if hasattr(recording, "metadata") and isinstance(recording.metadata, dict):
             abf_epochs = recording.metadata.get("abf_epochs")
+            holding_level = float(recording.metadata.get("abf_holding_level", 0.0) or 0.0)
+            pre_epoch_samples = int(recording.metadata.get("abf_pre_epoch_samples", 0) or 0)
         if abf_epochs is not None:
-            synth = NWBExporter._build_stim_from_abf_epochs(abf_epochs, trial_idx, n_samples)
+            synth = NWBExporter._build_stim_from_abf_epochs(
+                abf_epochs,
+                trial_idx,
+                n_samples,
+                holding_level=holding_level,
+                pre_epoch_samples=pre_epoch_samples,
+            )
             if synth is not None:
+                resp_units = str(getattr(channel, "units", "") or "").strip().lower()
+                synth_units = "mV" if resp_units in ("pa", "picoampere", "picoamperes", "na", "a", "amperes") else "pA"
                 stim = NWBExporter._make_stim_series(
                     synth,
-                    "pA",
+                    synth_units,
                     stim_name_base + "_synth",
                     "Synthetic stimulus array reconstructed from protocol metadata.",
                     ic_electrode,
@@ -291,7 +322,7 @@ class NWBExporter:
                     return stim, ""
 
         # ------ Attempt 3: no stimulus available ------
-        warning = "WARNING: No stimulus waveform captured during acquisition; " "command waveform is unavailable."
+        warning = "WARNING: No stimulus waveform captured during acquisition; command waveform is unavailable."
         return None, warning
 
     def export(  # noqa: C901
@@ -432,6 +463,19 @@ class NWBExporter:
                 "(account for Q10 kinetic scaling when comparing across preparations)"
             )
 
+            ljp_mv = session_metadata.get(
+                "liquid_junction_potential_mv",
+                recording.metadata.get("liquid_junction_potential_mv"),
+            )
+            if ljp_mv is not None:
+                try:
+                    notes_list.append(f"Liquid junction potential (mV): {float(ljp_mv):.3f}")
+                except (TypeError, ValueError):
+                    pass
+
+            if session_metadata.get("filter_params"):
+                notes_list.append(f"Digital filter provenance: {session_metadata['filter_params']}")
+
             notes_combined = "\n".join(notes_list)
 
             nwbfile = NWBFile(
@@ -542,34 +586,39 @@ class NWBExporter:
                     units = getattr(channel, "units", "unknown").lower()
 
                     # --- SI unit conversion and series class selection ---
-                    # NWB best practice: store data in SI (volts, amperes).
-                    # Synaptipy/Neo typically keeps data in mV or pA.
-                    # We convert to SI and record the conversion factor.
+                    # NWB best practice: store data directly in SI base units (volts, amperes)
+                    # with conversion=1.0 so that value_SI = data * conversion is exact and
+                    # never double-scaled by downstream NWB/DANDI/Neo readers.
                     export_data = trial_data.copy().astype(np.float64)
                     conversion = 1.0
 
                     # Select the appropriate NWB series class based on
                     # channel units, which indicate the clamp mode:
-                    #   voltage units (mV, V) → CurrentClampSeries
-                    #   current units (pA, nA, A) → VoltageClampSeries
+                    #   voltage units (mV, V) -> CurrentClampSeries
+                    #   current units (pA, nA, A) -> VoltageClampSeries
                     SeriesClass = PatchClampSeries  # fallback
 
                     if units in ("mv", "millivolt", "millivolts"):
-                        export_data = export_data * 1e-3  # mV → V
-                        conversion = 1e-3
+                        export_data = export_data * 1e-3  # mV -> V
                         final_units = "volts"
                         SeriesClass = CurrentClampSeries
                     elif units in ("v", "volt", "volts"):
                         final_units = "volts"
                         SeriesClass = CurrentClampSeries
+                    elif units in ("uv", "microvolt", "microvolts"):
+                        export_data = export_data * 1e-6  # uV -> V
+                        final_units = "volts"
+                        SeriesClass = CurrentClampSeries
                     elif units in ("pa", "picoampere", "picoamperes"):
-                        export_data = export_data * 1e-12  # pA → A
-                        conversion = 1e-12
+                        export_data = export_data * 1e-12  # pA -> A
                         final_units = "amperes"
                         SeriesClass = VoltageClampSeries
                     elif units in ("na", "nanoampere", "nanoamperes"):
-                        export_data = export_data * 1e-9  # nA → A
-                        conversion = 1e-9
+                        export_data = export_data * 1e-9  # nA -> A
+                        final_units = "amperes"
+                        SeriesClass = VoltageClampSeries
+                    elif units in ("ua", "microampere", "microamperes"):
+                        export_data = export_data * 1e-6  # uA -> A
                         final_units = "amperes"
                         SeriesClass = VoltageClampSeries
                     elif units in ("a", "ampere", "amperes"):
@@ -578,17 +627,15 @@ class NWBExporter:
                     else:
                         final_units = getattr(channel, "units", "unknown")
                         log.warning(
-                            "Unrecognised channel units '%s' for '%s'. " "Using generic PatchClampSeries.",
+                            "Unrecognised channel units '%s' for '%s'. Using generic PatchClampSeries.",
                             units,
                             channel.name,
                         )
 
                     channel_rate = getattr(channel, "sampling_rate", recording.sampling_rate)
+                    trial_t_start = NWBExporter._resolve_trial_t_start(channel, trial_idx)
 
                     # --- Stimulus Series (3-step fallback) ---
-                    # Attempt 1: raw digitized command waveform.
-                    # Attempt 2: synthetic waveform from ABF epoch metadata.
-                    # Attempt 3: stimulus=None, warning appended to ts_desc.
                     stim_series, stim_note = NWBExporter._resolve_stimulus_series(
                         channel,
                         trial_idx,
@@ -609,7 +656,7 @@ class NWBExporter:
                             unit=final_units,
                             electrode=ic_electrode,
                             rate=float(channel_rate) if channel_rate else 1000.0,
-                            starting_time=float(getattr(channel, "t_start", 0.0)),
+                            starting_time=trial_t_start,
                             gain=1.0,
                             sweep_number=np.uint64(trial_idx),
                             conversion=conversion,
@@ -713,6 +760,33 @@ class NWBExporter:
                                 dt.add_row(time_s=float(t_val))
                         pm.add(dt)
                         log.debug("NWB ProcessingModule: added table '%s' (%d rows)", tbl_name, len(times_arr))
+
+                    scalar_rows: List[Tuple[str, str, str, float]] = []
+                    for row in rows:
+                        if not isinstance(row, dict):
+                            continue
+                        chan_label = str(row.get("channel_name") or row.get("channel") or "ch")
+                        analysis_label = str(row.get("analysis") or row.get("analysis_type") or "summary")
+                        metrics_map = row.get("metrics") if isinstance(row.get("metrics"), dict) else row
+                        for m_key, m_val in metrics_map.items():
+                            if str(m_key).startswith("_") or m_key in ("metrics", "parameters"):
+                                continue
+                            if isinstance(m_val, (int, float, np.integer, np.floating)) and not isinstance(m_val, bool):
+                                f_val = float(m_val)
+                                if np.isfinite(f_val):
+                                    scalar_rows.append((chan_label, analysis_label, str(m_key), f_val))
+                    if scalar_rows:
+                        summary_dt = DynamicTable(
+                            name="scalar_metrics",
+                            description="Scalar electrophysiology metrics exported by Synaptipy.",
+                        )
+                        summary_dt.add_column(name="channel", description="Channel identifier or name.")
+                        summary_dt.add_column(name="analysis", description="Analysis identifier.")
+                        summary_dt.add_column(name="metric", description="Metric name.")
+                        summary_dt.add_column(name="value", description="Numeric metric value.")
+                        for ch_s, an_s, mk_s, mv_f in scalar_rows:
+                            summary_dt.add_row(channel=ch_s, analysis=an_s, metric=mk_s, value=mv_f)
+                        pm.add(summary_dt)
                 except Exception as e_pm:
                     log.warning("NWB analysis ProcessingModule failed (non-fatal): %s", e_pm)
 

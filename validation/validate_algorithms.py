@@ -402,9 +402,9 @@ def validate_sag_ratio(report: ValidationReport) -> None:
         + (steady_mv - baseline_mv) * (1 - np.exp(-t_step / tau_sag))
     )
 
-    # Expected sag_ratio = (V_peak - V_baseline) / (V_ss - V_baseline)
-    # = (-90 - (-70)) / (-80 - (-70)) = -20 / -10 = 2.0
-    expected_ratio = (peak_mv - baseline_mv) / (steady_mv - baseline_mv)
+    # Canonical Synaptipy sag_ratio = (V_ss - V_baseline) / (V_peak - V_baseline)
+    # = (-80 - (-70)) / (-90 - (-70)) = -10 / -20 = 0.5
+    expected_ratio = (steady_mv - baseline_mv) / (peak_mv - baseline_mv)
 
     result = calculate_sag_ratio(
         voltage_trace=data,

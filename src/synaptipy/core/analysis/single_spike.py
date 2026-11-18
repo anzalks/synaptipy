@@ -127,13 +127,15 @@ def detect_spikes_threshold(  # noqa: C901
     try:
         dt = time[1] - time[0] if len(time) > 1 else 1.0
 
-        # Apply 5 kHz low-pass filter
-        from scipy.signal import butter, sosfiltfilt
+        # Apply 5 kHz low-pass filter using BLAS-safe SOS filter
+        from scipy.signal import butter
+
+        from synaptipy.core.signal_processor import _sosfiltfilt_safe
 
         nyq = 0.5 / dt
         if 5000.0 < nyq:
             sos = butter(4, 5000.0, btype="low", output="sos", fs=1.0 / dt)
-            data_filtered = sosfiltfilt(sos, data)
+            data_filtered = _sosfiltfilt_safe(sos, data)
         else:
             data_filtered = data
 
@@ -150,46 +152,31 @@ def detect_spikes_threshold(  # noqa: C901
                 parameters=parameters or {},
             )
 
-        if refractory_samples <= 0:
-            valid_crossing_indices = crossings
-        else:
-            valid_crossings_list = [crossings[0]]
-            last_crossing_idx = crossings[0]
-            for idx in crossings[1:]:
-                if (idx - last_crossing_idx) >= refractory_samples:
-                    valid_crossings_list.append(idx)
-                    last_crossing_idx = idx
-            valid_crossing_indices = np.array(valid_crossings_list)
-
-        if valid_crossing_indices.size == 0:
-            return SpikeTrainResult(
-                value=0,
-                unit="spikes",
-                spike_times=np.array([]),
-                spike_indices=np.array([]),
-                parameters=parameters or {},
-            )
-
         peak_indices_list = []
         if peak_search_window_samples is None:
             peak_search_window_samples = (
                 refractory_samples if refractory_samples > 0 else int(0.005 / (time[1] - time[0]))
             )
 
-        for crossing_idx in valid_crossing_indices:
+        last_accepted_crossing = -refractory_samples - 1 if refractory_samples > 0 else -1
+        for crossing_idx in crossings:
+            if refractory_samples > 0 and (crossing_idx - last_accepted_crossing) < refractory_samples:
+                continue
             search_start = crossing_idx
             search_end = min(crossing_idx + peak_search_window_samples, len(data))
             if search_start >= search_end:
                 peak_idx = crossing_idx
             else:
                 try:
-                    relative_peak_idx = np.argmax(data[search_start:search_end])
+                    relative_peak_idx = int(np.argmax(data[search_start:search_end]))
                     peak_idx = search_start + relative_peak_idx
                 except ValueError:
                     peak_idx = crossing_idx
 
+            # Only commit refractory suppression when peak actually crosses voltage threshold
             if data[peak_idx] >= threshold:
                 peak_indices_list.append(peak_idx)
+                last_accepted_crossing = crossing_idx
 
         peak_indices_arr = np.array(peak_indices_list).astype(int)
         peak_times_arr = time[peak_indices_arr]
@@ -535,42 +522,46 @@ def calculate_spike_features(  # noqa: C901
     valid_ahp_dur = has_recovery & has_ap_end & (rec_rel_indices > ap_end_rel_indices)
     ahp_durations[valid_ahp_dur] = (rec_rel_indices[valid_ahp_dur] - ap_end_rel_indices[valid_ahp_dur]) * dt * 1000.0
 
-    # --- ADP ---
+    # --- ADP (variation-diminishing Gaussian-smoothed waveform, bounded before next AP onset) ---
     adp_amplitudes = np.full(n_spikes, np.nan)
-    if ahp_max_samples > 2:
-        val_mid = ahp_waveforms[:, 1:-1]
-        val_left = ahp_waveforms[:, :-2]
-        val_right = ahp_waveforms[:, 2:]
+    if ahp_max_samples > 3:
+        from scipy.ndimage import gaussian_filter1d
 
-        # Find all local minima (troughs)
-        is_local_min_inner = (val_mid < val_left) & (val_mid < val_right)
-        is_local_min = np.pad(is_local_min_inner, ((0, 0), (1, 1)), mode="constant", constant_values=False)
+        adp_sigma = max(1.0, 0.0002 / dt)
+        adp_smooth = gaussian_filter1d(ahp_waveforms.astype(np.float64), sigma=adp_sigma, axis=1, mode="nearest")
 
-        col_idxs2 = np.tile(np.arange(ahp_max_samples), (n_spikes, 1))
+        adp_bound_per_spike = ahp_max_samples_per_spike.copy()
+        if n_spikes > 1:
+            dist_to_next_onset = np.maximum(1, thresh_indices[1:] - spike_indices[:-1])
+            adp_bound_per_spike[:-1] = np.minimum(adp_bound_per_spike[:-1], dist_to_next_onset)
 
-        # The fast trough is the FIRST local minimum
-        valid_min_mask = is_local_min & (col_idxs2 < ahp_max_samples_per_spike[:, None])
-        has_trough = np.any(valid_min_mask, axis=1)
-        first_trough_idx = np.argmax(valid_min_mask, axis=1)
-
-        # The ADP peak is the FIRST local maximum after the fast trough
-        is_local_max_inner = (val_mid > val_left) & (val_mid > val_right)
-        is_local_max = np.pad(is_local_max_inner, ((0, 0), (1, 1)), mode="constant", constant_values=False)
-
-        valid_max_mask = (
-            is_local_max & (col_idxs2 > first_trough_idx[:, None]) & (col_idxs2 < ahp_max_samples_per_spike[:, None])
-        )
-
-        # Find highest valid local maximum between fast trough and next spike / end of window
-        temp_vals = ahp_waveforms.copy()
-        temp_vals[~valid_max_mask] = -np.inf
-        adp_peaks = np.max(temp_vals, axis=1)
-
-        has_adp = np.any(valid_max_mask, axis=1) & ~np.isinf(adp_peaks)
-        fast_trough_vals = ahp_waveforms[np.arange(n_spikes), first_trough_idx]
-        calced_adps = adp_peaks - fast_trough_vals
-
-        adp_amplitudes = np.where(has_trough & has_adp, calced_adps, np.nan)
+        for i in range(n_spikes):
+            bound = int(min(adp_bound_per_spike[i], ahp_max_samples))
+            if bound < 4:
+                continue
+            seg = adp_smooth[i, :bound]
+            mid = seg[1:-1]
+            # Fast trough: first genuine local minimum below AP threshold
+            min_locs = np.where((mid <= seg[:-2]) & (mid < seg[2:]) & (mid < ap_thresholds[i]))[0] + 1
+            if min_locs.size == 0:
+                continue
+            trough_idx = int(min_locs[0])
+            # Candidate local maxima after the fast trough
+            post = seg[trough_idx:]
+            if post.size < 3:
+                continue
+            post_mid = post[1:-1]
+            max_rel = np.where((post_mid > post[:-2]) & (post_mid >= post[2:]))[0] + 1
+            for m_rel in max_rel:
+                m_idx = trough_idx + int(m_rel)
+                if m_idx + 1 >= bound:
+                    break
+                rise_amp = float(seg[m_idx] - seg[trough_idx])
+                post_drop = float(seg[m_idx] - np.min(seg[m_idx + 1 : bound]))
+                # Require genuine depolarizing hump (>0.25 mV rise AND >=0.20 mV subsequent repolarization)
+                if rise_amp > 0.25 and post_drop >= 0.20:
+                    adp_amplitudes[i] = rise_amp
+                    break
 
     # --- fAHP and mAHP (separate physiological windows) ---
     # fAHP: fast AHP (default 1-5 ms post-peak): Na+ channel-mediated repolarisation overshoot
@@ -773,6 +764,34 @@ def get_phase_plane_trajectory(
     return voltage, dvdt
 
 
+def _resolve_single_kink_index(
+    v_slice: np.ndarray,
+    dvdt_slice: np.ndarray,
+    lower_bound: int,
+    peak_idx: int,
+    sampling_rate: float,
+    dvdt_threshold: float,
+    kink_slope: float,
+) -> int:
+    """Resolve the AP onset index within [lower_bound, peak_idx)."""
+    if dvdt_slice.size == 0:
+        return max(0, int(peak_idx) - 1)
+    below_mask = np.where(dvdt_slice <= dvdt_threshold)[0]
+    if below_mask.size > 0 and below_mask[-1] + 1 < dvdt_slice.size:
+        return lower_bound + int(below_mask[-1]) + 1
+    crossings = np.where(dvdt_slice > dvdt_threshold)[0]
+    if crossings.size > 0:
+        return lower_bound + int(crossings[0])
+    if kink_slope > 0 and v_slice.size >= 3:
+        dv = np.diff(v_slice)
+        ddvdt = np.diff(dvdt_slice)
+        phase_slope = np.where(np.abs(dv) > 1e-6, ddvdt / dv, 0.0)
+        kink_hits = np.where((phase_slope >= kink_slope) & (dvdt_slice[1:] > 0))[0]
+        if kink_hits.size > 0:
+            return lower_bound + int(kink_hits[0]) + 1
+    return max(lower_bound, int(peak_idx) - int(0.001 * sampling_rate))
+
+
 def detect_threshold_kink(
     voltage: np.ndarray,
     sampling_rate: float,
@@ -794,19 +813,25 @@ def detect_threshold_kink(
 
     dvdt = calculate_dvdt(voltage, sampling_rate, sigma_ms=0.1)
     threshold_indices = []
-    search_samples = int((search_window_ms / 1000.0) * sampling_rate)
+    search_samples = max(1, int((search_window_ms / 1000.0) * sampling_rate))
 
-    for peak_idx in peak_indices:
-        start_search = max(0, peak_idx - search_samples)
-        dvdt_slice = dvdt[start_search:peak_idx]
-        crossings = np.where(dvdt_slice > dvdt_threshold)[0]
-        if crossings.size > 0:
-            thresh_idx = start_search + crossings[0]
-        else:
-            thresh_idx = max(0, peak_idx - int(0.001 * sampling_rate))
+    for i_pk, peak_idx in enumerate(peak_indices):
+        lower_bound = max(0, int(peak_idx) - search_samples)
+        if i_pk > 0 and int(peak_indices[i_pk - 1]) < int(peak_idx):
+            prev_pk = int(peak_indices[i_pk - 1])
+            lower_bound = max(lower_bound, prev_pk + int(np.argmin(voltage[prev_pk:peak_idx])))
+        thresh_idx = _resolve_single_kink_index(
+            voltage[lower_bound:peak_idx],
+            dvdt[lower_bound:peak_idx],
+            lower_bound,
+            int(peak_idx),
+            sampling_rate,
+            dvdt_threshold,
+            kink_slope,
+        )
         threshold_indices.append(thresh_idx)
 
-    return np.array(threshold_indices)
+    return np.array(threshold_indices, dtype=int)
 
 
 # ---------------------------------------------------------------------------
@@ -904,6 +929,8 @@ def run_spike_detection_wrapper(
     try:
         ljp_mv = float(kwargs.get("ljp_correction_mv", 0.0))
         data = apply_ljp_correction(data, ljp_mv)
+        if "refractory_ms" in kwargs and float(kwargs["refractory_ms"]) >= 0:
+            refractory_period = float(kwargs["refractory_ms"]) / 1000.0
         refractory_samples = int(refractory_period * sampling_rate)
         peak_window_samples = int(peak_search_window * sampling_rate)
 
@@ -977,9 +1004,26 @@ def run_spike_detection_wrapper(
                 else np.array([])
             )
 
+            n_spk = len(result.spike_indices) if result.spike_indices is not None else 0
+            trace_dur = float(time[-1] - time[0]) if len(time) > 1 else 0.0
+            stim_onset_s = float(kwargs.get("stim_onset_s", time[0] if len(time) > 0 else 0.0))
+            stim_end_s = float(kwargs.get("stim_end_s", time[-1] if len(time) > 0 else 0.0))
+            if "stim_onset_s" in kwargs and "stim_end_s" in kwargs and stim_end_s > stim_onset_s:
+                win_dur = stim_end_s - stim_onset_s
+                n_win = (
+                    int(np.sum((result.spike_times >= stim_onset_s) & (result.spike_times <= stim_end_s)))
+                    if result.spike_times is not None and n_spk > 0
+                    else 0
+                )
+                win_freq_hz = float(n_win / win_dur)
+            else:
+                win_freq_hz = (n_spk / trace_dur) if trace_dur > 0 else 0.0
+            first_lat_s = float(result.spike_times[0] - stim_onset_s) if n_spk > 0 else np.nan
             metrics: Dict[str, Any] = {
-                "spike_count": len(result.spike_indices) if result.spike_indices is not None else 0,
+                "spike_count": n_spk,
                 "mean_freq_hz": result.mean_frequency if result.mean_frequency is not None else 0.0,
+                "window_frequency_hz": win_freq_hz,
+                "first_spike_latency_s": first_lat_s,
                 "spike_times": result.spike_times,
                 "spike_indices": result.spike_indices,
                 "spike_voltages": v_data,
@@ -1093,6 +1137,12 @@ def phase_plane_analysis_wrapper(
     )
 
     threshold_vals = voltage[thresh_indices] if thresh_indices.size > 0 else []
+    if spike_res.spike_indices is not None and len(spike_res.spike_indices) > 0:
+        win_s = max(1, int(0.002 * sampling_rate))
+        spk_max_vals = [float(np.max(dvdt[max(0, int(pk) - win_s) : int(pk) + 1])) for pk in spike_res.spike_indices]
+        max_dvdt_val = float(np.max(spk_max_vals)) if spk_max_vals else float(np.max(dvdt))
+    else:
+        max_dvdt_val = float(np.max(dvdt)) if len(dvdt) > 0 else 0.0
 
     metrics = {
         "voltage": v,
@@ -1101,7 +1151,8 @@ def phase_plane_analysis_wrapper(
         "threshold_vals": threshold_vals,
         "threshold_v": float(np.mean(threshold_vals)) if len(threshold_vals) > 0 else np.nan,
         "threshold_dvdt": float(dvdt_threshold),
-        "max_dvdt": float(np.max(dvdt)) if len(dvdt) > 0 else 0.0,
+        "max_dvdt": max_dvdt_val,
+        "trace_max_dvdt": float(np.max(dvdt)) if len(dvdt) > 0 else 0.0,
         "threshold_mean": float(np.mean(threshold_vals)) if len(threshold_vals) > 0 else np.nan,
     }
     return {"module_used": "single_spike", "metrics": metrics}

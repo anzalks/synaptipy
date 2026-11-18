@@ -194,6 +194,20 @@ class SignalProcessingPipeline:
 # ---------------------------------------------------------------------------
 
 
+def _apply_ljp_offset(result: np.ndarray, ljp_mv: float, units: str) -> np.ndarray:
+    """Step A: unit-aware liquid junction potential subtraction (voltage channels only)."""
+    u_norm = str(units or "mV").strip().lower()
+    if u_norm in ("pa", "picoampere", "picoamperes", "na", "nanoampere", "a", "ampere", "amperes"):
+        log.warning("apply_trace_corrections: skipping LJP subtraction on current trace (%s).", units)
+        return result
+    if u_norm in ("v", "volt", "volts"):
+        return result - float(ljp_mv) * 1e-3
+    if u_norm in ("uv", "microvolt", "microvolts"):
+        return result - float(ljp_mv) * 1e3
+    log.debug("apply_trace_corrections: Step A - LJP %.4f mV subtracted.", ljp_mv)
+    return result - float(ljp_mv)
+
+
 def _apply_pn_subtraction(result: np.ndarray, pn_traces, pn_scale: float) -> np.ndarray:
     """Step B: P/N leak subtraction helper."""
     pn_arr = np.asarray(pn_traces, dtype=float)
@@ -244,6 +258,7 @@ def apply_trace_corrections(
     fs: float,
     *,
     ljp_mv: float = 0.0,
+    units: str = "mV",
     pn_traces: Optional[np.ndarray] = None,
     pn_scale: float = 1.0,
     pre_event_window_s: Optional[tuple] = None,
@@ -314,11 +329,10 @@ def apply_trace_corrections(
     result: np.ndarray = data.copy()
 
     # ------------------------------------------------------------------
-    # Step A — Liquid Junction Potential subtraction
+    # Step A - Liquid Junction Potential subtraction (voltage channels only)
     # ------------------------------------------------------------------
     if ljp_mv != 0.0:
-        result = result - float(ljp_mv)
-        log.debug("apply_trace_corrections: Step A — LJP %.4f mV subtracted.", ljp_mv)
+        result = _apply_ljp_offset(result, ljp_mv, units)
 
     # ------------------------------------------------------------------
     # Step B — P/N Leak Subtraction

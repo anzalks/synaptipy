@@ -481,7 +481,7 @@ class AnalyserTab(QtWidgets.QWidget):
         from synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
         from synaptipy.core.analysis.registry import AnalysisRegistry
 
-        registered_analyses = AnalysisRegistry.list_registered()
+        registered_analyses = AnalysisRegistry.list_analysis()
 
         # Collect all covered analysis names from loaded manual tabs
         loaded_registry_names = set()
@@ -671,9 +671,15 @@ class AnalyserTab(QtWidgets.QWidget):
                     params.pop("method_display", None)
 
                     if registry_name:
-                        pipeline_config = [
-                            {"analysis": registry_name, "scope": "all_trials", "params": params}  # Default scope
-                        ]
+                        task_entry: Dict[str, Any] = {
+                            "analysis": registry_name,
+                            "scope": "all_trials",
+                            "params": params,
+                        }
+                        sec_combo = getattr(current_tab, "_secondary_channel_combobox", None)
+                        if sec_combo is not None and sec_combo.currentData() is not None:
+                            task_entry["secondary_channel"] = str(sec_combo.currentData())
+                        pipeline_config = [task_entry]
 
                         # --- PREPEND Global Preprocessing ---
                         global_prep = self.get_global_preprocessing()

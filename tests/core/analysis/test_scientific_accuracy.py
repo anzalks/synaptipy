@@ -559,24 +559,27 @@ class TestGroundTruthPassive:
         ), f"Rin {result.value:.4f} MOhm deviates >0.1% from true {true_rin} MOhm"
 
     def test_delta_v_exact_from_rc_trace(self):
-        """Steady-state voltage deflection must match I * Rin to 0.1%."""
+        """Steady-state voltage deflection from calculate_rin must match I * Rin to 0.1%."""
         import math
 
         from tests.shared.test_data_generation import make_rc_passive_trace
 
         v, t, known = make_rc_passive_trace(rin_mohm=100.0, tau_ms=10.0, step_amplitude_pa=-50.0)
-        # Expected delta_V: 50 pA * 100 MOhm / 1000 = 5 mV
         expected_dv = abs(known["delta_v_mv"])
 
-        baseline_mean = float(np.mean(v[t < 0.04]))
-        # Steady-state measured near end of step (90% time-constant settled)
-        steady_mask = (t >= 0.22) & (t < 0.24)
-        steady_mean = float(np.mean(v[steady_mask]))
-        measured_dv = abs(steady_mean - baseline_mean)
+        result = calculate_rin(
+            voltage_trace=v,
+            time_vector=t,
+            current_amplitude=-50.0,
+            baseline_window=(0.0, 0.04),
+            response_window=(0.22, 0.24),
+        )
+        assert result.is_valid
+        measured_dv = abs(float(result.voltage_deflection))
 
         assert math.isclose(
             measured_dv, expected_dv, rel_tol=1e-3
-        ), f"Measured ΔV {measured_dv:.4f} mV ≠ expected {expected_dv:.4f} mV"
+        ), f"Measured delta_V {measured_dv:.4f} mV != expected {expected_dv:.4f} mV"
 
 
 class TestGroundTruthSingleSpike:
@@ -607,19 +610,21 @@ class TestGroundTruthSingleSpike:
         ), f"max_dvdt {feat.max_dvdt:.2f} V/s deviates >10% from true {true_dvdt_vs} V/s"
 
     def test_peak_voltage_exact(self):
-        """Spike peak voltage must match the known waveform peak."""
+        """Spike peak voltage extracted by calculate_spike_features must match known peak."""
         import math
 
+        from synaptipy.core.analysis.single_spike import detect_spikes_threshold
         from tests.shared.test_data_generation import make_single_spike_trace
 
         true_peak = 30.0  # mV
-        v, t, known = make_single_spike_trace(peak_mv=true_peak, sampling_rate=100000.0)
-        peak_idx = known["peak_idx"]
-
-        measured_peak = float(v[peak_idx])
+        v, t, _known = make_single_spike_trace(peak_mv=true_peak, sampling_rate=100000.0)
+        det = detect_spikes_threshold(v, t, threshold=-20.0, refractory_samples=200, dvdt_threshold=20.0)
+        assert det.value == 1
+        feats = calculate_spike_features(v, t, det.spike_indices, dvdt_threshold=20.0)
+        measured_peak = float(feats[0].absolute_peak_mv)
         assert math.isclose(
             measured_peak, true_peak, rel_tol=1e-3
-        ), f"Measured peak {measured_peak:.2f} mV ≠ true {true_peak} mV"
+        ), f"Measured peak {measured_peak:.2f} mV != true {true_peak} mV"
 
 
 class TestGroundTruthFiringDynamics:
@@ -688,60 +693,68 @@ class TestGroundTruthFiringDynamics:
 
 
 class TestGroundTruthSynapticEvents:
-    """Pillar 4 — Synaptic Events: bi-exponential decay AUC and peak recovered from pure waveform."""
+    """Pillar 4 - Synaptic Events: bi-exponential kinetics and dynamic charge recovered via Synaptipy."""
 
     def test_biexponential_peak_exact(self):
-        """Peak amplitude of a pure bi-exp waveform must equal A_fast + A_slow."""
+        """Synaptipy fit_biexponential_decay must recover fast and slow taus from a pure bi-exp EPSC."""
         import math
 
+        from synaptipy.core.analysis.synaptic_events import fit_biexponential_decay
         from tests.shared.test_data_generation import make_biexponential_epsc
 
         a_fast, a_slow = 60.0, 40.0
-        current, t, known = make_biexponential_epsc(
+        current, _t, _known = make_biexponential_epsc(
             a_fast=a_fast,
             a_slow=a_slow,
             tau_fast_ms=3.0,
             tau_slow_ms=20.0,
         )
-
-        # Peak inward current at t=0 (most negative sample = -(a_fast + a_slow))
-        measured_peak_inward = float(np.min(current))
-        expected_peak_inward = -(a_fast + a_slow)
-        assert math.isclose(
-            measured_peak_inward, expected_peak_inward, rel_tol=1e-3
-        ), f"Peak {measured_peak_inward:.3f} pA ≠ expected {expected_peak_inward:.3f} pA"
+        trace = np.concatenate((np.zeros(200), current))
+        peak_idx = 200
+        kin = fit_biexponential_decay(
+            trace, peak_idx, sample_rate=20000.0, local_baseline=0.0, polarity="negative", fit_window_ms=100.0
+        )
+        assert kin["bi_exp_converged"] is True
+        assert math.isclose(kin["tau_fast_ms"], 3.0, rel_tol=0.15)
+        assert math.isclose(kin["tau_slow_ms"], 20.0, rel_tol=0.15)
 
     def test_biexponential_auc_exact(self):
-        """Numeric AUC of a pure bi-exp must equal A_fast*tau_fast + A_slow*tau_slow to 0.1%."""
+        """Synaptipy calculate_event_charge_dynamic must match analytical bi-exp charge."""
         import math
 
+        from synaptipy.core.analysis.synaptic_events import calculate_event_charge_dynamic
         from tests.shared.test_data_generation import make_biexponential_epsc
 
         a_fast, tau_fast = 60.0, 3.0  # pA, ms
         a_slow, tau_slow = 40.0, 20.0
-        current, t, known = make_biexponential_epsc(
+        current, _t, known = make_biexponential_epsc(
             a_fast=a_fast,
             tau_fast_ms=tau_fast,
             a_slow=a_slow,
             tau_slow_ms=tau_slow,
             duration_ms=300.0,
         )
-
-        # Numeric AUC of the inward transient (integrate absolute value, pA·s → convert to pA·ms)
-        dt_ms = 1000.0 / 20000.0  # sampling_rate=20000 → dt in ms
-        auc_numeric = float(np.trapezoid(-current, dx=dt_ms))  # pA·ms
-
+        trace = np.concatenate((np.zeros(200), current))
+        charge_pa_s = calculate_event_charge_dynamic(
+            trace,
+            event_index=200,
+            sample_rate=20000.0,
+            local_baseline=0.0,
+            polarity="negative",
+            max_duration_ms=300.0,
+        )
+        auc_numeric_pa_ms = abs(float(charge_pa_s)) * 1000.0
         expected_auc = known["auc_pa_ms"]
         assert math.isclose(
-            auc_numeric, expected_auc, rel_tol=5e-3
-        ), f"Numeric AUC {auc_numeric:.3f} pA·ms deviates >0.5% from analytical {expected_auc:.3f} pA·ms"
+            auc_numeric_pa_ms, expected_auc, rel_tol=0.02
+        ), f"Dynamic AUC {auc_numeric_pa_ms:.3f} pA*ms deviates >2% from analytical {expected_auc:.3f} pA*ms"
 
 
 class TestGroundTruthEvokedPPR:
-    """Pillar 5 — Evoked Responses: residual at stim2 matches analytic value from pure PPR trace."""
+    """Pillar 5 - Evoked Responses: residual at stim2 and residual-subtracted PPR match ground truth."""
 
     def test_residual_at_stim2_exact(self):
-        """Analytically known residual at stim2 must match calculated residual to 1%."""
+        """Analytically known residual and true PPR=1.0 must be recovered from summating paired pulses."""
         import math
 
         from synaptipy.core.analysis.evoked_responses import calculate_paired_pulse_ratio
@@ -749,7 +762,6 @@ class TestGroundTruthEvokedPPR:
 
         r1 = -5.0  # mV
         tau = 40.0  # ms
-        # Use tau as the slow component; fast component set to 10 ms (faster artifact)
         v, t, known = make_ppr_evoked_trace(
             r1_amp_mv=r1,
             r2_amp_mv=-5.0,
@@ -783,14 +795,35 @@ class TestGroundTruthEvokedPPR:
         assert math.isclose(
             abs(measured_residual), abs(analytic_residual), rel_tol=0.05
         ), f"Residual {measured_residual:.4f} mV deviates >5% from analytic {analytic_residual:.4f} mV"
+        assert math.isclose(
+            float(result["paired_pulse_ratio"]), 1.0, rel_tol=0.03
+        ), f"Residual-corrected PPR {result['paired_pulse_ratio']:.4f} deviates >3% from true 1.0"
 
     def test_naive_ppr_equals_one_for_matched_events(self):
-        """For two equal-amplitude events with negligible residual, naive PPR = r2/r1 = 1."""
+        """For two equal-amplitude events with negligible residual, calculate_paired_pulse_ratio returns PPR=1."""
         import math
 
+        from synaptipy.core.analysis.evoked_responses import calculate_paired_pulse_ratio
         from tests.shared.test_data_generation import make_ppr_evoked_trace
 
-        _v, _t, known = make_ppr_evoked_trace(r1_amp_mv=-5.0, r2_amp_mv=-5.0)
+        v, t, _known = make_ppr_evoked_trace(
+            r1_amp_mv=-5.0,
+            r2_amp_mv=-5.0,
+            tau_fast_ms=2.0,
+            tau_slow_ms=4.0,
+            stim1_s=0.1,
+            stim2_s=0.3,
+            sampling_rate=10000.0,
+        )
+        res = calculate_paired_pulse_ratio(
+            data=v,
+            time=t,
+            stim1_onset_s=0.1,
+            stim2_onset_s=0.3,
+            response_window_ms=20.0,
+            baseline_window_ms=5.0,
+            polarity="negative",
+        )
         assert math.isclose(
-            known["naive_ppr"], 1.0, rel_tol=1e-9
-        ), f"naive_ppr {known['naive_ppr']:.6f} should be exactly 1.0 for matched amplitudes."
+            float(res["paired_pulse_ratio"]), 1.0, rel_tol=0.02
+        ), f"PPR {res['paired_pulse_ratio']:.6f} should be ~1.0 for matched well-separated amplitudes."

@@ -257,10 +257,18 @@ class Channel:
             log.warning(f"Channel {self.id}: Negative trial index {trial_index} requested. Returning None.")
             return None
 
-        if self.data_trials and trial_index >= len(self.data_trials):
+        meta_trials = int(self.metadata.get("num_trials", 0) or 0) if isinstance(self.metadata, dict) else 0
+        if self.loader is None:
+            if not self.data_trials or trial_index >= len(self.data_trials):
+                log.warning(
+                    f"Channel {self.id}: Trial index {trial_index} exceeds available trials "
+                    f"(max index: {len(self.data_trials) - 1}). Returning None."
+                )
+                return None
+        elif meta_trials > 0 and trial_index >= max(len(self.data_trials), meta_trials):
             log.warning(
-                f"Channel {self.id}: Trial index {trial_index} exceeds available trials "
-                f"(max index: {len(self.data_trials) - 1}). Returning None."
+                f"Channel {self.id}: Trial index {trial_index} exceeds lazy trial count "
+                f"(max index: {max(len(self.data_trials), meta_trials) - 1}). Returning None."
             )
             return None
 

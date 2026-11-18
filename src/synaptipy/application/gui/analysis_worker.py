@@ -189,6 +189,7 @@ class NwbExportWorker(QtCore.QThread):
         output_filepath: Path,
         nwb_metadata: Dict,
         parent: Optional[QtCore.QObject] = None,
+        analysis_results: Optional[List] = None,
     ) -> None:
         """Initialise the NWB export worker.
 
@@ -198,17 +199,24 @@ class NwbExportWorker(QtCore.QThread):
             output_filepath: Destination path for the ``.nwb`` file.
             nwb_metadata: Metadata dict accepted by :meth:`NWBExporter.export`.
             parent: Optional Qt parent object.
+            analysis_results: Optional list of analysis result dicts to embed.
         """
         super().__init__(parent)
         self._exporter = exporter
         self._recording = recording
         self._output_filepath = output_filepath
         self._nwb_metadata = nwb_metadata
+        self._analysis_results = analysis_results
 
     def run(self) -> None:
-        """Execute the NWB export — called automatically by :meth:`QThread.start`."""
+        """Execute the NWB export - called automatically by :meth:`QThread.start`."""
         try:
-            self._exporter.export(self._recording, self._output_filepath, self._nwb_metadata)
+            self._exporter.export(
+                self._recording,
+                self._output_filepath,
+                self._nwb_metadata,
+                analysis_results=self._analysis_results,
+            )
             self.export_finished.emit(str(self._output_filepath))
         except Exception:  # noqa: BLE001
             log.exception("NwbExportWorker: unhandled exception.")

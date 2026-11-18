@@ -5,7 +5,7 @@ LABEL description="Synaptipy: Reproducible electrophysiology analysis environmen
 
 # System dependencies for Qt6 offscreen rendering
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1-mesa-glx \
+    libgl1 \
     libegl1 \
     libxkbcommon0 \
     libdbus-1-3 \
@@ -26,6 +26,6 @@ RUN pip install --no-cache-dir ".[dev]"
 # Default to offscreen rendering for headless environments
 ENV QT_QPA_PLATFORM=offscreen
 
-# Validation entry point
+# Test and validation entry point
 ENTRYPOINT ["python", "-m", "pytest"]
-CMD ["validation/", "-v"]
+CMD ["tests/", "-v"]

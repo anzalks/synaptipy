@@ -2180,12 +2180,15 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                             all_y_max = item_max
                 self.set_data_ranges(x_range, (all_y_min, all_y_max))
 
-            # 6. Store State (including raw data for efficient preprocessing)
+            # 6. Store State (preserve unfiltered raw_data so re-filtering never double-filters)
+            unfiltered_arr = (
+                plot_package.raw_main_data if plot_package.raw_main_data is not None else plot_package.main_data
+            )
             self._current_plot_data = {
                 "data": plot_package.main_data,
                 "time": plot_package.main_time,
-                "raw_data": plot_package.main_data.copy(),  # Cache raw for preprocessing
-                "raw_time": plot_package.main_time.copy(),  # Cache raw time
+                "raw_data": unfiltered_arr.copy(),
+                "raw_time": plot_package.main_time.copy(),
                 "channel_id": plot_package.channel_id,
                 "data_source": plot_package.data_source,
                 "units": plot_package.units,

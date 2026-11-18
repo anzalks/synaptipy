@@ -293,9 +293,9 @@ def sweep_ahp_windows(
             mahp_window_ms=mahp,
         )
         depths = [
-            f.get("fahp_depth", np.nan)
+            float(getattr(f, "fahp_depth", np.nan))
             for f in features
-            if f.get("fahp_depth") is not None and not np.isnan(f.get("fahp_depth", np.nan))
+            if getattr(f, "fahp_depth", None) is not None and not np.isnan(getattr(f, "fahp_depth", np.nan))
         ]
         mean_depth = float(np.mean(depths)) if depths else 0.0
         metric_values.append(mean_depth)

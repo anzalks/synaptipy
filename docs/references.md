@@ -30,13 +30,13 @@ potential initiation in cortical neurons. *Nature*, 440(7087), 1060-1063.
 > Artifact ceiling constant 300 V/s in `single_spike.py` — above this rate the
 > rising phase is flagged as non-physiological.
 
-**Sekerli, M., Del Negro, C. A., Lee, R. H., & Bhatt, D. L. (2004).**
+**Sekerli, M., Del Negro, C. A., Lee, R. H., & Butera, R. J. (2004).**
 Estimating action potential thresholds from neuronal time-series: new metrics
 and evaluation of methodologies. *IEEE Transactions on Biomedical Engineering*,
 51(9), 1665-1672.
 [doi:10.1109/TBME.2004.827827](https://doi.org/10.1109/TBME.2004.827827)
-> Maximum-curvature (d²V/dt²) AP threshold method in `single_spike.py` §6.2
-> and §15.2.
+> Maximum-curvature (d2V/dt2) AP threshold method in `single_spike.py` section 6.2
+> and section 15.2.
 
 **Henze, D. A., & Buzsaki, G. (2001).** Action potential threshold of
 hippocampal pyramidal cells in vivo is increased by recent spiking activity.
@@ -197,9 +197,11 @@ neurons in rat hippocampal slices. *Journal of Neuroscience*, 14(8),
 > Conceptual framework for PPR interpretation — facilitation (PPR > 1) and
 > depression (PPR < 1) classification (`evoked_responses.py`).
 
-**Thanawala, M. S., & Bhatt, D. (2013).** Bhatt lab internal protocol for
-iterative cumulative decay subtraction in multi-pulse PPR analysis.
-> Iterative decay subtraction methodology (§15.5): for each pulse, the
+**Thanawala, M. S., & Regehr, W. G. (2013).** Presynaptic calcium influx
+controls neurotransmitter release in part by regulating the effective size of
+the readily releasable pool. *Journal of Neuroscience*, 33(11), 4625-4633.
+[doi:10.1523/JNEUROSCI.4031-12.2013](https://doi.org/10.1523/JNEUROSCI.4031-12.2013)
+> Iterative decay subtraction methodology (section 15.5): for each pulse, the
 > cumulative residual from all prior fitted decays is subtracted before
 > measuring amplitude and fitting the current pulse's isolated decay.
 
