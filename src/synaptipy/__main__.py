@@ -13,6 +13,7 @@ This file is part of Synaptipy, licensed under the GNU Affero General Public Lic
 See the LICENSE file in the root of the repository for full license details.
 """
 
+import multiprocessing
 import sys
 
 from synaptipy.shared.logging_config import ensure_stdio_streams_support_fileno
@@ -30,10 +31,12 @@ _install_crash_hook()
 
 def main():
     """Main entry point for the application."""
+    multiprocessing.freeze_support()
     if "--version" in sys.argv:
         from synaptipy import __version__
 
-        print(f"Synaptipy version {__version__}")
+        sys.stdout.write(f"Synaptipy version {__version__}\n")
+        sys.stdout.flush()
         return 0
 
     from synaptipy.application.__main__ import run_gui
@@ -42,4 +45,5 @@ def main():
 
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     sys.exit(main())

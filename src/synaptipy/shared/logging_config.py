@@ -29,11 +29,32 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-# Lazily opened discard stream for windowed / embedded builds (shared stdout+stderr).
+# Lazily opened fallback stream for windowed / embedded builds (shared stdout+stderr).
 _discard_stdio_stream = None
 
+# Default log directory is in the user's home directory
+DEFAULT_LOG_DIR = Path.home() / ".synaptipy" / "logs"
 
-def ensure_stdio_streams_support_fileno() -> None:
+
+def _open_fallback_stdio_stream(log_dir: Path | str | None = None):
+    """Open a writable OS-backed file stream for detached windowed builds.
+
+    Routes early pre-logging output and ``faulthandler`` C tracebacks to
+    ``~/.synaptipy/logs/boot.log`` (or ``SYNAPTIPY_LOG_DIR/boot.log``) so
+    packaged GUI startup crashes are preserved on disk instead of lost to
+    ``os.devnull``. Falls back to ``os.devnull`` if the log directory is not
+    writable.
+    """
+    env_dir = os.environ.get("SYNAPTIPY_LOG_DIR")
+    target_dir = Path(log_dir) if log_dir is not None else (Path(env_dir) if env_dir else DEFAULT_LOG_DIR)
+    try:
+        os.makedirs(target_dir, exist_ok=True)
+        return open(target_dir / "boot.log", "a", encoding="utf-8", buffering=1)
+    except OSError:
+        return open(os.devnull, "w", encoding="utf-8")
+
+
+def ensure_stdio_streams_support_fileno(log_dir: Path | str | None = None) -> None:
     """Ensure ``sys.stdout`` and ``sys.stderr`` support ``fileno()``.
 
     PyInstaller ``console=False`` builds may set streams to ``None`` or to
@@ -42,33 +63,28 @@ def ensure_stdio_streams_support_fileno() -> None:
     to :class:`io.StringIO` avoids ``None`` errors but still raises
     :exc:`io.UnsupportedOperation` on ``fileno()``.
 
-    When a stream is missing or fd-less, replace it with a write-only handle to
-    :data:`os.devnull` (same approach as redirecting to a real log file).  Console
-    output is already duplicated to log files via :func:`setup_logging`.
+    When a stream is missing or fd-less, replace it with an append handle to
+    ``boot.log`` (falling back to :data:`os.devnull` on read-only filesystems).
     """
     global _discard_stdio_stream
 
     def _needs_replacement(stream) -> bool:
-        if stream is None:
+        if stream is None or getattr(stream, "closed", False):
             return True
         try:
             stream.fileno()
-        except (io.UnsupportedOperation, OSError, AttributeError):
+        except (io.UnsupportedOperation, OSError, AttributeError, ValueError):
             return True
-        else:
-            return False
+        return False
 
     if _needs_replacement(sys.stdout) or _needs_replacement(sys.stderr):
-        if _discard_stdio_stream is None:
-            _discard_stdio_stream = open(os.devnull, "w", encoding="utf-8")
+        if _discard_stdio_stream is None or getattr(_discard_stdio_stream, "closed", False):
+            _discard_stdio_stream = _open_fallback_stdio_stream(log_dir=log_dir)
         if _needs_replacement(sys.stdout):
             sys.stdout = _discard_stdio_stream
         if _needs_replacement(sys.stderr):
             sys.stderr = _discard_stdio_stream
 
-
-# Default log directory is in the user's home directory
-DEFAULT_LOG_DIR = Path.home() / ".synaptipy" / "logs"
 
 # Define logger levels for different modes
 DEFAULT_CONSOLE_LEVEL = logging.WARNING  # Regular operation - show WARNING+ in console (Silent by default)

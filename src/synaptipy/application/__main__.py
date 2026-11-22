@@ -19,24 +19,22 @@ See the LICENSE file in the root of the repository for full license details.
 
 import argparse
 import faulthandler
-import logging
+import multiprocessing
 import os
 import sys
 import traceback
 import warnings
 from pathlib import Path
+from typing import Optional, Sequence
 
-from synaptipy.shared.logging_config import ensure_stdio_streams_support_fileno, setup_logging
+from synaptipy.shared.logging_config import ensure_stdio_streams_support_fileno, get_logger, setup_logging
 
 # PyInstaller ``console=False`` / ``--noconsole``: streams may be None or lack
 # ``fileno()`` (e.g. *None* patched to :class:`io.StringIO` elsewhere).
-# :func:`faulthandler.enable` requires ``sys.stderr.fileno()`` — bootstrap before Qt.
+# :func:`faulthandler.enable` requires ``sys.stderr.fileno()`` - bootstrap before Qt.
 ensure_stdio_streams_support_fileno()
 
 from PySide6 import QtCore, QtGui, QtWidgets  # noqa: E402
-
-# --- Import Core Components ---
-from synaptipy.application.startup_manager import StartupManager  # noqa: E402
 
 warnings.filterwarnings("ignore", category=RuntimeWarning, module="pyqtgraph")
 
@@ -44,28 +42,72 @@ warnings.filterwarnings("ignore", category=RuntimeWarning, module="pyqtgraph")
 # Python stack trace in the log (zero overhead in normal operation).
 try:
     faulthandler.enable()
-except Exception:
+except (OSError, RuntimeError, ValueError):
     pass
 
-# Log instance to be initialized after setting up logging
-log = logging.getLogger(__name__)
+# Log instance namespaced under "synaptipy" even when __name__ == "__main__" in PyInstaller
+log = get_logger(__name__)
 
 
-def parse_arguments():
+def _strip_macos_launch_args(argv: Sequence[str]) -> list[str]:
+    """Strip macOS LaunchServices process serial number flags (``-psn_*``)."""
+    return [arg for arg in argv if not arg.startswith("-psn_")]
+
+
+_KNOWN_BOOL_FLAGS = frozenset({"--dev", "--verbose", "-v", "--smoke-test", "--version", "-h", "--help"})
+
+
+def _extract_positional_file(cleaned_argv: Sequence[str]) -> Optional[str]:
+    """Return an OS-supplied file path from ``cleaned_argv``, ignoring ``-flag value`` pairs."""
+    skip_next = False
+    for token in cleaned_argv:
+        if skip_next:
+            skip_next = False
+            continue
+        if token.startswith("-"):
+            if "=" in token or token in _KNOWN_BOOL_FLAGS:
+                continue
+            # Both known value flags (--file X) and unknown OS/Qt flags
+            # (-ApplePersistenceIgnoreState YES, -platform offscreen) may
+            # consume the next non-option token as their value.
+            skip_next = True
+            continue
+        if Path(token).is_file():
+            return token
+    return None
+
+
+def parse_arguments(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     """
     Parse command line arguments for the application.
 
-    Returns:
-        argparse.Namespace: Parsed command line arguments
+    Uses ``parse_known_args`` so macOS LaunchServices / Cocoa flags
+    (e.g. ``-psn_0_...``, ``-ApplePersistenceIgnoreState YES``,
+    ``-NSDocumentRevisionsDebugMode YES``) and Qt platform flags never cause an
+    unhandled ``SystemExit(2)`` in packaged desktop bundles.
+
+    Parameters
+    ----------
+    argv : Sequence[str], optional
+        Explicit argument vector (excluding program name). Defaults to
+        ``sys.argv[1:]``.
+
+    Returns
+    -------
+    argparse.Namespace
+        Parsed command line arguments.
     """
     try:
         from synaptipy import __version__ as _version
-    except Exception:
+    except ImportError:
         _version = "unknown"
+
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    cleaned_argv = _strip_macos_launch_args(raw_argv)
 
     parser = argparse.ArgumentParser(description="Synaptipy - Electrophysiology Visualization Suite")
     # --version is handled by argparse before any Qt code runs, so it exits 0
-    # cleanly in headless / no-console builds — used by installer smoke tests.
+    # cleanly in headless / no-console builds - used by installer smoke tests.
     parser.add_argument(
         "--version",
         action="version",
@@ -76,7 +118,13 @@ def parse_arguments():
     parser.add_argument("--log-dir", type=str, help="Custom directory for log files")
     parser.add_argument("--log-file", type=str, help="Custom log filename")
     parser.add_argument("--file", type=str, default=None, help="Open a specific file on startup")
-    return parser.parse_args()
+    parser.add_argument("--smoke-test", action="store_true", help=argparse.SUPPRESS)
+
+    args, unknown = parser.parse_known_args(cleaned_argv)
+    args.unknown_args = unknown
+    if args.file is None:
+        args.file = _extract_positional_file(cleaned_argv)
+    return args
 
 
 # ---------------------------------------------------------------------------
@@ -95,7 +143,7 @@ class CrashReportDialog(QtWidgets.QDialog):
 
     def __init__(self, traceback_text: str, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Synaptipy — Unexpected Error")
+        self.setWindowTitle("Synaptipy - Unexpected Error")
         self.setMinimumSize(720, 460)
         self._traceback_text = traceback_text
         self._markdown_report = self._build_markdown_report(traceback_text)
@@ -202,7 +250,7 @@ class CrashReportDialog(QtWidgets.QDialog):
         QtWidgets.QApplication.clipboard().setText(self._markdown_report)
 
 
-def _install_excepthook() -> None:
+def _install_excepthook(headless: bool = False) -> None:
     """Replace ``sys.excepthook`` with a GUI-aware crash reporter.
 
     When an unhandled exception propagates to the top of the event loop,
@@ -223,6 +271,11 @@ def _install_excepthook() -> None:
         log.critical("Unhandled exception:\n%s", tb_str)
 
         app = QtWidgets.QApplication.instance()
+        if headless:
+            sys.__excepthook__(exc_type, exc_value, exc_tb)
+            if app is not None:
+                app.exit(1)
+            return
         if app is not None:
             try:
                 dlg = CrashReportDialog(tb_str)
@@ -236,126 +289,154 @@ def _install_excepthook() -> None:
     sys.excepthook = _excepthook
 
 
-def run_gui():  # noqa: C901
+def _create_qapplication() -> QtWidgets.QApplication:
+    """Return existing QApplication or instantiate one with High-DPI PassThrough."""
+    app = QtWidgets.QApplication.instance()
+    if app is not None:
+        return app
+
+    if hasattr(QtCore.Qt, "HighDpiScaleFactorRoundingPolicy"):
+        try:
+            QtWidgets.QApplication.setHighDpiScaleFactorRoundingPolicy(
+                QtCore.Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+            )
+            log.debug("High DPI PassThrough policy set successfully")
+        except (AttributeError, RuntimeError) as exc:
+            log.warning("Could not set High DPI policy: %s", exc)
+
+    qt_argv = [sys.argv[0], *_strip_macos_launch_args(sys.argv[1:])]
+    return QtWidgets.QApplication(qt_argv)
+
+
+def _schedule_initial_file_open(startup_manager, initial_file: Path) -> None:
+    """Poll until MainWindow is visible, then open ``initial_file``."""
+    timer = QtCore.QTimer(startup_manager)
+    timer.setInterval(200)
+
+    def _try_open_initial_file() -> None:
+        mw = startup_manager.get_main_window()
+        if mw is None or not mw.isVisible():
+            return
+        timer.stop()
+        fio = getattr(mw, "file_io_controller", None)
+        if fio is None:
+            return
+        siblings = fio._scan_siblings(initial_file)
+        idx = siblings.index(initial_file) if initial_file in siblings else 0
+        mw._load_in_explorer(initial_file, siblings, idx, False)
+
+    timer.timeout.connect(_try_open_initial_file)
+    startup_manager._initial_file_timer = timer
+    startup_manager._initial_file_cb = _try_open_initial_file
+    timer.start()
+
+
+def _schedule_smoke_test_exit(app: QtWidgets.QApplication, startup_manager) -> None:
+    """Verify full packaged GUI bootstrap through MainWindow, then exit cleanly."""
+    attempts = [0]
+    timer = QtCore.QTimer(startup_manager)
+    timer.setInterval(100)
+
+    def _probe() -> None:
+        attempts[0] += 1
+        mw = startup_manager.get_main_window()
+        if mw is not None and mw.isVisible():
+            timer.stop()
+            from synaptipy.core.analysis.registry import AnalysisRegistry
+
+            if not AnalysisRegistry.list_registered():
+                log.critical("Smoke test failed: AnalysisRegistry is empty.")
+                app.exit(1)
+                return
+            sentinel = os.environ.get("SYNAPTIPY_SMOKE_SENTINEL")
+            if sentinel:
+                Path(sentinel).write_text("OK\n", encoding="utf-8")
+            log.info("Smoke test passed: MainWindow initialized and visible.")
+            mw.close()
+            app.exit(0)
+            return
+        if attempts[0] >= 200:
+            timer.stop()
+            log.critical("Smoke test timed out waiting for MainWindow visibility.")
+            app.exit(1)
+
+    timer.timeout.connect(_probe)
+    startup_manager._smoke_test_timer = timer
+    startup_manager._smoke_test_cb = _probe
+    timer.start()
+
+
+def _start_welcome_flow(app: QtWidgets.QApplication, smoke_test: bool = False):
+    """Import StartupManager after logging/excepthook setup and display WelcomeScreen."""
+    from synaptipy.application.startup_manager import StartupManager
+
+    startup_manager = StartupManager(app, headless_smoke_test=smoke_test)
+    welcome_screen = startup_manager.start_loading()
+    welcome_screen.show()
+    welcome_screen.raise_()
+    welcome_screen.activateWindow()
+    app.processEvents()
+    welcome_screen.force_display()
+    log.debug("Welcome screen displayed, beginning startup process")
+    return startup_manager
+
+
+def run_gui():
     """
     Set up and run the Synaptipy GUI application with welcome screen.
-
-    This function:
-    1. Parses command line arguments
-    2. Configures the logging system
-    3. Initializes the Qt application
-    4. Creates and displays the welcome screen
-    5. Manages startup process with progress tracking
-    6. Runs the Qt event loop
 
     Returns:
         int: The application exit code
     """
-    # Parse command line arguments
+    multiprocessing.freeze_support()
     args = parse_arguments()
 
-    # Check for dev mode environment variable
-    env_dev_mode = os.environ.get("SYNAPTIPY_DEV_MODE")
-    if env_dev_mode and env_dev_mode.lower() in ("1", "true", "yes"):
-        dev_mode = True
-    else:
-        dev_mode = args.dev or args.verbose
+    env_dev_mode = os.environ.get("SYNAPTIPY_DEV_MODE", "")
+    dev_mode = (env_dev_mode.lower() in ("1", "true", "yes")) or args.dev or args.verbose
 
-    # Setup logging with the appropriate mode
     setup_logging(dev_mode=dev_mode, log_dir=args.log_dir, log_filename=args.log_file)
-
     log.info("Application starting...")
     if dev_mode:
         log.info("Running in DEVELOPMENT mode with verbose logging")
 
-    app = QtWidgets.QApplication.instance()
-    if app is None:
-        # Qt 6 always enables high-DPI scaling. Keep the rounding policy
-        # explicit so fractional display scale factors remain predictable.
-        if hasattr(QtCore.Qt, "HighDpiScaleFactorRoundingPolicy"):
-            try:
-                QtWidgets.QApplication.setHighDpiScaleFactorRoundingPolicy(
-                    QtCore.Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
-                )
-                log.debug("High DPI PassThrough policy set successfully")
-            except Exception as e:
-                log.warning(f"Could not set High DPI policy: {e}")
-
-        app = QtWidgets.QApplication(sys.argv)
-
-    # Force locale to English/US to ensure dot decimal separators
-    # This fixes issues where European locales force comma separators in spinboxes
+    app = _create_qapplication()
     QtCore.QLocale.setDefault(QtCore.QLocale(QtCore.QLocale.English, QtCore.QLocale.UnitedStates))
     log.debug("Forced application locale to English/US (dot decimal separator)")
 
-    # Install the GUI-aware crash reporter so unhandled exceptions show a
-    # dialog with a "Copy to Clipboard" button instead of silently exiting.
-    _install_excepthook()
+    smoke_test = bool(getattr(args, "smoke_test", False))
+    _install_excepthook(headless=smoke_test)
     log.debug("Crash-report excepthook installed.")
 
-    # Create startup manager and begin loading process
     try:
-        startup_manager = StartupManager(app)
-        welcome_screen = startup_manager.start_loading()
-
-        # Show welcome screen immediately and force display
-        welcome_screen.show()
-        welcome_screen.raise_()  # Bring to front
-        welcome_screen.activateWindow()  # Activate the window
-
-        # Force Qt to process events and display the window immediately
-        app.processEvents()
-
-        # Use the optimized display method
-        welcome_screen.force_display()
-
-        log.debug("Welcome screen displayed, beginning startup process")
-
-    except Exception as e:
-        log.critical(f"Failed to create startup manager: {e}", exc_info=True)
+        startup_manager = _start_welcome_flow(app, smoke_test=smoke_test)
+    except Exception as exc:  # noqa: BLE001 - top-level GUI bootstrap guard
+        log.critical("Failed to create startup manager: %s", exc, exc_info=True)
         try:
             QtWidgets.QMessageBox.critical(
-                None, "Application Startup Error", f"Failed to create startup manager:\n{e}\n\nSee logs."
+                None, "Application Startup Error", f"Failed to create startup manager:\n{exc}\n\nSee logs."
             )
-        except Exception:
+        except RuntimeError:
             pass
         sys.exit(1)
 
-    # If --file was given, open it once the main window is ready.
     if args.file:
         initial_file = Path(args.file).resolve()
         if not initial_file.exists():
-            log.error(f"File not found: {initial_file}")
-            print(f"Error: File not found: {initial_file}")
+            log.error("File not found: %s", initial_file)
+            sys.stderr.write(f"Error: File not found: {initial_file}\n")
             sys.exit(1)
+        _schedule_initial_file_open(startup_manager, initial_file)
 
-        def _open_initial_file():
-            mw = startup_manager.get_main_window()
-            if mw is None:
-                return
-            fio = getattr(mw, "file_io_controller", None)
-            if fio is None:
-                return
-            siblings = fio._scan_siblings(initial_file)
-            idx = siblings.index(initial_file) if initial_file in siblings else 0
-            mw._load_in_explorer(initial_file, siblings, idx, False)
+    if getattr(args, "smoke_test", False):
+        _schedule_smoke_test_exit(app, startup_manager)
 
-        def _try_open_initial_file():
-            mw = startup_manager.get_main_window()
-            if mw is not None and mw.isVisible():
-                _open_initial_file()
-            else:
-                QtCore.QTimer.singleShot(200, _try_open_initial_file)
-
-        QtCore.QTimer.singleShot(500, _try_open_initial_file)
-
-    # Start Qt Event Loop
     log.debug("Starting Qt event loop...")
     exit_code = app.exec()
-    log.debug(f"Qt event loop finished with exit code {exit_code}.")
+    log.debug("Qt event loop finished with exit code %s.", exit_code)
     return exit_code
 
 
-# Allow direct execution for development and testing
+# Allow direct execution for development and frozen PyInstaller bundles
 if __name__ == "__main__":
-    run_gui()
+    multiprocessing.freeze_support()
+    sys.exit(run_gui())

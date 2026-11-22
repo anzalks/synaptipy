@@ -4,6 +4,7 @@
 # win_private_assemblies (removed in 6.0), a.zipfiles in COLLECT (removed in 6.0).
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 import os
+import platform
 import re
 import sys
 
@@ -16,24 +17,67 @@ with open(_PYPROJECT, encoding="utf-8") as _f:
     _match = re.search(r'^version\s*=\s*"([^"]+)"', _f.read(), re.MULTILINE)
 _APP_VERSION = _match.group(1) if _match else "0.0.0"
 
+_IS_DARWIN = sys.platform == "darwin"
+# UPX corrupts Mach-O code signatures on macOS (causing amfid SIGKILL after
+# Gatekeeper approval); keep UPX disabled on Darwin.
+_USE_UPX = not _IS_DARWIN
+# Pin Mach-O slice architecture on macOS so universal2 Python/Qt binaries are
+# thinned to match single-arch scientific wheels (arm64 vs x86_64), preventing
+# silent architecture-mismatch crashes on launch.
+_TARGET_ARCH = (os.environ.get("SYNAPTIPY_TARGET_ARCH") or platform.machine()) if _IS_DARWIN else None
+
+
+def _safe_collect_submodules(pkg_name):
+    try:
+        return collect_submodules(pkg_name)
+    except Exception:
+        return []
+
+
+def _safe_collect_data_files(pkg_name):
+    try:
+        return collect_data_files(pkg_name)
+    except Exception:
+        return []
+
+
 # Collect hidden imports for dynamic imports.
 # Note: pyqtgraph, neo, and pynwb all use plugin/registry patterns and require
 # collect_submodules to enumerate their subpackages.  hdmf uses dynamic type
 # registration (TypeMap) at import time; dask uses lazy top-level imports that
 # the bytecode scanner does not follow without explicit collection.
-hiddenimports = []
-hiddenimports += collect_submodules("pyqtgraph")
-hiddenimports += collect_submodules("neo")
-hiddenimports += collect_submodules("quantities")
-hiddenimports += collect_submodules("scipy")
-hiddenimports += collect_submodules("h5py")
-hiddenimports += collect_submodules("pynwb")
-hiddenimports += collect_submodules("hdmf")
-hiddenimports += collect_submodules("dask")
+hiddenimports = [
+    "PySide6.QtHelp",
+    "PySide6.QtOpenGL",
+    "PySide6.QtOpenGLWidgets",
+    "PySide6.QtPrintSupport",
+    "PySide6.QtSvg",
+    "PySide6.QtSvgWidgets",
+    "matplotlib.backends.backend_agg",
+    "matplotlib.backends.backend_pdf",
+    "matplotlib.backends.backend_svg",
+]
+for _pkg in (
+    "pyqtgraph",
+    "neo",
+    "quantities",
+    "scipy",
+    "h5py",
+    "pynwb",
+    "hdmf",
+    "dask",
+    "ruamel",
+    "tzlocal",
+    "jsonschema",
+    "jsonschema_specifications",
+    "referencing",
+    "pyabf",
+):
+    hiddenimports += _safe_collect_submodules(_pkg)
 
 # Include user-facing local resources while excluding Sphinx build caches and
-# internal development reports.  The rendered HTML manual remains available
-# offline in the desktop bundle.
+# internal development reports.  The rendered HTML manual and QtHelp (.qhc/.qch)
+# archives remain available offline in the desktop bundle.
 datas = []
 _RESOURCE_ROOT = os.path.join("src", "synaptipy", "resources")
 _RESOURCE_EXCLUDED_PARTS = {".doctrees", "_sources", "_modules", "development_logs", "decisions", "__pycache__"}
@@ -48,12 +92,11 @@ for _root, _dirs, _files in os.walk(_RESOURCE_ROOT):
         datas.append((_source, _destination))
 # Example plugins shipped in-repo -- consumed via EXAMPLES_PLUGIN_DIR in frozen builds
 datas += [("examples/plugins", "synaptipy/examples/plugins")]
-datas += collect_data_files("pynwb")
-datas += collect_data_files("hdmf")
-datas += collect_data_files("neo")
+for _data_pkg in ("pynwb", "hdmf", "neo", "jsonschema_specifications", "tzdata"):
+    datas += _safe_collect_data_files(_data_pkg)
 
 # Determine appropriate icon based on OS
-icon_ext = ".icns" if sys.platform == "darwin" else ".ico"
+icon_ext = ".icns" if _IS_DARWIN else ".ico"
 icon_path = os.path.join("src", "synaptipy", "resources", "icons", f"logo{icon_ext}")
 
 a = Analysis(
@@ -79,11 +122,11 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=_USE_UPX,
     console=False,
     disable_windowed_traceback=False,
-    target_arch=None,
-    codesign_identity='-',
+    target_arch=_TARGET_ARCH,
+    codesign_identity="-" if _IS_DARWIN else None,
     entitlements_file=None,
     icon=icon_path if os.path.exists(icon_path) else None,
 )
@@ -93,22 +136,29 @@ coll = COLLECT(
     a.binaries,
     a.datas,
     strip=False,
-    upx=True,
+    upx=_USE_UPX,
     upx_exclude=[],
     name="synaptipy",
 )
 
-if sys.platform == "darwin":
+if _IS_DARWIN:
     app = BUNDLE(
         coll,
-        name="synaptipy.app",
+        name="Synaptipy.app",
+        version=_APP_VERSION,
         icon=icon_path if os.path.exists(icon_path) else None,
         bundle_identifier="com.anzalks.synaptipy",
         info_plist={
             "NSPrincipalClass": "NSApplication",
-            "NSHighResolutionCapable": "True",
-            "LSBackgroundOnly": "False",
+            "NSRequiresAquaSystemAppearance": False,
+            "NSHighResolutionCapable": True,
+            "LSBackgroundOnly": False,
+            "CFBundleName": "Synaptipy",
+            "CFBundleDisplayName": "Synaptipy",
             "CFBundleShortVersionString": _APP_VERSION,
+            "CFBundleVersion": _APP_VERSION,
+            "CFBundlePackageType": "APPL",
             "CFBundleIconFile": "logo.icns",
+            "LSMinimumSystemVersion": "11.0",
         },
     )

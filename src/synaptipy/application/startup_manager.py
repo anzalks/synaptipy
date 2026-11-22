@@ -104,12 +104,15 @@ class StartupManager(QtCore.QObject):
         (3, "Ready!", "Application loaded successfully"),
     ]
 
-    def __init__(self, app: QtWidgets.QApplication):
+    def __init__(self, app: QtWidgets.QApplication, headless_smoke_test: bool = False):
         super().__init__()
         self.app = app
+        self._headless_smoke_test = headless_smoke_test
         self.welcome_screen: Optional[WelcomeScreen] = None
         self.main_window: Optional[MainWindow] = None
+        self._version_checker: Optional[VersionCheckerWorker] = None
         self._loading_complete = False
+        self._transitioned = False
         self._start_time = time.time()
         self._plugin_load_failures = []
 
@@ -250,8 +253,11 @@ class StartupManager(QtCore.QObject):
 
     def _transition_to_main_window(self):
         """Transition from welcome screen to main window."""
+        if self._transitioned:
+            return
         if self.main_window and self.welcome_screen:
             try:
+                self._transitioned = True
                 # Calculate total loading time
                 total_time = time.time() - self._start_time
                 log.debug(f"Total startup time: {total_time:.2f} seconds")
@@ -259,8 +265,10 @@ class StartupManager(QtCore.QObject):
                 # Hide welcome screen
                 self.welcome_screen.hide()
 
-                # Show main window
+                # Show and foreground main window (required for macOS LaunchServices)
                 self.main_window.show()
+                self.main_window.raise_()
+                self.main_window.activateWindow()
 
                 # Clean up welcome screen
                 self.welcome_screen.deleteLater()
@@ -268,10 +276,11 @@ class StartupManager(QtCore.QObject):
 
                 log.debug("Successfully transitioned to main window")
 
-                # Start background version check — done after show() so the
+                # Start background version check - done after show() so the
                 # main-thread event loop is fully running when the signal fires.
-                self._start_version_check()
-                if self._plugin_load_failures:
+                if not self._headless_smoke_test:
+                    self._start_version_check()
+                if self._plugin_load_failures and not self._headless_smoke_test:
                     QtCore.QTimer.singleShot(0, self._show_plugin_load_failures)
 
             except Exception as e:
@@ -303,6 +312,8 @@ class StartupManager(QtCore.QObject):
             self._version_checker = VersionCheckerWorker(current_version=__version__, parent=self)
             if self.main_window and hasattr(self.main_window, "show_update_banner"):
                 self._version_checker.update_available.connect(self.main_window.show_update_banner)
+            if self.app is not None:
+                self.app.aboutToQuit.connect(lambda: self._version_checker and self._version_checker.wait(3500))
             self._version_checker.start()
         except Exception as exc:
             log.debug("Could not start version checker: %s", exc)
