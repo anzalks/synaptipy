@@ -124,7 +124,7 @@ jobs:
           codesign --verify --all-architectures --deep --strict --verbose=2 "dist/Synaptipy.app"
           plutil -lint "dist/Synaptipy.app/Contents/Info.plist"
 
-      # ── Smoke tests: verify both CLI version and full GUI MainWindow bootstrap ─
+      # ── Pre-package binary smoke tests ────────────────────────────────────────
       - name: Smoke test binary (Linux)
         if: runner.os == 'Linux'
         env:
@@ -152,11 +152,12 @@ jobs:
           cat /tmp/smoke_gui.txt
           test -f /tmp/synaptipy_smoke_ok.txt
 
-      - name: Smoke test binary (Windows)
+      - name: Smoke test binary and MAX_PATH guard (Windows)
         if: runner.os == 'Windows'
         shell: powershell
         run: |
-          $binaryPath = "dist\synaptipy\synaptipy.exe"
+          $distRoot = (Resolve-Path "dist\synaptipy").Path
+          $binaryPath = Join-Path $distRoot "synaptipy.exe"
           if (-not (Test-Path $binaryPath)) {
             Write-Error "Binary not found: $binaryPath"
             exit 1
@@ -165,6 +166,21 @@ jobs:
           Write-Host ("Binary found: {0} ({1:F1} MB)" -f $binaryPath, $sizeMB)
           if ($sizeMB -lt 5) {
             Write-Error ("Binary suspiciously small ({0:F1} MB); packaging may have failed" -f $sizeMB)
+            exit 1
+          }
+          # Guard against Win32 MAX_PATH (260 chars) under per-user AppData\Local\Programs installs
+          $maxRelLen = 0
+          $longestRel = ""
+          Get-ChildItem -Path $distRoot -Recurse -Force | ForEach-Object {
+            $rel = $_.FullName.Substring($distRoot.Length).TrimStart('\')
+            if ($rel.Length -gt $maxRelLen) {
+              $maxRelLen = $rel.Length
+              $longestRel = $rel
+            }
+          }
+          Write-Host ("Longest relative bundle path ({0} chars): {1}" -f $maxRelLen, $longestRel)
+          if ($maxRelLen -ge 160) {
+            Write-Error ("Relative path exceeds 160-char MAX_PATH safety margin ({0} chars): {1}" -f $maxRelLen, $longestRel)
             exit 1
           }
           $sentinel = Join-Path $env:TEMP "synaptipy_smoke_ok.txt"
@@ -176,41 +192,107 @@ jobs:
             Write-Error ("GUI smoke test failed (exit code: {0}, sentinel present: {1})" -f $proc.ExitCode, (Test-Path $sentinel))
             exit 1
           }
-          Write-Host "Smoke test PASSED"
+          Write-Host "Pre-package Windows smoke test PASSED"
 
-      - name: Package for Windows
+      # ── OS Installer Packaging + Post-Package Verification ────────────────────
+      - name: Package and verify installer (Windows)
         if: runner.os == 'Windows'
         shell: powershell
         run: |
-          # APP_VERSION was exported to $GITHUB_ENV by the 'Read app version'
-          # bash step above; PowerShell reads it from the process environment.
           $VERSION = $Env:APP_VERSION
           Write-Host "Packaging version: $VERSION"
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/dMyAppVersion=$VERSION" installer\windows_setup.iss
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Inno Setup compilation failed with exit code $LASTEXITCODE"
+            exit 1
+          }
+          $setupExe = Resolve-Path ("Synaptipy_Setup_{0}.exe" -f $VERSION)
+          $installDir = Join-Path $env:TEMP "SynaptipyInstalledVerify"
+          if (Test-Path $installDir) { Remove-Item $installDir -Recurse -Force }
+          $installProc = Start-Process -FilePath $setupExe.Path -ArgumentList @(
+            "/VERYSILENT",
+            "/SUPPRESSMSGBOXES",
+            "/NORESTART",
+            "/CURRENTUSER",
+            "/DIR=$installDir"
+          ) -PassThru -Wait
+          if ($installProc.ExitCode -ne 0) {
+            Write-Error ("Silent installer execution failed with exit code {0}" -f $installProc.ExitCode)
+            exit 1
+          }
+          $installedBinary = Join-Path $installDir "synaptipy.exe"
+          if (-not (Test-Path $installedBinary)) {
+            Write-Error "Installed binary missing at $installedBinary"
+            exit 1
+          }
+          $sentinel = Join-Path $env:TEMP "synaptipy_installed_smoke_ok.txt"
+          if (Test-Path $sentinel) { Remove-Item $sentinel -Force }
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $env:SYNAPTIPY_SMOKE_SENTINEL = $sentinel
+          $smokeProc = Start-Process -FilePath $installedBinary -ArgumentList "--smoke-test" -PassThru -Wait
+          if ($smokeProc.ExitCode -ne 0 -or -not (Test-Path $sentinel)) {
+            Write-Error ("Installed binary smoke test failed (exit code: {0}, sentinel: {1})" -f $smokeProc.ExitCode, (Test-Path $sentinel))
+            exit 1
+          }
+          Write-Host "Post-install Windows verification PASSED"
 
-      - name: Package for macOS
+      - name: Package and verify DMG (macOS)
         if: runner.os == 'macOS'
         run: |
           command -v create-dmg >/dev/null 2>&1 || brew install create-dmg
           VERSION="${{ env.APP_VERSION }}"
           ARCH="${{ matrix.arch_label }}"
-          create-dmg \
+          EXPECTED_ARCH="${{ matrix.target_arch }}"
+          DMG_PATH="dist/Synaptipy_${VERSION}_macOS_${ARCH}.dmg"
+          rm -f "${DMG_PATH}"
+
+          if ! create-dmg \
             --volname "Synaptipy Installer (${ARCH})" \
+            --no-internet-enable \
             --window-pos 200 120 \
             --window-size 800 400 \
             --icon-size 100 \
             --icon "Synaptipy.app" 200 190 \
             --hide-extension "Synaptipy.app" \
             --app-drop-link 600 185 \
-            "dist/Synaptipy_${VERSION}_macOS_${ARCH}.dmg" \
-            "dist/Synaptipy.app"
+            "${DMG_PATH}" \
+            "dist/Synaptipy.app"; then
+            echo "Finder AppleScript styling timed out on headless runner; retrying with --skip-jenkins..."
+            rm -f "${DMG_PATH}"
+            create-dmg \
+              --volname "Synaptipy Installer (${ARCH})" \
+              --skip-jenkins \
+              --no-internet-enable \
+              --app-drop-link 600 185 \
+              "${DMG_PATH}" \
+              "dist/Synaptipy.app"
+          fi
 
-      - name: Package for Linux (AppImage)
+          codesign --force --sign - "${DMG_PATH}"
+
+          MOUNT_DIR="$(mktemp -d /tmp/synaptipy_dmg_mount.XXXXXX)"
+          cleanup_mount() {
+            hdiutil detach "${MOUNT_DIR}" -force -quiet 2>/dev/null || true
+            rmdir "${MOUNT_DIR}" 2>/dev/null || true
+          }
+          trap cleanup_mount EXIT
+
+          hdiutil attach "${DMG_PATH}" -mountpoint "${MOUNT_DIR}" -nobrowse -readonly -quiet
+          codesign --verify --all-architectures --deep --strict --verbose=2 "${MOUNT_DIR}/Synaptipy.app"
+          ACTUAL_ARCHS="$(lipo -archs "${MOUNT_DIR}/Synaptipy.app/Contents/MacOS/synaptipy")"
+          echo "Mounted binary architectures: ${ACTUAL_ARCHS} (expected: ${EXPECTED_ARCH})"
+          if [ "${ACTUAL_ARCHS}" != "${EXPECTED_ARCH}" ]; then
+            echo "ERROR: Mounted binary architecture '${ACTUAL_ARCHS}' does not match '${EXPECTED_ARCH}'"
+            exit 1
+          fi
+
+      - name: Package and verify AppImage (Linux)
         if: runner.os == 'Linux'
         run: |
           VERSION="${{ env.APP_VERSION }}"
 
           # 1. Create the AppDir structure required by AppImage
+          rm -rf AppDir
           mkdir -p AppDir/usr/bin
 
           # 2. Copy the PyInstaller output into the AppDir
@@ -220,15 +302,19 @@ jobs:
           cp installer/linux/synaptipy.desktop AppDir/
           cp src/synaptipy/resources/icons/logo.png AppDir/synaptipy.png
 
-          # 4. Create the standard AppRun symlink pointing to our binary
-          cd AppDir
-          ln -s usr/bin/synaptipy AppRun
-          cd ..
+          # 4. Write POSIX AppRun wrapper with Wayland-to-XWayland (xcb) fallback
+          cat << 'EOF' > AppDir/AppRun
+          #!/bin/sh
+          set -e
+          HERE="$(dirname "$(readlink -f "$0")")"
+          if [ -z "${QT_QPA_PLATFORM:-}" ] && [ -n "${WAYLAND_DISPLAY:-}" ] && [ -n "${DISPLAY:-}" ]; then
+            export QT_QPA_PLATFORM="xcb"
+          fi
+          exec "${HERE}/usr/bin/synaptipy" "$@"
+          EOF
+          chmod +x AppDir/AppRun
 
           # 5. Download the AppImage runtime
-          # Using the manual squashfs method instead of appimagetool to avoid
-          # glibc compatibility issues. The runtime from 'continuous' release is
-          # actively maintained and compatible with ubuntu-22.04.
           echo "Downloading AppImage runtime..."
           if ! wget -O runtime https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64; then
             echo "ERROR: Failed to download AppImage runtime"
@@ -249,19 +335,26 @@ jobs:
           echo "Squashfs created: $(stat -c%s AppDir.squashfs) bytes"
 
           # 7. Combine runtime + squashfs to create the final AppImage
+          APPIMAGE_PATH="dist/Synaptipy-${VERSION}-x86_64.AppImage"
           echo "Combining runtime + squashfs..."
-          cat runtime AppDir.squashfs > "dist/Synaptipy-${VERSION}-x86_64.AppImage"
-          chmod +x "dist/Synaptipy-${VERSION}-x86_64.AppImage"
+          cat runtime AppDir.squashfs > "${APPIMAGE_PATH}"
+          chmod +x "${APPIMAGE_PATH}"
 
-          # 8. Verify the AppImage was created
-          if [ -f "dist/Synaptipy-${VERSION}-x86_64.AppImage" ]; then
-            SIZE=$(stat -c%s "dist/Synaptipy-${VERSION}-x86_64.AppImage")
-            echo "AppImage created successfully: $(($SIZE / 1024 / 1024)) MB"
-            file "dist/Synaptipy-${VERSION}-x86_64.AppImage"
-          else
+          # 8. Verify the AppImage file and execute full GUI smoke test from inside it
+          if [ ! -f "${APPIMAGE_PATH}" ]; then
             echo "ERROR: AppImage file not created"
             exit 1
           fi
+          SIZE=$(stat -c%s "${APPIMAGE_PATH}")
+          echo "AppImage created successfully: $(($SIZE / 1024 / 1024)) MB"
+          file "${APPIMAGE_PATH}"
+
+          rm -f /tmp/synaptipy_appimage_smoke_ok.txt
+          QT_QPA_PLATFORM=offscreen SYNAPTIPY_SMOKE_SENTINEL=/tmp/synaptipy_appimage_smoke_ok.txt \
+            xvfb-run -a "./${APPIMAGE_PATH}" --appimage-extract-and-run --smoke-test > /tmp/smoke_appimage.txt 2>&1
+          cat /tmp/smoke_appimage.txt
+          test -f /tmp/synaptipy_appimage_smoke_ok.txt
+          echo "Post-package Linux AppImage verification PASSED"
 
       - name: Upload installer artifact
         # if-no-files-found: error surfaces packaging failures immediately

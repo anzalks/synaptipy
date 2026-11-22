@@ -366,6 +366,81 @@ def _schedule_smoke_test_exit(app: QtWidgets.QApplication, startup_manager) -> N
     timer.start()
 
 
+def _ensure_writable_cwd(target_home: Path) -> None:
+    """Relocate working directory to ``target_home`` when launched from ``/`` or read-only cwd."""
+    try:
+        cwd = Path.cwd()
+    except OSError:
+        cwd = Path("/")
+    if cwd == Path("/") or not os.access(cwd, os.W_OK):
+        try:
+            os.chdir(target_home)
+        except OSError:
+            pass
+
+
+def _ensure_mpl_cache_dir(target_home: Path) -> None:
+    """Point ``MPLCONFIGDIR`` to a persistent user cache directory if unset."""
+    if os.environ.get("MPLCONFIGDIR"):
+        return
+    mpl_dir = target_home / ".synaptipy" / "cache" / "matplotlib"
+    try:
+        mpl_dir.mkdir(parents=True, exist_ok=True)
+        os.environ["MPLCONFIGDIR"] = str(mpl_dir)
+    except OSError:
+        pass
+
+
+def _configure_frozen_environment(home_dir: Optional[Path] = None) -> None:
+    """Normalise working directory and Matplotlib font-cache path in frozen bundles."""
+    if not getattr(sys, "frozen", False):
+        return
+    target_home = Path(home_dir) if home_dir is not None else Path.home()
+    _ensure_writable_cwd(target_home)
+    _ensure_mpl_cache_dir(target_home)
+
+
+class _MacFileOpenFilter(QtCore.QObject):
+    """Application event filter handling macOS ``QFileOpenEvent`` Finder launches."""
+
+    def __init__(self, on_file_open, parent: Optional[QtCore.QObject] = None) -> None:
+        super().__init__(parent)
+        self._on_file_open = on_file_open
+
+    def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
+        if event.type() == QtCore.QEvent.Type.FileOpen and hasattr(event, "file"):
+            raw_path = event.file()
+            if raw_path:
+                candidate = Path(raw_path)
+                if candidate.is_file():
+                    self._on_file_open(candidate.resolve())
+                    return True
+        return super().eventFilter(watched, event)
+
+
+def _install_file_open_filter(app: QtWidgets.QApplication, startup_manager) -> _MacFileOpenFilter:
+    """Attach macOS ``QFileOpenEvent`` handler to ``app``."""
+    flt = _MacFileOpenFilter(
+        lambda resolved_path: _schedule_initial_file_open(startup_manager, resolved_path),
+        parent=startup_manager,
+    )
+    app.installEventFilter(flt)
+    startup_manager._file_open_filter = flt
+    return flt
+
+
+def _handle_cli_file_arg(raw_file: Optional[str], startup_manager) -> None:
+    """Validate and schedule opening of ``--file`` or positional CLI file path."""
+    if not raw_file:
+        return
+    initial_file = Path(raw_file).resolve()
+    if not initial_file.exists():
+        log.error("File not found: %s", initial_file)
+        sys.stderr.write(f"Error: File not found: {initial_file}\n")
+        sys.exit(1)
+    _schedule_initial_file_open(startup_manager, initial_file)
+
+
 def _start_welcome_flow(app: QtWidgets.QApplication, smoke_test: bool = False):
     """Import StartupManager after logging/excepthook setup and display WelcomeScreen."""
     from synaptipy.application.startup_manager import StartupManager
@@ -389,6 +464,7 @@ def run_gui():
         int: The application exit code
     """
     multiprocessing.freeze_support()
+    _configure_frozen_environment()
     args = parse_arguments()
 
     env_dev_mode = os.environ.get("SYNAPTIPY_DEV_MODE", "")
@@ -419,15 +495,10 @@ def run_gui():
             pass
         sys.exit(1)
 
-    if args.file:
-        initial_file = Path(args.file).resolve()
-        if not initial_file.exists():
-            log.error("File not found: %s", initial_file)
-            sys.stderr.write(f"Error: File not found: {initial_file}\n")
-            sys.exit(1)
-        _schedule_initial_file_open(startup_manager, initial_file)
+    _install_file_open_filter(app, startup_manager)
+    _handle_cli_file_arg(args.file, startup_manager)
 
-    if getattr(args, "smoke_test", False):
+    if smoke_test:
         _schedule_smoke_test_exit(app, startup_manager)
 
     log.debug("Starting Qt event loop...")

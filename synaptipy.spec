@@ -160,5 +160,28 @@ if _IS_DARWIN:
             "CFBundlePackageType": "APPL",
             "CFBundleIconFile": "logo.icns",
             "LSMinimumSystemVersion": "11.0",
+            "CFBundleDocumentTypes": [
+                {
+                    "CFBundleTypeName": "Electrophysiology Recording",
+                    "CFBundleTypeRole": "Viewer",
+                    "LSHandlerRank": "Alternate",
+                    "CFBundleTypeExtensions": [
+                        "abf",
+                        "nwb",
+                        "wcp",
+                        "smr",
+                        "smrx",
+                        "edf",
+                        "bdf",
+                        "axgx",
+                        "axgd",
+                        "cfs",
+                        "dat",
+                        "ibw",
+                        "h5",
+                        "hdf5",
+                    ],
+                }
+            ],
         },
     )

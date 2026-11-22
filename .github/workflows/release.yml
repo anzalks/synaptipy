@@ -268,7 +268,7 @@ jobs:
     name: Create GitHub Release
     needs: [build, pypi-publish]
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 75
     # Run when build succeeded regardless of whether pypi-publish was skipped
     # (dry_run / workflow_dispatch path) or succeeded (real release path).
     if: >-
@@ -300,7 +300,9 @@ jobs:
             const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
             let run = null;
 
-            for (let i = 0; i < 30; i++) {
+            // Poll up to 60 minutes (120 * 30s) while installer.yml builds all 4 OS
+            // targets, failing immediately if a completed run did not succeed.
+            for (let i = 0; i < 120; i++) {
               const runs = await github.rest.actions.listWorkflowRuns({
                 owner,
                 repo,
@@ -309,17 +311,25 @@ jobs:
                 per_page: 50,
               });
 
-              run = runs.data.workflow_runs.find((r) => r.status === 'completed' && r.conclusion === 'success');
-              if (run) {
-                break;
+              const latest = runs.data.workflow_runs[0];
+              if (latest && latest.status === 'completed') {
+                if (latest.conclusion === 'success') {
+                  run = latest;
+                  break;
+                }
+                core.setFailed(
+                  `installer.yml run ${latest.id} finished with non-success conclusion: ${latest.conclusion}`
+                );
+                return;
               }
 
-              core.info(`installer.yml run not ready yet (attempt ${i + 1}/30); waiting 20s...`);
-              await sleep(20000);
+              const state = latest ? `${latest.status} (id=${latest.id})` : 'not queued yet';
+              core.info(`installer.yml status: ${state} (attempt ${i + 1}/120); waiting 30s...`);
+              await sleep(30000);
             }
 
             if (!run) {
-              core.setFailed('Could not find a successful installer.yml workflow run for this commit.');
+              core.setFailed('Timed out waiting for a successful installer.yml workflow run for this commit.');
               return;
             }
 
