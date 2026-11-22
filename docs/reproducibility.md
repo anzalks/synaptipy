@@ -23,15 +23,47 @@ conda activate synaptipy
 
 ## Docker Container
 
-For full system-level reproducibility:
+For full system-level reproducibility, build the Docker image (whose default
+entrypoint is `python -m pytest` with `QT_QPA_PLATFORM=offscreen`):
 
 ```bash
 docker build -t synaptipy .
-docker run synaptipy validation/ -v
+
+# Run the automated pytest suite (default container command):
+docker run synaptipy
+
+# Execute the standalone algorithmic validation scripts:
+docker run --entrypoint python synaptipy validation/validate_algorithms.py
 ```
 
 The Docker image copies `src/`, `tests/`, `validation/`, `examples/`, and
-`paper/` so validation commands operate on the same tree used by reviewers.
+`paper/` so test and validation commands operate on the exact tree used by
+reviewers.
+
+## Headless CLI Batch Execution
+
+Headless pipelines can be replayed deterministically from the command line
+using `synaptipy-batch`:
+
+```bash
+# List all registered built-in, preprocessing, and plugin analyses:
+synaptipy-batch list-analyses
+
+# Execute a JSON pipeline across recordings and write CSV + provenance JSON:
+synaptipy-batch run data/*.abf \
+    --pipeline pipeline.json \
+    --output results/summary.csv \
+    --channel Vm_prime \
+    --max-workers 1
+```
+
+Every `synaptipy-batch run` invocation writes a companion
+`<stem>_provenance.json` file alongside `<stem>.csv` (for example,
+`results/summary_provenance.json`). The provenance record captures
+`generated_at_utc`, `synaptipy_version`, `command`, `input_files`,
+`pipeline_file`, the full resolved `pipeline` task list, `channel_filter`,
+`max_workers`, and `cross_file_average` so any exported table can be audited
+and re-run verbatim.
 
 ## Paper Reproduction
 
@@ -57,7 +89,7 @@ software versions, command-line options, and git commit.
 
 ## Random Seed Policy
 
-Synaptipy's analysis algorithms are **fully deterministic** — no
+Synaptipy's analysis algorithms are **fully deterministic** - no
 stochastic elements are used in:
 - Spike detection (threshold-based, not stochastic)
 - Curve fitting (deterministic initial conditions from data statistics)
@@ -65,19 +97,22 @@ stochastic elements are used in:
 - Signal processing (IIR/FIR filters)
 
 The only source of non-determinism is floating-point ordering in
-parallel operations (disabled by default). All `curve_fit` initial
-parameter estimates are derived deterministically from the input data
-(e.g., initial tau estimate = time to 63% of steady-state voltage).
+parallel operations (disabled by default when `max_workers=1`). All `curve_fit`
+initial parameter estimates are derived deterministically from the input data
+(for example, the initial membrane tau estimate is computed via ordinary
+least-squares linear regression on `log(|V - V_ss|)` versus time as
+`-1.0 / slope`, clipped to `tau_bounds`, with a deterministic `10 ms` fallback
+when the log-linear fit is degenerate).
 
 ## Verification
 
-After installing, verify your environment produces correct results:
+After installing, verify your environment produces expected results:
 
 ```bash
 conda run -n synaptipy python validation/validate_algorithms.py
 ```
 
-All checks should pass with tolerances specified in the validation
+All checks should pass within the tolerances specified in the validation
 scripts.
 
 ## Analysis Provenance and Eligibility

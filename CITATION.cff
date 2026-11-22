@@ -1,9 +1,9 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 type: software
-title: "SynaptiPy: An Open-Source Electrophysiology Visualization and Analysis Suite"
+title: "Synaptipy: An Open-Source Electrophysiology Visualization and Analysis Suite"
 abstract: >-
-  SynaptiPy is an open-source, cross-platform software suite for the
+  Synaptipy is an open-source, cross-platform software suite for the
   visualization and automated analysis of patch-clamp electrophysiology
   data. It provides experimental neuroscientists with a unified graphical
   interface and a programmatic backend supporting over 30 file formats via
@@ -21,10 +21,6 @@ authors:
 version: "0.1.8"
 date-released: "2026-08-28"
 license: "AGPL-3.0-or-later"
-identifiers:
-  - type: other
-    value: "RRID:SCR_XXXXXX"
-    description: "SciCrunch Research Resource Identifier (replace after registration at scicrunch.org/resources)"
 repository-code: "https://github.com/anzalks/synaptipy"
 keywords:
   - electrophysiology

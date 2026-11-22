@@ -27,25 +27,28 @@ environments.
 
 ## Section 2: GUI Plugin Templates
 
-The files in `plugins/` are **`@AnalysisRegistry.register` UI templates**
-that integrate directly into the Analyser tab -- they are **not** standalone
-scripts and cannot be executed directly from the command line.
+The files in `plugins/` are **`@AnalysisRegistry.register` UI plugins**
+that integrate directly into the Analyser tab - they are **not** standalone
+scripts and are not executed directly from the command line.
 
 | Plugin file | Analyser tab label | What it measures |
 |---|---|---|
-| `plugins/synaptic_charge.py` | Synaptic Charge (AUC) | Postsynaptic charge (pC) via trapezoidal integration; shaded fill + peak star overlay |
+| `plugins/synaptic_charge.py` | Synaptic Charge (AUC) | Postsynaptic charge (pC) via trapezoidal integration; shaded fill, baseline line, and peak star overlay |
 | `plugins/opto_jitter.py` | Opto Latency Jitter | Trial-to-trial spike-latency jitter after an optogenetic TTL pulse (requires a TTL channel) |
-| `plugins/ap_repolarization.py` | AP Repolarization Rate | Maximum repolarization rate (dV/dt minimum) of the first action potential in a search window |
-| `plugins/miniml_integration.py` | miniML Events | Demonstrates deep-learning integration via delvendahl/miniML for synaptic event detection using a pre-trained Keras model. |
+| `plugins/ap_repolarization.py` | Max Repolarization Rate | Maximum repolarization rate (dV/dt minimum) of the first action potential in a search window |
+| `plugins/miniml_integration.py` | miniML Events | Deep-learning synaptic event detection via `delvendahl/miniML` using a pre-trained Keras model |
+| `plugins/spike_interface_integration.py` | Spike Detection (SpikeInterface) | Extracellular spike detection and sorting wrapper integrating `SpikeInterface` pipelines |
 
 The plugin API supports optional `protocol_requirements`, `supported_channel_units`,
-and a dictionary-valued `requires_secondary_channel` declaration.  Use the TTL
+and a dictionary-valued `requires_secondary_channel` declaration. Use the TTL
 selector declaration for stimulus-dependent plugins; batch pipelines then set
 `secondary_channel` to the channel ID or native channel name used in every file.
 
 To activate: check **Enable Custom Plugins** in
-**Edit > Preferences** (or **Synaptipy > Preferences** on macOS), then
-restart. Copy any file to `~/.synaptipy/plugins/` to create a personal variant.
+**Edit > Preferences > Extensions** (or **Synaptipy > Preferences** on macOS).
+Plugins hot-reload in-process without restarting the application. Copy any file
+to `~/.synaptipy/plugins/` (or select **Help > Download Example Plugins...**) to
+create a personal variant.
 
 See [docs/extending_synaptipy.md](../docs/extending_synaptipy.md) for a
 complete guide to writing your own plugin.
@@ -56,48 +59,44 @@ complete guide to writing your own plugin.
 
 The `miniml_integration.py` plugin adds a deep-learning event detector
 ([delvendahl/miniML](https://github.com/delvendahl/miniML)) as an Analyser tab.
-Follow these steps exactly to avoid environment breakage.
+Follow these steps carefully to avoid environment conflicts.
 
-### Step 1 — Clone miniML (once, outside the Synaptipy directory)
+### Step 1 - Clone miniML (once, outside the Synaptipy directory)
 
 ```bash
 git clone https://github.com/delvendahl/miniML.git ~/miniML
 ```
 
-Do **not** clone it inside the Synaptipy repo — git would track it.
+Do **not** clone it inside the Synaptipy repo so git does not track it.
 The exact location does not matter; you will browse to it in the GUI.
 
-### Step 2 — Install miniML's Python dependencies into the Synaptipy env
+### Step 2 - Install miniML's Python dependencies into the Synaptipy env
 
 ```bash
 conda activate synaptipy
 pip install "tensorflow>=2.17" tf_keras h5py scikit-learn ruptures==1.1.10
 ```
 
-> **TensorFlow version note:** Synaptipy requires numpy >= 2.0.
-> TensorFlow 2.15 and earlier use deprecated numpy 1.x internals and will
-> crash on import.  TensorFlow >= 2.17 is the first release fully compatible
-> with numpy 2.x.
+> **TensorFlow version note:** Synaptipy requires `numpy>=2.0`.
+> TensorFlow 2.15 and earlier use deprecated NumPy 1.x internals and crash on
+> import. TensorFlow `>=2.17` is compatible with NumPy 2.x.
 >
-> TensorFlow 2.16+ ships Keras 3 by default; the `GC_lstm_model.h5` bundled
-> with miniML was saved under Keras 2.  The `tf_keras` package (installed
-> above) provides a Keras 2 compatibility layer.  The plugin sets
-> `TF_USE_LEGACY_KERAS=1` automatically so you do not need to do anything
-> extra.
+> TensorFlow 2.16+ ships Keras 3 by default; `GC_lstm_model.h5` bundled with
+> miniML was saved under Keras 2. The `tf_keras` package provides the Keras 2
+> compatibility layer, and the plugin sets `TF_USE_LEGACY_KERAS=1` automatically.
 
 > **Do NOT run `pip install -r ~/miniML/requirements.txt`.**
-> That file pins `numpy==1.23.5` and `pandas==1.5.3`, which are
-> incompatible with Synaptipy's `numpy>=2.0` requirement.
-> Installing it will silently downgrade numpy and break all `np.trapezoid`
-> calls throughout Synaptipy (they will raise `AttributeError`).
+> That file pins `numpy==1.23.5` and `pandas==1.5.3`, which conflict with
+> Synaptipy's `numpy>=2.0` requirement and break `np.trapezoid` calls.
 >
-> If you accidentally ran it, restore the correct versions with:
+> If you accidentally ran it, restore the supported versions with:
+>
 > ```bash
 > conda activate synaptipy
-> pip install --force-reinstall "numpy>=2.0,<3" "pandas>=2.0"
+> pip install --force-reinstall "numpy>=2.0,<3" "pandas>=2.3.0"
 > ```
 
-### Step 3 — Install the plugin
+### Step 3 - Install the plugin
 
 Copy the plugin file to your personal plugins directory:
 
@@ -106,33 +105,26 @@ mkdir -p ~/.synaptipy/plugins
 cp examples/plugins/miniml_integration.py ~/.synaptipy/plugins/
 ```
 
-Then open Synaptipy, go to **Edit > Preferences**, check
-**Enable Custom Plugins**, and restart.
+Then open Synaptipy, go to **Edit > Preferences > Extensions**, and check
+**Enable Custom Plugins** (plugins reload immediately in-process).
 
-### Step 4 — Use the miniML Events tab
+### Step 4 - Use the miniML Events tab
 
 1. Open a recording in the Explorer tab and switch to the Analyser tab.
-2. Click the **miniML Events** sub-tab.
-3. Click the **Browse...** button next to **miniML core/ Path** and navigate
-   to the `core/` sub-directory inside the cloned miniML repo
-   (e.g. `~/miniML/core/`).
-4. Click the **Browse...** button next to **Model Path (.h5)** and navigate
-   to a `.h5` model file in the `models/` sub-directory
-   (e.g. `~/miniML/models/GC_lstm_model.h5`).
+2. Select the **miniML Events** sub-tab.
+3. Click **Browse...** next to **miniML core/ Path** and select the `core/`
+   sub-directory inside the cloned miniML repo (e.g. `~/miniML/core/`).
+4. Click **Browse...** next to **Model Path (.h5)** and select a `.h5` model
+   file in `models/` (e.g. `~/miniML/models/GC_lstm_model.h5`).
 5. Adjust **Prediction Threshold** and **Direction** as needed.
 6. Click **Run Analysis**.
 
-### Conda environment / numpy version notes
+### Conda environment / NumPy version notes
 
-- `pip install -e ".[dev]"` will install or upgrade packages according to
-  `pyproject.toml` (which requires `numpy>=2.0`).  After running it, verify
-  numpy is intact with `python -c "import numpy; print(numpy.__version__)"`.
-  If you see `ModuleNotFoundError`, a partial uninstall left a stale dist-info;
-  fix it with `pip install --force-reinstall numpy`.
-- Never mix `conda install numpy` and `pip install numpy` in the same env —
-  conda's numpy and pip's numpy have separate file trees and will clobber each
-  other.  This env uses pip exclusively for numpy; keep it that way.
-- The miniML integration is optional and its TensorFlow/Keras compatibility is
-  controlled by the tested `tensorflow>=2.17` plus `tf_keras` recipe above.
-  Do not substitute an older TensorFlow release without validating the model
-  and NumPy compatibility in a separate environment.
+- `pip install -e ".[dev]"` installs packages according to `pyproject.toml`
+  (`numpy>=2.0`). Verify NumPy afterward with
+  `python -c "import numpy; print(numpy.__version__)"`.
+- Do not mix `conda install numpy` and `pip install numpy` in the same
+  environment - their file trees differ and can leave stale `.dist-info` metadata.
+- Validate any alternate TensorFlow or Keras version in a separate environment
+  before modifying your primary `synaptipy` installation.

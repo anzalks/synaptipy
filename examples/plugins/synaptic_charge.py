@@ -328,8 +328,8 @@ def calculate_synaptic_charge(
         },
         {
             "type": "hlines",
-            "values": ["Baseline_pA"],
-            "colors": ["b"],
+            "data": ["Baseline_pA"],
+            "color": "b",
             "styles": ["dash"],
         },
     ],

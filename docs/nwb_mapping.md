@@ -2,12 +2,16 @@
 
 This page documents how Synaptipy maps electrophysiology data to the
 [Neurodata Without Borders (NWB) 2.x](https://nwb.org/) format when
-exporting via **File - Export to NWB** or the `NWBExporter` API.
+exporting via the Exporter tab or the `NWBExporter` API
+(`src/synaptipy/infrastructure/exporters/nwb_exporter.py`).
 
 :::{important}
-The NWB exporter writes voltage/current traces, electrode metadata, session
-information, stimulus waveforms (3-step fallback), NWB 2.x icephys sweep
-grouping tables, and embedded analysis results via a `ProcessingModule`.
+The NWB exporter writes pre-scaled SI voltage and current traces, electrode and
+device metadata, required MINDS/DANDI subject and session records, session
+provenance notes (temperature, liquid junction potential, digital filter
+parameters), stimulus waveforms (3-step fallback including ABF step and linear
+ramp reconstruction), NWB 2.x intracellular sweep grouping tables, and embedded
+analysis and preprocessing `DynamicTable` containers under `/processing`.
 See [Container Mapping](#container-mapping) and
 [Limitations and Future Work](#limitations-and-future-work) for details.
 :::
@@ -18,245 +22,275 @@ See [Container Mapping](#container-mapping) and
 
 | Synaptipy Concept | NWB Container | Notes |
 |-------------------|---------------|-------|
-| Recording session | `NWBFile` | Top-level container with session metadata |
-| Amplifier | `Device` | Name, description, manufacturer from dialog |
-| Per-channel electrode | `IntracellularElectrode` | One per channel; linked to Device |
-| Voltage trace (CC mode) | `CurrentClampSeries` | Selected when channel units are mV or V |
-| Current trace (VC mode) | `VoltageClampSeries` | Selected when channel units are pA, nA, or A |
-| Unknown clamp mode | `PatchClampSeries` | Fallback when units are unrecognised |
-| Animal metadata | `Subject` | Optional; populated from the export dialog |
-| Command waveform (raw) | `CurrentClampStimulusSeries` / `VoltageClampStimulusSeries` | Attempt 1: digitized from `channel.current_data_trials` |
-| Command waveform (synthetic) | `CurrentClampStimulusSeries` | Attempt 2: reconstructed from ABF epoch metadata; description notes "Synthetic stimulus array reconstructed from protocol metadata." |
-| Missing command waveform | *(none)* | Attempt 3: `stimulus=None`; warning appended to response trace description |
+| Recording session | `NWBFile` | Top-level container with session metadata and provenance `notes` |
+| Amplifier | `Device` | Required `device_description` (`ValueError` if missing); `device_name` defaults to `"Generic Amplifier"` |
+| Per-channel electrode | `IntracellularElectrode` | One per channel (`electrode_<chan_id>`); linked to `Device` |
+| Voltage trace (CC mode) | `CurrentClampSeries` | Selected when channel units are `uV`, `mV`, or `V` |
+| Current trace (VC mode) | `VoltageClampSeries` | Selected when channel units are `pA`, `nA`, `uA`, or `A` |
+| Unknown clamp mode | `PatchClampSeries` | Fallback when channel units are unrecognised |
+| Animal metadata | `Subject` | Required `subject_id` (`ValueError` if missing); `species` defaults to `"unknown species"` |
+| Command waveform (raw) | `CurrentClampStimulusSeries` / `VoltageClampStimulusSeries` | Attempt 1: digitized command array from `channel.current_data_trials` |
+| Command waveform (synthetic) | `CurrentClampStimulusSeries` / `VoltageClampStimulusSeries` | Attempt 2: step (`nEpochType == 1`) and linear ramp (`nEpochType == 2`) waveforms reconstructed from ABF `EpochSections` metadata |
+| Missing command waveform | *(none)* | Attempt 3: `stimulus=None`; warning appended to response series `description` |
 | Sweep-level linkage | `IntracellularRecordingsTable` | Response + stimulus series linked per trial |
-| Simultaneous recording group | `SimultaneousRecordingsTable` | One row per (electrode, trial) pair |
-| Sequential recording group | `SequentialRecordingsTable` | Groups trials by `stimulus_type` (`current_clamp` / `voltage_clamp`) |
-| Discrete event arrays | `ProcessingModule` → `DynamicTable` | Spike times / synaptic event times from batch-engine `_raw_arrays`; requires HDMF |
+| Simultaneous recording group | `SimultaneousRecordingsTable` | One row per `(electrode, trial)` pair |
+| Sequential recording group | `SequentialRecordingsTable` | Groups trials by `stimulus_type` (`current_clamp`, `voltage_clamp`, or `unknown`) |
+| Embedded scalar metrics | `/processing/analysis` (`ProcessingModule` -> `DynamicTable`) | `scalar_metrics` table with columns `channel`, `analysis`, `metric`, `value` |
+| Discrete event arrays | `/processing/analysis` (`ProcessingModule` -> `DynamicTable`) | `{channel}_{analysis}` tables (`time_s`, optional `amplitude`) from `_raw_arrays` |
+| Preprocessing audit trail | `/processing/preprocessing` (`ProcessingModule` -> `DynamicTable`) | `preprocessing_steps` table (`timestamp`, `operation`, `parameters`) |
 
 ---
 
 ## Series Class Selection
 
-The exporter inspects the **units** attribute on each channel to determine the
-appropriate NWB series class:
+The exporter inspects the `units` attribute on each `Channel` (case-insensitive)
+to determine the appropriate NWB series class:
 
 | Channel Units | Interpreted Clamp Mode | NWB Series Class |
 |---------------|----------------------|------------------|
-| `mV`, `millivolt` | Current-clamp (records voltage) | `CurrentClampSeries` |
-| `V`, `volt` | Current-clamp | `CurrentClampSeries` |
-| `pA`, `picoampere` | Voltage-clamp (records current) | `VoltageClampSeries` |
-| `nA`, `nanoampere` | Voltage-clamp | `VoltageClampSeries` |
-| `A`, `ampere` | Voltage-clamp | `VoltageClampSeries` |
+| `uV`, `microvolt`, `microvolts` | Current-clamp (records voltage) | `CurrentClampSeries` |
+| `mV`, `millivolt`, `millivolts` | Current-clamp (records voltage) | `CurrentClampSeries` |
+| `V`, `volt`, `volts` | Current-clamp | `CurrentClampSeries` |
+| `pA`, `picoampere`, `picoamperes` | Voltage-clamp (records current) | `VoltageClampSeries` |
+| `nA`, `nanoampere`, `nanoamperes` | Voltage-clamp | `VoltageClampSeries` |
+| `uA`, `microampere`, `microamperes` | Voltage-clamp | `VoltageClampSeries` |
+| `A`, `ampere`, `amperes` | Voltage-clamp | `VoltageClampSeries` |
 | Other / unknown | Unknown | `PatchClampSeries` (generic parent) |
 
 ---
 
 ## SI Unit Conversion
 
-NWB best practices require data in SI base units. Synaptipy and Neo
-typically store data in millivolts (mV) or picoamperes (pA). The exporter
-converts automatically:
+NWB and DANDI best practices require data arrays to be stored directly in SI
+base units (`volts` or `amperes`). `NWBExporter` pre-scales each trial array to
+64-bit floating-point SI values prior to writing and sets `conversion=1.0` on
+every exported series so that `value_SI = data * conversion` is exact and never
+double-scaled by downstream NWB, DANDI, or Neo readers:
 
-| Original Unit | SI Unit | Conversion Factor | Stored in NWB `conversion` field |
-|---------------|---------|-------------------|----------------------------------|
-| mV | V (volts) | $\times 10^{-3}$ | `1e-3` |
-| V | V | $\times 1$ | `1.0` |
-| pA | A (amperes) | $\times 10^{-12}$ | `1e-12` |
-| nA | A | $\times 10^{-9}$ | `1e-9` |
-| A | A | $\times 1$ | `1.0` |
+| Original Channel Unit | Pre-Scale Multiplier Applied to `data` | Stored NWB `unit` | Stored NWB `conversion` |
+|-----------------------|----------------------------------------|-------------------|-------------------------|
+| `uV` / `microvolt(s)` | $\times 10^{-6}$ | `"volts"` | `1.0` |
+| `mV` / `millivolt(s)` | $\times 10^{-3}$ | `"volts"` | `1.0` |
+| `V` / `volt(s)` | $\times 1$ | `"volts"` | `1.0` |
+| `pA` / `picoampere(s)` | $\times 10^{-12}$ | `"amperes"` | `1.0` |
+| `nA` / `nanoampere(s)` | $\times 10^{-9}$ | `"amperes"` | `1.0` |
+| `uA` / `microampere(s)` | $\times 10^{-6}$ | `"amperes"` | `1.0` |
+| `A` / `ampere(s)` | $\times 1$ | `"amperes"` | `1.0` |
+| Unrecognised | $\times 1$ (unmodified) | Original unit string | `1.0` |
 
-The `conversion` field is written to the NWB file so that downstream tools
-can recover the original units if needed.
+Stimulus waveforms (`_make_stim_series`) apply the same SI pre-scaling (`mV` ->
+`1e-3` `"volts"`, `nA` -> `1e-9` `"amperes"`, `pA` -> `1e-12` `"amperes"`).
 
 ---
 
 ## Electrode Metadata
 
-Each channel is associated with an `IntracellularElectrode` object. The
-following metadata fields are populated from the NWB Export Dialog or from
-channel attributes:
+Each channel is associated with an `IntracellularElectrode` object named
+`electrode_{chan_id}`. Fields are populated from channel attributes or fallback
+defaults in `session_metadata`:
 
 | Field | Source | Default |
 |-------|--------|---------|
-| `description` | Dialog or `channel.electrode_description` | `"Intracellular Electrode"` |
-| `location` | Dialog or `channel.electrode_location` | `"Unknown"` |
-| `filtering` | Dialog or `channel.electrode_filtering` | `"unknown"` |
+| `description` | `channel.electrode_description` or `electrode_description_default` | `"Recording Pipette"` |
+| `location` | `channel.electrode_location` or `electrode_location_default` | `"Unknown"` |
+| `filtering` | `channel.electrode_filtering` or `electrode_filtering_default` | `"unknown"` |
 | `device` | Linked `Device` object | - |
-| `resistance` | `channel.electrode_resistance` | Omitted when not available |
-| `seal` | `channel.electrode_seal` | Omitted when not available |
+| `resistance` | `channel.electrode_resistance` | Omitted when `None` |
+| `seal` | `channel.electrode_seal` | Omitted when `None` |
 
 `resistance` and `seal` are written as strings in the units stored by the
-acquisition software (e.g. `"10 MOhm"`, `"5 GOhm"`). These fields are
-omitted entirely when the corresponding channel attribute is `None`, ensuring
-the exported NWB file remains valid for recordings where pipette QC data were
-not logged.
+acquisition software (e.g., `"10 MOhm"`, `"5 GOhm"`). These fields are omitted
+when the corresponding channel attribute is `None`.
 
 ---
 
-## Session Metadata
+## Session, Device, and Provenance Metadata
 
-The `NWBFile` top-level container is populated from the export dialog:
+`NWBExporter.export()` validates five mandatory MINDS/DANDI fields before
+creating the `NWBFile`, raising `ValueError` if any is missing or empty:
 
-| NWB Field | Dialog Tab | Required |
-|-----------|-----------|----------|
-| `session_description` | Session | Yes |
-| `identifier` | Session (auto-generated UUID) | Yes |
-| `session_start_time` | Session | Yes (timezone-aware) |
-| `experimenter` | Session | No |
-| `lab` | Session | No |
-| `institution` | Session | No |
-| `session_id` | Session | No |
+| Metadata Key | NWB Target | Required | Notes / Fallback |
+|--------------|------------|----------|------------------|
+| `session_description` | `NWBFile.session_description` | **Yes** (`ValueError` if missing) | Protocol or experiment summary |
+| `identifier` | `NWBFile.identifier` | **Yes** (`ValueError` if missing) | Unique session UUID string |
+| `session_start_time` | `NWBFile.session_start_time` | **Yes** (`ValueError` if missing) | `datetime`; naive timestamps are localised via `tzlocal` or UTC |
+| `subject_id` | `Subject.subject_id` | **Yes** (`ValueError` if missing) | Can also be passed via `subject_id=` keyword argument |
+| `device_description` | `Device.description` | **Yes** (`ValueError` if missing) | Can also be passed via `device_description=` keyword argument |
+| `device_name` | `Device.name` | No | Defaults to `"Generic Amplifier"` |
+| `device_manufacturer` | `Device.manufacturer` | No | Defaults to `"Unknown"` |
+| `experimenter` | `NWBFile.experimenter` | No | Optional |
+| `lab` | `NWBFile.lab` | No | Optional |
+| `institution` | `NWBFile.institution` | No | Optional |
+| `session_id` | `NWBFile.session_id` | No | Optional |
 
-If the `session_start_time` is timezone-naive, Synaptipy localises it to
-the system timezone (via `tzlocal`) or falls back to UTC.
+### Session `notes` Provenance
+
+`NWBFile.notes` combines any user-supplied `notes` string with structured
+acquisition and preprocessing provenance lines:
+
+- `Original file: <source_file_name>`
+- `Imported protocol label: <imported_protocol_label>` (when present on `Recording`)
+- `Recording temperature: <temp> degC (account for Q10 kinetic scaling when comparing across preparations)` (resolved from `session_metadata["recording_temperature"]`, `recording.recording_temperature`, or `recording.metadata["recording_temperature"]`, defaulting to `22.0` degC)
+- `Liquid junction potential (mV): <ljp_mv>` (when `liquid_junction_potential_mv` is present in `session_metadata` or `recording.metadata`)
+- `Digital filter provenance: <filter_params>` (when `session_metadata["filter_params"]` is supplied)
 
 ---
 
 ## Subject Metadata
 
-Populated from the **Subject** tab in the export dialog:
+Populated from `session_metadata` (and the **Subject** tab in the NWB Export
+Dialog):
 
-| NWB Field | Type | Notes |
-|-----------|------|-------|
-| `subject_id` | string | Required to create Subject object |
-| `species` | string | e.g. `"Mus musculus"` |
-| `age` | string | ISO 8601 duration, e.g. `"P90D"` |
-| `sex` | string | `"M"`, `"F"`, or `"U"` (default) |
-| `genotype` | string | Optional |
-| `weight` | string | Optional |
-| `description` | string | Optional |
+| NWB Field | Metadata Key | Required | Notes |
+|-----------|--------------|----------|-------|
+| `subject_id` | `subject_id` | **Yes** (`ValueError` if missing) | Unique animal/specimen identifier |
+| `species` | `species` | No | Defaults to `"unknown species"` with a warning if omitted; e.g. `"Mus musculus"` |
+| `age` | `age` | No | ISO 8601 duration, e.g. `"P90D"` |
+| `sex` | `sex` | No | `"M"`, `"F"`, or `"U"` (default `"U"`) |
+| `genotype` | `genotype` | No | Optional |
+| `weight` | `weight` | No | Optional |
+| `description` | `subject_description` | No | Optional |
 
 ---
 
-## Sweep Organisation
+## Sweep Organisation and Stimulus Reconstruction
 
 Each trial within a channel is stored as a separate `PatchClampSeries`
-(or subclass) with a unique `sweep_number` (`np.uint64`). The naming
-convention is:
+subclass with a unique `sweep_number` (`np.uint64`). Response and stimulus
+series follow the naming conventions:
 
-```
+```text
 {channel_name}_trial_{index:03d}
+{channel_name}_stim_trial_{index:03d}        # raw digitized command
+{channel_name}_stim_trial_{index:03d}_synth  # reconstructed from ABF epochs
 ```
 
-For example, `Vm_trial_000`, `Vm_trial_001`, etc.
+Stimulus resolution uses a 3-step per-trial fallback:
 
-Each trial is also linked via the NWB 2.x icephys hierarchy:
+1. **Attempt 1 (raw command)**: Digitized command waveform from
+   `channel.current_data_trials[trial_idx]`.
+2. **Attempt 2 (ABF epoch synthesis)**: Reconstructs both **step**
+   (`nEpochType == 1`) and **linear ramp** (`nEpochType == 2`, via
+   `numpy.linspace` from the preceding epoch level to the target level,
+   incorporating per-sweep level increments `fEpochLevelInc`, duration
+   increments `lEpochDurationInc`, `abf_holding_level`, and
+   `abf_pre_epoch_samples`) command waveforms from
+   `recording.metadata["abf_epochs"]`. The series description records
+   `"Synthetic stimulus array reconstructed from protocol metadata."`
+3. **Attempt 3 (unavailable)**: Sets `stimulus=None` and appends
+   `"WARNING: No stimulus waveform captured during acquisition; command waveform is unavailable."`
+   to the response series description.
 
-- **`IntracellularRecordingsTable`** - one row per trial; binds the response
-  series to its electrode and (when available) its stimulus series.
-- **`SimultaneousRecordingsTable`** - one row per (electrode, trial) pair;
-  groups simultaneous multi-channel recordings.
-- **`SequentialRecordingsTable`** - groups simultaneous recordings by
-  `stimulus_type` (`"current_clamp"` or `"voltage_clamp"`).
+Each trial is linked through the NWB 2.x intracellular electrophysiology table
+hierarchy:
+
+- **`IntracellularRecordingsTable`** - one row per trial binding the response
+  series, electrode, and (when available) stimulus series.
+- **`SimultaneousRecordingsTable`** - one row per `(electrode, trial)` pair.
+- **`SequentialRecordingsTable`** - groups simultaneous recordings with
+  `stimulus_type` (`"current_clamp"`, `"voltage_clamp"`, or `"unknown"`).
 
 ---
 
-## Preprocessing History (FAIR Compliance)
+## Embedded Analysis and Preprocessing Containers (`/processing`)
 
-When the active recording carries a `processing_history` key in its
-`metadata` dictionary, Synaptipy exports the full preprocessing audit trail
-to NWB as a `DynamicTable` within a dedicated `ProcessingModule` named
-`"preprocessing"`. This ensures that the computational provenance of the
-data is machine-readable and replicable by third-party tools.
+When HDMF is installed (included with PyNWB), `NWBExporter` writes two
+dedicated `ProcessingModule` containers under `nwbfile.processing`:
 
-### Container structure
-
-```
+```text
 NWBFile
   processing
-    preprocessing (ProcessingModule)
+    analysis (ProcessingModule - populated when analysis_results is provided)
+      scalar_metrics (DynamicTable)
+        channel    : string - channel identifier or name
+        analysis   : string - registry analysis identifier
+        metric     : string - scalar metric key
+        value      : float64 - finite numeric metric value
+      {channel}_{analysis}[_{n}] (DynamicTable - when _raw_arrays["event_times"] exists)
+        time_s     : float64 - discrete event or spike timestamp (s)
+        amplitude  : float64 - event amplitude in channel units (optional)
+    preprocessing (ProcessingModule - populated when recording.metadata["processing_history"] exists)
       preprocessing_steps (DynamicTable)
-        timestamp  : ISO 8601 string - when the step was applied
+        timestamp  : string - ISO 8601 timestamp when the step was applied
         operation  : string - operation name (e.g. "lowpass", "baseline_subtract")
-        parameters : string - JSON-encoded parameter dict
+        parameters : string - JSON-encoded parameter dictionary
 ```
 
-### Availability
-
-Preprocessing history export requires HDMF (installed with PyNWB). When HDMF
-is unavailable, the preprocessing module is silently omitted (non-fatal) and
-a warning is logged. The absence of the `preprocessing` module does not affect
-the validity of the exported acquisition data.
-
-Steps are appended to `processing_history` automatically whenever the user
-applies a preprocessing operation via the Analyser tab's preprocessing widget
-before running analysis.
+After writing the file to disk, `NWBExporter` runs `pynwb.validate` in read
+mode and logs any DANDI-compliance warnings without aborting the export.
 
 ---
 
 ## Limitations and Future Work
 
-1. **Stimulus data** - A 3-step fallback is applied per trial: (1) raw
-   digitized command waveform; (2) synthetic step waveform from ABF epoch
-   metadata; (3) `stimulus=None` with a warning in the response description.
-   Non-ABF formats without command channel support will always fall through to
-   Attempt 3.
-2. **Embedded scalar analysis** - Scalar results (Rin, tau, etc.) are exported
-   to CSV/JSON but not yet embedded in the NWB `ProcessingModule`. Only
-   discrete event arrays (spike times, synaptic event times) from the batch
-   engine `_raw_arrays` sub-dict are currently written as `DynamicTable` rows.
-   Preprocessing steps are embedded (see [Preprocessing History](#preprocessing-history-fair-compliance)).
-3. **RepetitionsTable / ExperimentalConditionsTable** - Higher-level NWB icephys
-   grouping tables are not yet populated.
+1. **Non-ABF synthetic stimulus reconstruction** - Formats other than ABF that
+   lack a digitized command channel fall through to Attempt 3 (`stimulus=None`
+   with an explicit warning in the response description).
+2. **Continuous fit curves and `Units` table** - `/processing/analysis` embeds
+   all finite scalar metrics in `scalar_metrics` and discrete event arrays from
+   `_raw_arrays["event_times"]` as `DynamicTable` objects; continuous 10-50 kHz
+   fitted overlay curves (such as `_fit_values`) are excluded to avoid file
+   bloat, and migration of spike times to the top-level `pynwb.misc.Units`
+   table is planned for a future release.
+3. **`RepetitionsTable` / `ExperimentalConditionsTable`** - Higher-level NWB
+   icephys grouping tables above `SequentialRecordingsTable` are not yet
+   populated.
 
 ---
 
 ## Per-Analysis-Module PyNWB Class Mapping
 
-The table below documents which PyNWB classes are used for each of the 15
-analysis modules.  The **Trace export** column reflects the class used when
-writing raw data.  The **Analysis NWB object** column shows implemented
-export (marked **✓**) or the planned container for future embedding.
+The table below lists all 16 built-in leaf analysis routines across Synaptipy's
+five core pillars, the acquisition series class used for raw trace export, and
+the implemented `/processing/analysis` containers written when batch results
+are passed via `analysis_results`.
 
-| # | Analysis Module | Registry Name | Trace Export Class | Analysis NWB Object |
-|---|----------------|--------------|-------------------|-----------------------------|
-| 1 | Baseline / RMP | `rmp_analysis` | `CurrentClampSeries` | `ProcessingModule` - scalar `TimeSeries` for RMP per sweep (planned) |
-| 2 | Input Resistance (Rin) | `rin_analysis` | `CurrentClampSeries` | `ProcessingModule` - scalars delta-V, delta-I, Rin MOhm (planned) |
-| 3 | Membrane Time Constant (Tau) | `tau_analysis` | `CurrentClampSeries` | `ProcessingModule` - `TimeSeries` overlay of fit; scalar tau_ms (planned) |
-| 4 | Sag Ratio (Ih) | `sag_ratio_analysis` | `CurrentClampSeries` | `ProcessingModule` - scalars V_peak, V_ss, sag_ratio, rebound (planned) |
-| 5 | Capacitance (Cm) | `capacitance_analysis` | `CurrentClampSeries` (CC) / `VoltageClampSeries` (VC) | `ProcessingModule` - scalars Cm_pF, Rs_MOhm (planned) |
-| 6 | Spike Detection | `spike_detection` | `CurrentClampSeries` | `Units` table - spike_times column (planned) |
-| 7 | Phase Plane | `phase_plane_analysis` | `CurrentClampSeries` | `ProcessingModule` - 2-D `TimeSeries` (V vs dV/dt) per sweep (planned) |
-| 8 | Paired-Pulse Ratio (PPR) | `paired_pulse_ratio` | `CurrentClampSeries` / `VoltageClampSeries` | `ProcessingModule` - per-pulse amplitude_corrected, ratio, decay_tau_ms, residual (planned) |
-| 9 | Event Detection | `event_detection_threshold` / `event_detection_deconvolution` | `CurrentClampSeries` | **✓** `ProcessingModule` → `DynamicTable` with `time_s` and `amplitude` columns per channel/trial (requires HDMF; populated from batch-engine `_raw_arrays`) |
-| 10 | I-V Curve | `iv_curve_analysis` | `CurrentClampSeries` | `ProcessingModule` - arrays delta_V, delta_I; scalar Rin_aggregate, R2 (planned) |
-| 11 | Burst Analysis | `burst_analysis` | `CurrentClampSeries` | `ProcessingModule` - burst times, durations, intra-burst frequency (planned) |
-| 12 | F-I Curve / Excitability | `excitability_analysis` | `CurrentClampSeries` | `ProcessingModule` - arrays firing_rate, current_step; scalars rheobase, fi_slope (planned) |
-| 13 | Spike Train Dynamics | `train_dynamics` | `CurrentClampSeries` | `Units` table plus `ProcessingModule` scalars CV, CV2, LV, adaptation_index (planned) |
-| 14 | Optogenetic Synchronisation | `optogenetic_sync` | `CurrentClampSeries` + `VoltageClampSeries` (opto channel) | `ProcessingModule` - scalars latency_ms, jitter_ms, response_probability (planned) |
-
-### Notes on icephys best-practice containers
-
-`IntracellularRecordingsTable`, `SimultaneousRecordingsTable`, and
-`SequentialRecordingsTable` are **implemented** and populated for every
-exported trial.  The higher-level `RepetitionsTable` and
-`ExperimentalConditionsTable` are not yet populated.
-
-The relevant PyNWB classes in use:
-- `pynwb.icephys.IntracellularRecordingsTable`
-- `pynwb.icephys.SimultaneousRecordingsTable`
-- `pynwb.icephys.SequentialRecordingsTable`
-
-Spike times and synaptic event times will be stored in `pynwb.misc.Units`
-(planned); currently they are written as HDMF `DynamicTable` rows inside a
-`ProcessingModule` named `"analysis"`.
+| # | Pillar | Analysis Routine | Registry Name | Trace Export Class | `/processing/analysis` NWB Container |
+|---|--------|------------------|---------------|--------------------|--------------------------------------|
+| 1 | Intrinsic Properties | Baseline (RMP) | `rmp_analysis` | `CurrentClampSeries` | `scalar_metrics` `DynamicTable` (`rmp_mv`, `rmp_std`, `rmp_drift_rate_mv_per_sweep`) |
+| 2 | Intrinsic Properties | Input Resistance | `rin_analysis` | `CurrentClampSeries` (CC) / `VoltageClampSeries` (VC) | `scalar_metrics` `DynamicTable` (`rin_mohm`, `rin_peak_mohm`, `rin_steady_state_mohm`, `conductance_us`) |
+| 3 | Intrinsic Properties | Tau (Time Constant) | `tau_analysis` | `CurrentClampSeries` | `scalar_metrics` `DynamicTable` (`tau_ms` or `tau_fast_ms`/`tau_slow_ms`, `r_squared`, `tau_decay_after_stimulus_ms`) |
+| 4 | Intrinsic Properties | Sag Ratio (Ih) | `sag_ratio_analysis` | `CurrentClampSeries` | `scalar_metrics` `DynamicTable` (`sag_ratio`, `sag_percentage`, `v_peak`, `v_ss`, `v_baseline`, `rebound_depolarization`) |
+| 5 | Intrinsic Properties | I-V Curve | `iv_curve_analysis` | `CurrentClampSeries` | `scalar_metrics` `DynamicTable` (`rin_aggregate_mohm`, `iv_intercept`, `iv_r_squared`, `rectification_index`) |
+| 6 | Intrinsic Properties | Capacitance | `capacitance_analysis` | `CurrentClampSeries` (CC) / `VoltageClampSeries` (VC) | `scalar_metrics` `DynamicTable` (`capacitance_pf`, `rs_cc_mohm` or `series_resistance_mohm`) |
+| 7 | Spike Analysis | Spike Detection | `spike_detection` | `CurrentClampSeries` | `scalar_metrics` `DynamicTable` (`spike_count`, `mean_freq_hz`, 18 AP feature means/SDs) |
+| 8 | Spike Analysis | Phase Plane | `phase_plane_analysis` | `CurrentClampSeries` | `scalar_metrics` `DynamicTable` (`threshold_v`, `threshold_mean`, `max_dvdt`, `trace_max_dvdt`) |
+| 9 | Excitability | Excitability (F-I Curve) | `excitability_analysis` | `CurrentClampSeries` | `scalar_metrics` `DynamicTable` (`rheobase_pa`, `fi_slope`, `fi_r_squared`, `fi_p_value`, `max_freq_hz`) |
+| 10 | Excitability | Burst Analysis | `burst_analysis` | `CurrentClampSeries` | `scalar_metrics` `DynamicTable` (`burst_count`, `spikes_per_burst_avg`, `burst_duration_avg`, `burst_freq_hz`) |
+| 11 | Excitability | Spike Train Dynamics | `train_dynamics` | `CurrentClampSeries` | `scalar_metrics` `DynamicTable` (`mean_isi_s`, `cv`, `cv2`, `lv`, `adaptation_index`, `spike_broadening_index`) |
+| 12 | Synaptic Events | Event (Amplitude) | `event_detection_threshold` | `CurrentClampSeries` / `VoltageClampSeries` | `scalar_metrics` `DynamicTable` + `{chan}_event_detection_threshold` event `DynamicTable` (`time_s`, `amplitude`) |
+| 13 | Synaptic Events | Event (Template) | `event_detection_deconvolution` | `CurrentClampSeries` / `VoltageClampSeries` | `scalar_metrics` `DynamicTable` + `{chan}_event_detection_deconvolution` event `DynamicTable` (`time_s`, `amplitude`) |
+| 14 | Evoked Responses | Evoked Sync | `optogenetic_sync` | `CurrentClampSeries` / `VoltageClampSeries` + stimulus series | `scalar_metrics` `DynamicTable` + `{chan}_optogenetic_sync` event `DynamicTable` (`time_s`) |
+| 15 | Evoked Responses | Paired-Pulse Ratio | `paired_pulse_ratio` | `CurrentClampSeries` / `VoltageClampSeries` | `scalar_metrics` `DynamicTable` (`amplitude_raw_pN`, `amplitude_corrected_pN`, `ratio_pN`, `decay_tau_ms_pN`) |
+| 16 | Evoked Responses | Stimulus Train (STP) | `stimulus_train_stp` | `CurrentClampSeries` / `VoltageClampSeries` | `scalar_metrics` `DynamicTable` (`r1_amplitude`, `steady_state_ratio`, `R2/R1` ... `Rn/R1`) |
 
 ---
 
 ## Programmatic Usage
 
 ```python
+from datetime import datetime, timezone
+from pathlib import Path
+import uuid
+
 from synaptipy.infrastructure.exporters.nwb_exporter import NWBExporter
 
 exporter = NWBExporter()
 exporter.export(
- recording=my_recording,
- output_path=Path("output.nwb"),
- session_metadata={
- "session_description": "Whole-cell patch-clamp recording",
- "identifier": str(uuid.uuid4()),
- "session_start_time": datetime.now(timezone.utc),
- "experimenter": "J. Smith",
- },
+    recording=my_recording,
+    output_path=Path("output.nwb"),
+    session_metadata={
+        "session_description": "Whole-cell patch-clamp recording in acute slice",
+        "identifier": str(uuid.uuid4()),
+        "session_start_time": datetime.now(timezone.utc),
+        "subject_id": "mouse_001",
+        "species": "Mus musculus",
+        "device_name": "MultiClamp 700B",
+        "device_description": "Axon MultiClamp 700B patch-clamp amplifier",
+        "experimenter": "J. Smith",
+        "recording_temperature": 23.5,
+        "liquid_junction_potential_mv": 14.2,
+    },
+    analysis_results=batch_rows,  # optional list of dicts from BatchAnalysisEngine
 )
 ```

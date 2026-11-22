@@ -1,97 +1,87 @@
 # Release Process
 
 This guide is for maintainers preparing a Synaptipy release. It documents the
-current local-first process; the version-bump script never pushes to GitHub or
-starts a workflow on its own.
+local-first release workflow; `scripts/bump_version.py` never pushes to GitHub
+or triggers a remote workflow on its own.
 
 ## Before the version bump
 
 Use the existing `synaptipy` conda environment. Do not change the project's
-PySide6 pin while preparing a release.
+`PySide6==6.7.3` pin while preparing a release.
 
-Start from the branch you intend to release and make sure it has no uncommitted
-work:
+Start from the branch you intend to release (`main`) and verify there are no
+uncommitted changes:
 
 ```bash
 git status --short
 ```
 
-The normal bump refuses to run when this command has output. This protects the
-script's `git add -A` commit from including unrelated work. It also refuses a
-version that is not valid PEP 440, is not greater than the current version, or
-would reuse an existing local `vX.Y.Z` tag.
+A live bump refuses to run when `git status --short` produces output, when the
+target version is not a valid forward PEP 440 version relative to
+`pyproject.toml`, or when the target local `vX.Y.Z` tag already exists.
 
 ## Create the local release commit and tag
 
-Preview the exact edit set first. A dry run makes no file or Git changes and
-is safe while reviewing unrelated local work:
+Preview the edit set first with `--dry-run`:
 
 ```bash
-conda run -n synaptipy python scripts/bump_version.py 0.1.6.2 --dry-run
+conda run -n synaptipy python scripts/bump_version.py 0.1.9 --dry-run
 ```
 
-After reviewing the preview, run the same command without `--dry-run`:
+After reviewing the preview, apply the bump:
 
 ```bash
-conda run -n synaptipy python scripts/bump_version.py 0.1.6.2
+conda run -n synaptipy python scripts/bump_version.py 0.1.9
 ```
 
-The script updates these required release locations:
+The script updates all canonical release markers atomically:
 
 - `pyproject.toml` and `src/synaptipy/__init__.py`;
-- `CITATION.cff`, including its release date;
-- the Windows installer version and Linux desktop-entry version;
-- `CHANGELOG.md`, including its release comparison links.
+- `CITATION.cff` (`version` and `date-released`);
+- `installer/windows_setup.iss` (`MyAppVersion`) and `installer/linux/synaptipy.desktop` (`X-AppVersion`);
+- `CHANGELOG.md` (promotes `[Unreleased]` into `## [X.Y.Z] - YYYY-MM-DD` and updates comparison anchors).
 
-It also updates matching release text in `docs/references.md`, the
-cross-platform installer guide, versioned paper-environment files, and
-`README.md` when present. These derived references are optional: missing text
-produces a warning rather than a partial release. The installer guide normally
-uses wildcard filenames, so it only changes when a maintainer has deliberately
-included a concrete versioned example.
-
-On a normal run, the script stages the resulting clean release update with
-`git add -A`, creates the commit `chore: bump version to X.Y.Z`, and creates an
-annotated local tag `vX.Y.Z`. It never changes dependency constraints, pushes
-a branch or tag, or dispatches a GitHub Actions workflow.
+It also updates matching version strings in `docs/references.md`,
+`docs/development/manuals/CROSS_PLATFORM_SETUP.md`, `paper/envs/*.txt`, and
+`README.md` when present. It stages all updates with `git add -A`, commits
+`chore: bump version to X.Y.Z`, and creates the annotated tag `vX.Y.Z`.
 
 ## Verify before publishing
 
-Inspect the generated release commit and tag, then run the local CI verifier in
-the same conda environment:
+Inspect the generated commit and tag, then run the full local CI verifier:
 
 ```bash
 git show --stat HEAD
-git show --no-patch v0.1.6.2
+git show --no-patch v0.1.9
 conda run -n synaptipy python scripts/verify_ci.py
 ```
 
-`verify_ci.py` checks formatting, import order, linting, the primary
-90-percent coverage test gate, and the repository's source-text policy. Add
-`--with-screenshots` when documentation screenshots are part of the release.
-The GitHub workflow remains the cross-platform authority: it runs on Ubuntu,
-Windows, and macOS with Python 3.10, 3.11, and 3.12, plus its specialised jobs.
+`verify_ci.py` enforces `black`, `isort`, `flake8` syntax and complexity rules,
+the headless test suite with the 90-percent coverage threshold, and the
+zero-emoji source check.
 
 ## Publish deliberately
 
-Only after the checks and review are satisfactory, push the release commit and
-its tag yourself:
+Push `main` and the annotated `vX.Y.Z` tag together:
 
 ```bash
-git push origin <branch>
-git push origin v0.1.6.2
+git push origin main && git push origin v0.1.9
 ```
 
-The branch push starts the normal CI workflow. Pushing the `vX.Y.Z` tag is the
-normal release trigger; it starts the release workflow, which rebuilds and
-validates the distribution and documentation before its publication jobs.
-Manual workflow dispatch defaults to a dry run that produces build artifacts
-without publishing. The workflow also exposes a non-dry-run option, so use it
-only when an intentional manual publication is required.
+Pushing `main` and `vX.Y.Z` together coordinates all three GitHub Actions
+workflows cleanly:
 
-For a real publication, the workflow uploads the wheel and source distribution
-to TestPyPI first, installs that exact version in a clean environment, and only
-then permits the PyPI upload. If TestPyPI or that smoke test is unavailable,
-PyPI publishing is skipped; it is never bypassed. The macOS DMG name is derived
-from the canonical `pyproject.toml` version at build time, so it has no separate
-version string for the bump script to edit.
+1. `test.yml` runs the 3x3 OS/Python matrix, dependency bounds, Bandit SAST,
+   High-DPI checks, notebooks, and wheel installation on `main`. Its `auto-tag`
+   job detects that `vX.Y.Z` already exists on `origin` and skips re-tagging.
+   (If you push `main` *without* pushing `vX.Y.Z`, `auto-tag` creates an
+   annotated `vX.Y.Z` tag after CI succeeds and dispatches `installer.yml` and
+   `release.yml` via `workflow_dispatch` with `dry_run=false`.)
+2. `installer.yml` builds and smoke-tests all four standalone installers
+   (`Synaptipy-<ver>-x86_64.AppImage`, `Synaptipy_Setup_<ver>.exe`,
+   `Synaptipy_<ver>_macOS_arm64.dmg`, and `Synaptipy_<ver>_macOS_x86_64.dmg`).
+3. `release.yml` runs tests, strict Sphinx docs + `linkcheck`, builds the wheel
+   and sdist (including offline Help artefacts), publishes to TestPyPI and
+   verifies clean installation before publishing to PyPI via OIDC Trusted
+   Publisher, waits for `installer.yml` to finish, and attaches all four
+   desktop installers alongside the wheel and sdist on the GitHub Release.

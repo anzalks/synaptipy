@@ -33,7 +33,7 @@ software to demonstrate its contribution and positioning within the ecosystem.
 | Analysis | Synaptipy | Stimfit | EasyElectrophysiology | pyABF |
 |----------|-----------|---------|----------------------|-------|
 | Spike detection | dV/dt + threshold | Threshold | Template | Manual |
-| AP feature extraction | 12 features | 5 features | 8 features | No |
+| AP feature extraction | 18 features | 5 features | 8 features | No |
 | Phase plane (dV/dt vs V) | Yes | No | Yes | No |
 | Input resistance | Yes (peak + SS) | Yes | Yes | No |
 | Membrane tau (mono+bi) | Yes + CI | Yes | Yes | No |
@@ -65,17 +65,17 @@ software to demonstrate its contribution and positioning within the ecosystem.
 
 ## Design Priorities
 
-1. **Unified format support** -- 30+ formats via Neo, with NWB 2.x read and write.
+1. **Unified format support** - 30+ formats via Neo, with NWB 2.x read and write.
 
-2. **Reproducibility infrastructure** -- pinned environments, Docker container, methods text generator, parameter provenance tracking.
+2. **Reproducibility infrastructure** - pinned environments, Docker container, methods text generator, parameter provenance tracking.
 
-3. **Dual-interface architecture** -- interactive GUI and headless batch engine share the same analysis core.
+3. **Dual-interface architecture** - interactive GUI and headless batch engine share the same analysis core.
 
-4. **Algorithmic documentation** -- every analysis has LaTeX-specified mathematics with citations, validated against synthetic ground truth.
+4. **Algorithmic documentation** - every analysis has LaTeX-specified mathematics with citations, validated against synthetic ground truth.
 
-5. **Plugin system** -- custom analyses added without modifying core code, using a decorator-based registry.
+5. **Plugin system** - custom analyses added without modifying core code, using a decorator-based registry.
 
-6. **Fit quality reporting** -- confidence intervals on fitted parameters, goodness-of-fit metrics (R^2, p-values), and quality flags on results.
+6. **Fit quality reporting** - confidence intervals on fitted parameters, goodness-of-fit metrics (R^2, p-values), and quality flags on results.
 
 ## Sources
 

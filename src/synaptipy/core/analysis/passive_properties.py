@@ -1144,6 +1144,8 @@ def calculate_tau(  # noqa: C901
                 "tau_se_ms": tau_se_ms,
                 "tau_ci_lower": tau_ci_lower,
                 "tau_ci_upper": tau_ci_upper,
+                "tau_ci_95_low": tau_ci_lower,
+                "tau_ci_95_high": tau_ci_upper,
             }
 
         elif model == "bi":
@@ -2241,8 +2243,8 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
                     {
                         "tau_ms": result["tau_ms"],
                         "r_squared": result["r_squared"],
-                        "tau_ci_95_low": result.get("tau_ci_95_low"),
-                        "tau_ci_95_high": result.get("tau_ci_95_high"),
+                        "tau_ci_95_low": result.get("tau_ci_95_low", result.get("tau_ci_lower")),
+                        "tau_ci_95_high": result.get("tau_ci_95_high", result.get("tau_ci_upper")),
                         "tau_model": model,
                         "tau_decay_after_stimulus_ms": tau_decay_ms,
                         "parameters": params,

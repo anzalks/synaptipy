@@ -10,21 +10,24 @@ HOW TO USE
 2. Rename it to something descriptive, e.g. ``my_analysis.py``.
 3. Implement your analysis logic in ``calculate_my_metric`` (Part 1).
 4. Configure the decorator in Part 2 (name, label, ui_params, plots).
-5. Ensure "Enable Custom Plugins" is checked in
-   **Edit > Preferences > Extensions** (requires a restart).
+5. Enable "Enable Custom Plugins" in **Edit > Preferences > Extensions**
+   (plugins reload in-process without restarting).
 
-Your analysis appears as a new tab in the Analyser automatically.
-No other Synaptipy files need to be modified.
+Your analysis appears as a sub-tab in the Analyser automatically.
+No core Synaptipy files need to be modified.
 
 FULL EXAMPLES
 -------------
-- ``examples/plugins/opto_jitter.py``         - optogenetic latency jitter
-- ``examples/plugins/ap_repolarization.py``   - max AP repolarization rate
+- ``examples/plugins/opto_jitter.py``                 - optogenetic latency jitter
+- ``examples/plugins/ap_repolarization.py``           - max AP repolarization rate
+- ``examples/plugins/synaptic_charge.py``             - postsynaptic charge transfer
+- ``examples/plugins/miniml_integration.py``          - miniML deep-learning events
+- ``examples/plugins/spike_interface_integration.py`` - SpikeInterface sorting wrapper
 
 DOCUMENTATION
 -------------
-- ``docs/extending_synaptipy.md``             - complete reference including
-  all ui_params types and plot overlay types (markers, fill_between, etc.)
+- ``docs/extending_synaptipy.md``                     - complete reference including
+  all ui_params types and plot overlay types (markers, fill_between, hlines, etc.)
 
 This file is part of Synaptipy, licensed under the GNU Affero General Public License v3.0.
 See the LICENSE file in the root of the repository for full license details.
@@ -42,7 +45,7 @@ log = logging.getLogger(__name__)
 
 # ============================================================
 # PART 1 - PURE ANALYSIS LOGIC
-# Write your algorithm here.  No GUI imports.  Just NumPy / SciPy.
+# Write your algorithm here. No GUI imports; NumPy / SciPy only.
 # ============================================================
 
 
@@ -50,34 +53,28 @@ def calculate_my_metric(
     data: np.ndarray,
     time: np.ndarray,
     sampling_rate: float,
-    # TODO: add parameters that match your ui_params names below
 ) -> Dict[str, Any]:
     """
     Replace this docstring and body with your own analysis logic.
 
     Args:
-        data: 1-D NumPy array - the voltage (or current) trace for one sweep.
+        data: 1-D NumPy array - voltage or current trace for one sweep.
         time: 1-D NumPy array - time in seconds, same length as data.
         sampling_rate: Sampling rate in Hz.
-        # TODO: document your additional parameters here.
 
     Returns:
-        Dict with your results. Your main `process()` function should return a dictionary
-        with keys matching the `PluginResult` schema. Keys become rows in the results table.
-        Keys starting with ``_`` are hidden from the table (use for plot data).
-        A key named ``"error"`` triggers an error message in the GUI.
-
-        Return plain metrics.  ``AnalysisRegistry.execute`` converts this once
-        into the versioned ``AnalysisResult`` schema for the GUI, batch engine,
-        and exporter::
+        Flat dictionary of results. ``AnalysisRegistry.execute`` wraps this
+        automatically into the versioned ``AnalysisResult`` schema for the GUI,
+        batch engine, and exporters. Public keys appear in the results table;
+        keys prefixed with ``_`` pass hidden array data to plot overlays; a key
+        named ``"error"`` reports a graceful analysis error in the UI::
 
             {
                 "My_Value": 42.0,
-                "_plot_x": [...],                    # hidden: plot data
-                "_plot_y": [...],                    # hidden: plot data
+                "_plot_x": [...],
+                "_plot_y": [...],
             }
     """
-    # TODO: implement your analysis here.
     if data.size == 0:
         return {"error": "Empty data array"}
 
@@ -89,17 +86,16 @@ def calculate_my_metric(
 # ============================================================
 # PART 2 - REGISTRY WRAPPER
 # Configure the decorator to define your tab name, parameters,
-# and plot overlays.  The function body just calls Part 1.
+# and plot overlays. The wrapper extracts kwargs and calls Part 1.
 # ============================================================
 
 
 @AnalysisRegistry.register(
-    name="my_custom_metric",  # CHANGE: unique internal name
-    label="My Custom Metric",  # CHANGE: display name for the tab
-    expects_list=False,  # Set True only if your function needs the raw list of trials
+    name="my_custom_metric",  # CHANGE: unique internal registry name
+    label="My Custom Metric",  # CHANGE: display label in the Analyser UI
+    expects_list=False,  # Set True only if your function consumes a list of sweeps
     ui_params=[
-        # CHANGE: define your parameter widgets here.
-        # See docs/extending_synaptipy.md section 4 for all available types.
+        # See docs/extending_synaptipy.md section 4 for all available widget types.
         {
             "name": "window_start",
             "label": "Window Start (s):",
@@ -120,11 +116,10 @@ def calculate_my_metric(
         },
     ],
     plots=[
-        # CHANGE: define your plot overlays here.
-        # See docs/extending_synaptipy.md section 5 for all overlay types.
-        # Examples:
-        #   {"type": "interactive_region", "data": ["window_start", "window_end"], "color": "g"}
+        # See docs/extending_synaptipy.md section 5 for all overlay types:
+        #   {"type": "interactive_region", "data": ["window_start", "window_end"]}
         #   {"type": "markers", "x": "_peak_t", "y": "_peak_v", "color": "r"}
+        #   {"type": "hlines", "data": ["Mean_Value"], "color": "b", "styles": ["dash"]}
         #   {"type": "fill_between", "x": "_int_x", "y1": "_int_y", "y2": "_base"}
     ],
 )
@@ -138,29 +133,12 @@ def run_my_custom_metric_wrapper(
     Registry wrapper - extracts GUI parameters and calls the logic function.
 
     The signature ``(data, time, sampling_rate, **kwargs)`` is fixed.
-    CHANGE: update ``kwargs.get()`` calls to match your ui_params names.
-
-    Global Themes
-    -------------
-    Synaptipy injects a ``theme_config`` dict into ``kwargs`` whenever the
-    user changes plot-customisation settings (colours, line widths, etc.).
-    Use it to tint your result overlays so they stay visually consistent::
-
-        theme_config = kwargs.get("theme_config", {})
-        trace_color = theme_config.get("single_trial_color", (200, 200, 200))
-        avg_color   = theme_config.get("average_color", (255, 255, 0))
-
-    The dict contains the same keys as
-    :func:`~synaptipy.shared.plot_customization.get_plot_customization_manager`
-    properties (``single_trial_color``, ``average_color``, ``scatter_color``,
-    ``line_width``, etc.).  If the key is absent, fall back to a sensible
-    default so your plugin works even without custom styling.
+    Update ``kwargs.get()`` calls to forward any custom ``ui_params`` names to
+    your pure logic function.
     """
+    _ = kwargs
     return calculate_my_metric(
         data=data,
         time=time,
         sampling_rate=sampling_rate,
-        # TODO: pass your ui_params kwargs here, e.g.:
-        # window_start=kwargs.get("window_start", 0.0),
-        # window_end=kwargs.get("window_end", 0.5),
     )

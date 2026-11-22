@@ -344,3 +344,29 @@ def test_paper_tables_sustained_step_ignores_pre_sweep_test_pulse() -> None:
     assert math.isclose(s_t, 1.02, abs_tol=1e-3)
     assert math.isclose(e_t, 2.02, abs_tol=1e-3)
     assert math.isclose(amp, -110.0, abs_tol=0.5)
+
+
+def test_tau_wrapper_exposes_95_ci_bounds() -> None:
+    """Verify run_tau_analysis_wrapper populates finite tau_ci_95_low and tau_ci_95_high bounds."""
+    from synaptipy.core.analysis.passive_properties import run_tau_analysis_wrapper
+
+    fs = 20000.0
+    t = np.arange(0.0, 0.25, 1.0 / fs)
+    v = np.full_like(t, -70.0)
+    step_mask = t >= 0.05
+    v[step_mask] = -80.0 + 10.0 * np.exp(-(t[step_mask] - 0.05) / 0.020)
+    rng = np.random.default_rng(123)
+    v += rng.normal(0.0, 0.02, size=len(v))
+
+    res = run_tau_analysis_wrapper(
+        v,
+        t,
+        fs,
+        stim_start_time=0.05,
+        fit_duration=0.12,
+        tau_model="mono",
+    )
+    metrics = res["metrics"]
+    assert metrics["tau_ci_95_low"] is not None and math.isfinite(metrics["tau_ci_95_low"])
+    assert metrics["tau_ci_95_high"] is not None and math.isfinite(metrics["tau_ci_95_high"])
+    assert metrics["tau_ci_95_low"] < metrics["tau_ms"] < metrics["tau_ci_95_high"]

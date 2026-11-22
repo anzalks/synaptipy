@@ -17,9 +17,10 @@ over 30 acquisition formats including extracellular and multi-channel data.
 
 The software is implemented in Python using the Qt6 framework (PySide6). Signal visualization
 employs PyQtGraph's CPU-vectorized native raster engine. The application includes 16 built-in analysis
-modules spanning intrinsic membrane properties, action potential characterization, synaptic
-event detection, and evoked responses (Evoked Sync, Paired-Pulse Ratio, Stimulus Train STP).
-A batch processing engine implements composable analysis pipelines. An extensible plugin
+routines organized into 5 core pillar tabs spanning intrinsic membrane properties, action potential
+characterization, firing dynamics, synaptic event detection, and evoked responses (Evoked Sync,
+Paired-Pulse Ratio, Stimulus Train STP), alongside 7 registered signal-preprocessing stages for
+batch and CLI parity. A batch processing engine implements composable analysis pipelines. An extensible plugin
 interface permits integration of user-written analysis routines without modification to the
 core package. Five example plugins are available for download from the application. File I/O is handled
 via `Neo <https://neo.readthedocs.io/en/latest/>`_, supporting Axon ABF, WinWCP, CED/Spike2,
@@ -35,10 +36,10 @@ The source code is hosted on `GitHub <https://github.com/anzalks/synaptipy>`_.
 |
 
 .. note::
-   **Graphics Engine Architecture:** SynaptiPy's interactive workspace relies entirely on
-   PyQtGraph's highly optimized, CPU-vectorized native raster engine for rendering
-   high-density 2D electrophysiology traces. Matplotlib is used only for offline,
-   high-resolution static figure exporting and validation reporting.
+   **Graphics Engine Architecture:** Synaptipy's interactive workspace relies on
+   PyQtGraph's CPU-vectorized native raster engine for rendering high-density 2D
+   electrophysiology traces (with optional opt-in OpenGL acceleration in Preferences).
+   Matplotlib is used for offline, high-resolution static figure exporting and validation reporting.
 
 .. grid:: 2
 
@@ -98,7 +99,7 @@ The source code is hosted on `GitHub <https://github.com/anzalks/synaptipy>`_.
       :link: references
       :link-type: doc
 
-      Full annotated bibliography — all algorithms, methods, and
+      Full annotated bibliography - all algorithms, methods, and
       upstream libraries with verified DOIs.
 
    .. grid-item-card:: Source on GitHub

@@ -1,150 +1,97 @@
 # Synaptipy Styling Guide
 
-This document explains the styling system used in Synaptipy, how it's organized, and how to ensure consistent UI styling in your code.
+This document describes the Qt6 palette theming, button role conventions, and
+PyQtGraph plot styling utilities used across Synaptipy.
 
 ## Overview
 
-Synaptipy uses Qt's native theming system (`src/synaptipy/shared/styling.py`) for consistent application appearance. The styling system is designed to:
+Synaptipy separates application palette management (`src/synaptipy/shared/theme_manager.py`)
+from widget and plot helper utilities (`src/synaptipy/shared/styling.py` and
+`src/synaptipy/shared/plot_factory.py`):
 
-1. Ensure visual consistency throughout the application using Qt's built-in palette system
-2. Support light/dark theme switching
-3. Provide convenient helpers for PyQtGraph visualization styling
-4. Minimize custom styling in favor of native Qt appearance
+1. **Theme Manager** (`theme_manager.py`) applies Qt's `"Fusion"` style with
+   explicit dark or light `QPalette` definitions and tracks OS color-scheme
+   changes when `ThemeMode.SYSTEM` is selected.
+2. **Plot Factory** (`plot_factory.py`) constructs all `PyQtGraph` plot widgets
+   and layout containers with safe software-rendering defaults and scientific
+   axes formatting.
+3. **Styling Helpers** (`styling.py`) provide semantic button/label helpers and
+   theme-aware `PyQtGraph` pens.
 
-## Key Components
+## Theme Mode Management
 
-### Theme Mode Management
+Application theme state is managed in `src/synaptipy/shared/theme_manager.py`:
 
-Theme management lives in `src/synaptipy/shared/theme_manager.py`:
+- `ThemeMode`: Enum with `LIGHT`, `DARK`, and `SYSTEM` modes.
+- `get_theme_mode()`: Returns the persisted `ThemeMode` from `QSettings`.
+- `set_theme_mode(mode)`: Persists `mode`, applies the resolved palette immediately
+  via `apply_theme(mode)`, and notifies registered listeners.
+- `apply_theme(mode=None)`: Applies Qt `"Fusion"` style with `_apply_dark_palette`
+  or `_apply_light_palette` according to `is_dark_mode()`.
+- `install_system_theme_listener(app)`: Connects to `QStyleHints.colorSchemeChanged`
+  so `ThemeMode.SYSTEM` updates live when the OS switches between light and dark
+  appearance.
 
-- `get_theme_mode()`: Returns the current `ThemeMode` enum (`LIGHT`, `DARK`, or `SYSTEM`)
-- `set_theme_mode(mode)`: Set theme to a `ThemeMode` value; emits `theme_changed` signal
-- `is_dark_mode()`: Returns `True` if dark mode should be active
+```python
+from synaptipy.shared.theme_manager import ThemeMode, apply_theme, set_theme_mode
 
-The `styling.py` module provides `get_system_theme_mode()` for OS-level detection and `apply_stylesheet(app)` to apply the resolved theme.
+# Switch to dark mode and persist preference
+set_theme_mode(ThemeMode.DARK)
 
-### Qt Native Theming
+# Re-apply the currently saved preference at startup
+apply_theme()
+```
 
-The system uses Qt's native palette and style system with three modes:
+Scientific trace canvases keep a white (`"w"`) background with black foreground
+axes (`configure_plot_widget`) regardless of whether the surrounding UI chrome
+uses the dark or light Fusion palette, ensuring publication-consistent contrast.
 
-- **Dark**: Uses "Fusion" style with custom dark palette
-- **Light**: Uses "Fusion" style with custom light palette
-- **System**: Restores the OS-native style and palette from application startup
+## Creating and Styling PyQtGraph Plots
 
-### PyQtGraph Plot Styling
+Direct instantiation of `pg.PlotWidget()` or `pg.GraphicsLayoutWidget()` is
+forbidden because unguarded OpenGL/ViewBox configurations cause platform-specific
+crashes. Always construct plot widgets through `SynaptipyPlotFactory`:
 
-Specialized functions for plot appearance:
+```python
+from synaptipy.shared.plot_factory import SynaptipyPlotFactory
+from synaptipy.shared.styling import configure_plot_widget, get_average_pen, get_trial_pen
 
-- `configure_plot_widget(plot_widget)`: Apply theme-appropriate colors to plots
-- `get_trial_pen()`, `get_average_pen()`: Get theme-appropriate pens for data
-- `get_baseline_pen()`, `get_response_pen()`: Get pens for analysis indicators
-- `get_grid_pen()`: Get theme-appropriate grid line styling
+plot_widget = SynaptipyPlotFactory.create_plot_widget(
+    title="Membrane Potential",
+    labels={"left": ("Voltage", "mV"), "bottom": ("Time", "s")},
+)
+configure_plot_widget(plot_widget)
 
-### Simple Widget Styling
+plot_widget.plot(time, trial_data, pen=get_trial_pen())
+plot_widget.plot(time, avg_data, pen=get_average_pen())
+```
 
-Minimal styling helpers that work with Qt's native theming:
+User-configurable trace, scatter, and overlay pens are managed through
+`get_plot_customization_manager()` (`src/synaptipy/shared/plot_customization.py`),
+accessible in the UI under **View > Plot Customization...**.
 
-- `style_button(button, style='secondary')`: Apply a semantic, theme-aware button role
-- `style_label(label, style='normal')`: Apply label styling (heading, subheading)
-- `style_info_label(label)`: Style informational labels
-- `style_error_message(widget)`: Style error messages
+## Widget Helpers and Button Roles
 
-### Theme Application
-
-- `apply_stylesheet(app)`: Apply the current theme to the entire application
-
-## How to Use
-
-### For General UI Elements
-
-Use the minimal styling helpers when needed:
+All widget colors inherit from the active `QPalette`; avoid hardcoding hex
+stylesheets on individual controls. Assign button semantics via `style_button`:
 
 ```python
 from PySide6 import QtWidgets
 from synaptipy.shared.styling import style_button, style_label
 
-# Create widgets
-button = QtWidgets.QPushButton("Save")
-info_label = QtWidgets.QLabel("Select a file to analyze")
+run_btn = QtWidgets.QPushButton("Run Analysis")
+reset_btn = QtWidgets.QPushButton("Reset View")
+heading = QtWidgets.QLabel("Passive Properties")
 
-# Ordinary controls remain neutral and inherit the active theme palette.
-style_button(button)
-style_label(info_label, 'heading') # Makes label bold and larger
+style_button(run_btn, "primary")
+style_button(reset_btn, "secondary")
+style_label(heading, "heading")
 ```
 
-### Button roles
-
-All button colours are controlled by the active Qt theme; do not hard-code
-button colours or per-widget stylesheets. Assign a semantic role with
-`style_button` instead:
-
-| Role | Use | Appearance |
+| Role | Intended Action | Appearance |
 |---|---|---|
-| `secondary` (default) | Navigation and supporting actions: Previous/Next, Reset View, Save Plot, Browse, Refresh, Undo, and View Session | Neutral palette button |
-| `primary` | The one action that advances the current workflow: Run Analysis, Run Batch Analysis, or the panel's main export/add action | Theme accent/default button |
-| `danger` | Potentially unwanted removal or reset actions: Clear Analysis Set, Remove Files, Reset Preprocessing | Neutral by default; pair material data loss with a confirmation dialog rather than relying on colour alone |
+| `secondary` (default) | Navigation and supporting controls (`Previous`, `Next`, `Reset View`, `Browse`, `Refresh`, `Undo`) | Neutral palette button |
+| `primary` | The single primary action advancing the panel workflow (`Run Analysis`, `Run Batch Analysis`, `Export`) | Default/accent button (`setDefault(True)`) |
 
-Use at most one visible primary button in a panel or dialog. If several actions
-look primary, users cannot tell which action is the intended next step. Disabled
-controls must remain disabled and use the palette's muted state; never simulate
-disabled state with a custom colour.
-
-### For PyQtGraph Elements
-
-Use the PyQtGraph helper functions:
-
-```python
-import pyqtgraph as pg
-from synaptipy.shared.styling import configure_plot_widget, get_trial_pen, get_average_pen
-
-# Create plot widget with theme-appropriate styling
-plot_widget = pg.PlotWidget()
-configure_plot_widget(plot_widget)
-
-# Plot data with theme-appropriate pens
-plot_widget.plot(time, trial_data, pen=get_trial_pen())
-plot_widget.plot(time, avg_data, pen=get_average_pen())
-```
-
-### For Theme Switching
-
-Theme switching is handled automatically by the main window, but can be controlled programmatically:
-
-```python
-from synaptipy.shared.theme_manager import set_theme_mode, ThemeMode
-from synaptipy.shared.styling import apply_stylesheet
-from PySide6 import QtWidgets
-
-# Switch to dark theme
-set_theme_mode(ThemeMode.DARK)
-app = QtWidgets.QApplication.instance()
-apply_stylesheet(app)
-```
-
-## Best Practices
-
-1. **Rely on Qt's native theming** - Avoid custom stylesheets when possible
-2. **Use the theme helper functions** for plot styling and minimal widget customization
-3. **Let Qt handle most styling** - The palette system automatically handles colors for most widgets
-4. **Test both themes** - Always verify your UI works well in both light and dark modes
-5. **Keep styling minimal** - Add custom styling only when necessary for functionality
-6. **Use semantic button roles** - Call `style_button(button)` for ordinary controls and
-   `style_button(button, "primary")` only for the single main action in that context
-
-## Architecture Benefits
-
-The new Qt native theming approach provides:
-
-1. **Better OS Integration**: Matches system appearance expectations
-2. **Reduced Complexity**: Fewer custom stylesheets to maintain
-3. **Improved Performance**: Qt's native rendering is optimized
-4. **Better Accessibility**: Native theming supports system accessibility features
-5. **Future Compatibility**: Less dependent on external styling libraries
-
-## Migration from Previous System
-
-The previous complex custom styling system has been replaced with this simpler approach:
-
-- **Removed**: Complex custom stylesheets, qdarkstyle dependency, custom color palettes
-- **Replaced**: Qt native palettes with minimal custom styling for specific needs
-- **Maintained**: Plot styling helpers and basic widget styling functions
+Use at most one visible `primary` button per panel or dialog, and guard
+destructive reset/delete operations with an explicit confirmation dialog.

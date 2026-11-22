@@ -1,57 +1,63 @@
 # Development Guides
 
-Internal guides covering the development infrastructure, UI patterns, and
-code style used across the Synaptipy codebase.
+Technical guides covering the development infrastructure, layer boundaries, UI
+theming patterns, and release procedures used across the Synaptipy codebase.
 
 ## Overview
 
-Synaptipy follows a strict three-layer architecture:
+Synaptipy follows a strict four-layer architecture:
 
-- **Core layer** (`src/synaptipy/core/`) - Pure Python analysis logic, fully
-  decoupled from the GUI and independently testable. All analysis functions
-  are registered via the `@AnalysisRegistry.register()` decorator.
+- **Core layer** (`src/synaptipy/core/`) - Pure Python analysis and signal-processing
+  logic, decoupled from the GUI and independently testable. Public analyses
+  register with `@AnalysisRegistry.register` and signal preprocessors register
+  with `@AnalysisRegistry.register_processor`.
 - **Application layer** (`src/synaptipy/application/`) - PySide6 (Qt6) user
-  interface, plugin manager, session state, and controllers.
+  interface, headless `synaptipy-batch` CLI, plugin manager, session state,
+  and controllers.
 - **Infrastructure layer** (`src/synaptipy/infrastructure/`) - File I/O via
-  Neo and PyNWB; NWB export.
+  Neo and PyNWB; tabular (`CSVExporter`) and archival (`NWBExporter`) exports.
+- **Shared layer** (`src/synaptipy/shared/`) - Cross-cutting constants, logging,
+  theme management, plot factory, caching, and dependency-free XLSX writing.
 
 ## Code Quality
 
-All code must pass the following checks before merging:
+All code must pass the local CI gate before merging:
 
 ```bash
 # Auto-format
-black src/ tests/
-isort src/ tests/
+conda run -n synaptipy black src/ tests/ scripts/
+conda run -n synaptipy isort src/ tests/ scripts/
 
 # Lint
-flake8 src/ tests/
+conda run -n synaptipy flake8 src/ tests/
 
-# Test
-conda run -n synaptipy python scripts/run_tests.py
+# Full CI gate (formatting, lint, >= 90% coverage pytest, zero-emoji check)
+conda run -n synaptipy python scripts/verify_ci.py
 ```
 
 - **black** - line-length 120, target Python 3.10
-- **isort** - profile `black`
+- **isort** - profile `black`, line-length 120
 - **flake8** - max-line-length 120, max-complexity 10
-- **pytest** - CI runs on Ubuntu/Windows/macOS across Python 3.10, 3.11, 3.12
+- **pytest** - CI runs on Ubuntu, Windows, and macOS across Python 3.10, 3.11, and 3.12
 
 ## Key Design Rules
 
 1. **Registry import rule** - Always `import synaptipy.core.analysis` (the
-   full package), never just `from synaptipy.core.analysis.registry import
-   AnalysisRegistry`. The full import triggers sub-module decorators.
+   full package), never only `from synaptipy.core.analysis.registry import
+   AnalysisRegistry`. Importing the package triggers all sub-module decorators.
 2. **PySide6 == 6.7.3** - Do not widen or loosen this pin.
-3. **GC disabled in offscreen mode** - `gc.disable()` in test conftest.
-4. **Plot teardown order** - unlink, close, cancel events, widget.clear(),
-   clear refs, flush registry. See the developer guide for details.
+3. **Headless Qt mode** - Automated scripts and tests set `QT_QPA_PLATFORM=offscreen`
+   before creating Qt objects, with `gc.disable()` managed in `tests/conftest.py`.
+4. **Plot factory and teardown order** - Instantiate plots exclusively through
+   `SynaptipyPlotFactory` and follow the teardown sequence documented in the
+   Developer Guide.
 
 ## Contributing
 
 See the [Developer Guide](../developer_guide.md) for environment setup,
 coding standards, testing, and the contribution workflow. The
-[Plugin Guide](../extending_synaptipy.md) covers adding analysis modules
-without modifying core code.
+[Plugin Guide](../extending_synaptipy.md) covers adding custom analysis
+routines without modifying core code.
 
 ```{toctree}
 :maxdepth: 2
@@ -60,6 +66,5 @@ without modifying core code.
 refactor_rules
 styling_guide
 release_process
-decisions/index
-manuals/index
+manuals/CROSS_PLATFORM_SETUP
 ```

@@ -153,7 +153,9 @@ exclude_patterns = [
     ".DS_Store",
     ".agent/*",
     ".github/*",
-    "development/decisions/_INTERNAL_*",
+    "development/decisions/**",
+    "development/manuals/MANUAL_TESTING_GUIDE.md",
+    "development/manuals/index.md",
     "development_logs/**",
 ]
 
@@ -224,23 +226,25 @@ todo_include_todos = True
 # Skip URLs that return 403 to automated bots (publisher paywalls / crawl
 # protection) but are genuinely valid links. Using regex patterns.
 linkcheck_ignore = [
-    r"https://pubs\.acs\.org/",  # ACS — blocks crawlers with 403
-    r"https://direct\.mit\.edu/",  # MIT Press — blocks crawlers with 403
-    r"https://journals\.physiology\.org/",  # APS — blocks crawlers with 403
-    r"https://elifesciences\.org/",  # eLife — blocks crawlers with 406
-    r"https://physoc\.onlinelibrary\.wiley\.com/",  # Wiley/J.Physiol — blocks crawlers with 403
-    r"https://www\.jneurosci\.org/",  # JNeurosci — blocks crawlers with 403
-    r"https://www\.tandfonline\.com/",  # Taylor & Francis — blocks crawler checks with 403
-    r"https://rupress\.org/",  # Rockefeller University Press — blocks crawler checks with 403
+    r"https://pubs\.acs\.org/",  # ACS - blocks crawlers with 403
+    r"https://direct\.mit\.edu/",  # MIT Press - blocks crawlers with 403
+    r"https://journals\.physiology\.org/",  # APS - blocks crawlers with 403
+    r"https://elifesciences\.org/",  # eLife - blocks crawlers with 406
+    r"https://physoc\.onlinelibrary\.wiley\.com/",  # Wiley/J.Physiol - blocks crawlers with 403
+    r"https://www\.jneurosci\.org/",  # JNeurosci - blocks crawlers with 403
+    r"https://www\.tandfonline\.com/",  # Taylor & Francis - blocks crawler checks with 403
+    r"https://rupress\.org/",  # Rockefeller University Press - blocks crawler checks with 403
+    r"https://www\.annualreviews\.org/",  # Annual Reviews - blocks crawler checks with 403
+    r"https://digital-library\.theiet\.org/",  # IET Digital Library - blocks crawler checks with 403
     r"https://github\.com/anzalks/synaptipy#dependencies-and-citations",  # anchor check can be flaky in CI
     r"https://codecov\.io/",  # badge endpoint returns 504 under CI load
-    # DOI links whose publisher blocks automated checks.  linkcheck matches these
-    # patterns against the URI written in the document, so the doi.org form has to
-    # be listed here: ignoring the publisher domain never matches, because the
-    # block only happens after doi.org redirects.  The DOIs themselves resolve
-    # correctly in a browser.
-    r"https://doi\.org/10\.1101/cshperspect\.a005702",  # CSH Perspectives — 403 to crawlers
-    r"https://doi\.org/10\.3389/fninf\.2014\.00010",  # Frontiers — read timeout to crawlers
+    # DOI links whose publisher blocks automated checks. Include both publisher
+    # domains above and doi.org prefixes here so Sphinx 7/8 and Sphinx 9 both
+    # ignore crawler-blocked publisher redirects cleanly.
+    r"https://doi\.org/10\.1101/cshperspect\.a005702",  # CSH Perspectives - 403 to crawlers
+    r"https://doi\.org/10\.3389/fninf\.2014\.00010",  # Frontiers - read timeout to crawlers
+    r"https://doi\.org/10\.1146/annurev\.",  # Annual Reviews - 403 to crawlers
+    r"https://doi\.org/10\.1049/pi-3\.1949\.0101",  # IET Digital Library - 403 to crawlers
 ]
 # Allow redirects without treating them as broken (DOI resolvers always redirect)
 linkcheck_allowed_redirects = {

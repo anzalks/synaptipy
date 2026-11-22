@@ -35,11 +35,12 @@ pip install synaptipy
 
 ### Standalone Application
 
-Pre-compiled binaries for Windows, macOS, and Linux are available on the [Releases page](https://github.com/anzalks/synaptipy/releases). Download the file matching your operating system from the latest release assets:
+Pre-compiled binaries for Windows, macOS, and Linux are available on the [Releases page](https://github.com/anzalks/synaptipy/releases). Download the asset matching your operating system and CPU architecture from the latest release:
 
-- **Windows:** `Synaptipy_Setup.exe` — run the installer
-- **macOS:** `synaptipy.dmg` — open the disk image and drag to Applications
-- **Linux:** `Synaptipy-Linux.AppImage` — mark as executable (`chmod +x`) and run
+- **Windows (x64):** `Synaptipy_Setup_<version>.exe` - run the setup wizard
+- **macOS (Apple Silicon `arm64`):** `Synaptipy_<version>_macOS_arm64.dmg` - open the disk image and drag `Synaptipy.app` to `Applications`
+- **macOS (Intel `x86_64`):** `Synaptipy_<version>_macOS_x86_64.dmg` - open the disk image and drag `Synaptipy.app` to `Applications`
+- **Linux (x86_64):** `Synaptipy-<version>-x86_64.AppImage` - mark as executable (`chmod +x`) and run
 
 ### Advanced: From Source
 
@@ -112,7 +113,7 @@ containing the software version, input files, and full pipeline configuration.
 
 ## Analysis Capabilities
 
-Synaptipy provides built-in analysis routines covering passive membrane properties, action potential characterisation, firing dynamics, synaptic event detection, and evoked responses — organised into five module tabs. Each routine is available interactively in the graphical interface and as a composable unit in the batch processing pipeline.
+Synaptipy provides 16 built-in analysis routines covering passive membrane properties, action potential characterisation, firing dynamics, synaptic event detection, and evoked responses - organised into five core module tabs alongside 7 registered signal-preprocessing stages for batch and CLI parity. Each routine is available interactively in the graphical interface and as a composable unit in the batch processing pipeline.
 
 ### Tab 1: Intrinsic Properties
 
@@ -143,13 +144,13 @@ Synaptipy provides built-in analysis routines covering passive membrane properti
 
 - **Evoked Sync** - extracts TTL or digital stimulus pulses from a secondary channel and correlates them with detected spikes or synaptic events; reports optical latency, response probability, and trial-to-trial jitter
 - **Paired-Pulse Ratio** - stimulus-evoked PPR with residual decay correction: measures R1 and R2 amplitudes, fits a mono- or bi-exponential decay to the R1 tail, and subtracts the residual at the time of the second stimulus before computing the ratio. This is the GUI-accessible PPR analysis (Tab 5); there is no standalone PPR in Tab 4 (Synaptic Events).
-- **Stimulus Train** - measures response amplitudes across a multi-pulse stimulus train and normalises each pulse to R1; classifies the result as facilitation or depression
+- **Stimulus Train** - measures response amplitudes across a multi-pulse stimulus train, normalises each pulse to R1, computes the steady-state ratio (`steady_state_ratio`), and classifies short-term plasticity as `facilitation`, `depression`, or `biphasic`
 
 ---
 
 ## Visualization
 
-Trace rendering is implemented via PyQtGraph. GPU-accelerated rendering via OpenGL is enabled automatically at startup when a hardware GPU is detected; the application falls back to software rendering on headless or CPU-only systems. The interface comprises a tree-based multi-file explorer with synchronized trial navigation and per-channel amplitude scaling. View-range management, zooming, and panning are performed explicitly via mouse interactions. Popup plots are generated for I-V curves, F-I curves, phase planes, and inter-spike interval distributions.
+Trace rendering is implemented via PyQtGraph's CPU-vectorized native raster engine by default for cross-platform stability; optional hardware-accelerated OpenGL rendering can be enabled under **Edit > Preferences > Performance**. The interface comprises a tree-based multi-file explorer with synchronized trial navigation and per-channel amplitude scaling. View-range management, zooming, and panning are performed explicitly via mouse interactions. Popup plots are generated for I-V curves, F-I curves, phase planes, and inter-spike interval distributions.
 
 ### Cross-file trial averaging
 
@@ -174,19 +175,16 @@ A documented template at `src/synaptipy/templates/analysis_template.py` defines 
     name="my_analysis",
     label="My Analysis",
     ui_params=[{"name": "threshold", "type": "float", "default": -20.0}],
-    plots=[{"name": "Trace", "type": "trace"}],
+    plots=[{"type": "hlines", "data": ["threshold_mv"], "color": "b", "styles": ["dash"]}],
 )
 def my_analysis_wrapper(data, time, sampling_rate, **kwargs):
     ...
-    return {
-        "module_used": "my_analysis",
-        "metrics": {"threshold_mv": kwargs["threshold"]},
-    }
+    return {"threshold_mv": float(kwargs.get("threshold", -20.0))}
 ```
 
-Every wrapper must return a nested dictionary with a `module_used` key and a `metrics` sub-dictionary. Keys prefixed with `_` pass arrays to plot overlays without appearing in the results table. The full specification is in `docs/extending_synaptipy.md`.
+Wrappers return a flat dictionary of scalar metrics (automatically normalised into the versioned `AnalysisResult` schema by `AnalysisRegistry.execute`). Keys prefixed with `_` pass arrays to plot overlays without appearing in the results table. The full specification is in `docs/extending_synaptipy.md`.
 
-Plugin discovery always includes `~/.synaptipy/plugins/` (user additions). Example plugins can be downloaded on demand from **Help > Download Example Plugins…**; source checkouts and desktop bundles may also include them for development/demo use. A user copy with an identical filename takes precedence. Toggling **Enable Custom Plugins** in **Edit > Preferences** reloads all plugins and regenerates the Analyser tab UI within the running process. If one or more optional plugins cannot load, Synaptipy continues normally and shows one concise report after startup.
+Plugin discovery always includes `~/.synaptipy/plugins/` (user additions). Example plugins can be downloaded on demand from **Help > Download Example Plugins...**; source checkouts and desktop bundles also include them for development and demonstration use. A user copy with an identical filename takes precedence. Toggling **Enable Custom Plugins** in **Edit > Preferences** reloads all plugins and regenerates the Analyser tab UI within the running process. If one or more optional plugins cannot load, Synaptipy continues normally and shows one concise report after startup.
 
 ---
 
@@ -194,11 +192,11 @@ Plugin discovery always includes `~/.synaptipy/plugins/` (user additions). Examp
 
 Synaptipy exports raw traces and analysis results to [Neurodata Without Borders (NWB) 2.x](https://www.nwb.org):
 
-- Raw electrophysiology traces stored as `CurrentClampSeries` / `VoltageClampSeries`
-- Sweep-level organisation via `IntracellularRecordingsTable`, `SimultaneousRecordingsTable`, and `SequentialRecordingsTable` (NWB 2.x icephys best-practice hierarchy)
-- Stimulus waveform reconstruction from ABF epoch metadata when the command channel is absent; a three-step fallback (raw channel -> synthetic reconstruction -> `stimulus=None` with a warning) ensures NWB conformance for recordings with incomplete stimulus records
-- Discrete event data (spike times, synaptic event times, amplitudes) written as `DynamicTable` objects inside a `ProcessingModule` when the batch engine produces `_raw_arrays` output
-- Electrode metadata and session provenance fields
+- Raw electrophysiology traces pre-scaled to SI base units (`volts` / `amperes`, `conversion=1.0`) and stored as `CurrentClampSeries` / `VoltageClampSeries`
+- Sweep-level organisation via `IntracellularRecordingsTable`, `SimultaneousRecordingsTable`, and `SequentialRecordingsTable` (NWB 2.x icephys hierarchy)
+- Stimulus waveform reconstruction from ABF step and linear ramp (`nEpochType == 2`) epoch metadata when the command channel is absent; a three-step fallback (raw channel -> synthetic reconstruction -> `stimulus=None` with a warning) preserves NWB conformance
+- Scalar analysis metrics written as a `scalar_metrics` `DynamicTable` alongside discrete event `DynamicTable` objects inside `/processing/analysis`, plus preprocessing provenance in `/processing/preprocessing`
+- Electrode metadata and session provenance fields (including temperature, liquid junction potential offset, and digital filter provenance in session `notes`)
 
 ---
 
@@ -295,14 +293,14 @@ in the documentation for a complete annotated bibliography.
 
 **Passive membrane properties:**
 - Hamill OP et al. (1981). *Pflugers Arch* 391:85-100. [doi:10.1007/BF00656997](https://doi.org/10.1007/BF00656997) - patch-clamp; series resistance and capacitance
-- Robinson RB & Siegelbaum SA (2003). *Annu Rev Physiol* 65:453-480. [doi:10.1146/annurev.physiol.65.092101.142734](https://doi.org/10.1146/annurev.physiol.65.092101.142734) - HCN / Ih current; peak vs. steady-state Rᵢₙ
+- Robinson RB & Siegelbaum SA (2003). *Annu Rev Physiol* 65:453-480. [doi:10.1146/annurev.physiol.65.092101.142734](https://doi.org/10.1146/annurev.physiol.65.092101.142734) - HCN / Ih current; peak vs. steady-state Rin
 
 **After-hyperpolarisation:**
 - Storm JF (1987). *J Physiol* 385:733-759. [doi:10.1113/jphysiol.1987.sp016517](https://doi.org/10.1113/jphysiol.1987.sp016517) - fast AHP (BK, 1-5 ms)
 - Sah P & Faber ESL (2002). *Prog Neurobiol* 66:345-353. [doi:10.1016/S0301-0082(02)00004-7](https://doi.org/10.1016/S0301-0082(02)00004-7) - medium AHP (SK, 10-50 ms)
 
 **Spike-train statistics:**
-- Holt GR et al. (1996). *J Neurophysiol* 75:1806-1814. [doi:10.1152/jn.1996.75.5.1806](https://doi.org/10.1152/jn.1996.75.5.1806) - CV and CV₂
+- Holt GR et al. (1996). *J Neurophysiol* 75:1806-1814. [doi:10.1152/jn.1996.75.5.1806](https://doi.org/10.1152/jn.1996.75.5.1806) - CV and CV2
 - Shinomoto S et al. (2003). *Neural Comput* 15:2823-2842. [doi:10.1162/089976603322518759](https://doi.org/10.1162/089976603322518759) - Local Variation (LV)
 
 **Burst detection:**

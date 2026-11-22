@@ -11,10 +11,12 @@ what behavior must remain stable, and what evidence is required before merging.
 
 Core contains the scientific model and numerical behavior.
 
-- Keep it GUI-free: no `PySide6`, `pyqtgraph`, widgets, dialogs, clipboard, or
-  application window imports.
-- Put analysis algorithms in `core/analysis/` and register public analyses with
-  `@AnalysisRegistry.register`.
+- Keep it GUI-free: no `PySide6`, `pyqtgraph`, `matplotlib.pyplot`, widgets,
+  dialogs, clipboard, or application window imports.
+- Put analysis algorithms in `core/analysis/`, register public analyses with
+  `@AnalysisRegistry.register`, and register batch/CLI signal preprocessors
+  with `@AnalysisRegistry.register_processor`. Public executions normalize
+  outputs through `AnalysisResult` (`core/analysis/contracts.py`).
 - Put reusable signal operations in `signal_processor.py` or
   `processing_pipeline.py` when they are not tied to a single analysis module.
 - Return explicit metrics and flags rather than raising for biologically invalid
@@ -102,6 +104,8 @@ Shared is for cross-cutting helpers.
 
 ## Merge Checklist
 
+- Full local CI gate: `conda run -n synaptipy python scripts/verify_ci.py`
+  (runs `black`, `isort`, `flake8`, headless `pytest` with `--cov=src/synaptipy --cov-fail-under=90`, and the source-hygiene scanner)
 - Formatting: `black src/ tests/` and `isort src/ tests/`
 - Static checks: `flake8 src/ tests/`
 - Core tests: `python -m pytest tests/core tests/infrastructure`

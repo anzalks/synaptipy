@@ -153,34 +153,45 @@ def _generate_synaptic_event_trace(n_events: int = 20, sampling_rate: float = 20
 def sweep_dvdt_threshold(
     values: Optional[List[float]] = None,
 ) -> SensitivityResult:
-    """Sweep dV/dt threshold and measure spike count."""
+    """Sweep dV/dt threshold and measure mean AP onset threshold voltage (mV)."""
+    from synaptipy.core.analysis.single_spike import calculate_spike_features
+
     if values is None:
         values = [5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 40.0, 50.0]
 
     voltage, time = _generate_standard_spike_trace()
     sampling_rate = 1.0 / (time[1] - time[0])
     refractory_samples = int(0.002 * sampling_rate)
+    base_detection = detect_spikes_threshold(
+        voltage,
+        time,
+        threshold=-20.0,
+        refractory_samples=refractory_samples,
+        dvdt_threshold=5.0,
+    )
+    spike_indices = (
+        base_detection.spike_indices if base_detection.spike_indices is not None else np.array([], dtype=int)
+    )
 
     metric_values = []
     for dvdt_thresh in values:
-        result = detect_spikes_threshold(
+        features = calculate_spike_features(
             voltage,
             time,
-            threshold=-20.0,
-            refractory_samples=refractory_samples,
+            spike_indices,
             dvdt_threshold=dvdt_thresh,
         )
-        count = len(result.spike_indices) if result.spike_indices is not None else 0
-        metric_values.append(float(count))
+        thresholds = [f.ap_threshold for f in features if f.ap_threshold is not None and np.isfinite(f.ap_threshold)]
+        mean_thresh = float(np.mean(thresholds)) if thresholds else float("nan")
+        metric_values.append(mean_thresh)
 
-    # Default metric
     default_idx = values.index(DVDT_THRESHOLD_VS) if DVDT_THRESHOLD_VS in values else 3
     default_metric = metric_values[default_idx]
 
     return SensitivityResult(
         param_name="dvdt_threshold_vs",
         param_values=values,
-        metric_name="spike_count",
+        metric_name="mean_threshold_mv",
         metric_values=metric_values,
         default_value=DVDT_THRESHOLD_VS,
         default_metric=default_metric,
@@ -364,7 +375,7 @@ def generate_sensitivity_report(output_dir: Optional[Path] = None) -> str:
                 change = (mval - r.default_metric) / abs(r.default_metric) * 100
             else:
                 change = 0.0
-            marker = " **←default**" if abs(pval - r.default_value) < 1e-9 else ""
+            marker = " **<-default**" if abs(pval - r.default_value) < 1e-9 else ""
             lines.append(f"| {pval:.3f}{marker} | {mval:.2f} | {change:+.1f}% |")
 
     report_text = "\n".join(lines)

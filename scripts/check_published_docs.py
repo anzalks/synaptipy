@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
 OFFLINE_HTML = ROOT / "src" / "synaptipy" / "resources" / "docs" / "html"
-FORBIDDEN_PATH_PARTS = ("development_logs", "_INTERNAL_")
+FORBIDDEN_PATH_PARTS = ("development_logs", "_INTERNAL_", "development/decisions", "MANUAL_TESTING_GUIDE")
 FORBIDDEN_TEXT = ("AI Model Refactoring Guide", "step-by-step guide for an AI model")
 
 
