@@ -316,7 +316,7 @@ jobs:
 
           # 5. Download the AppImage runtime
           echo "Downloading AppImage runtime..."
-          if ! wget -O runtime https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64; then
+          if ! wget --tries=5 --waitretry=5 --retry-connrefused -O runtime https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64; then
             echo "ERROR: Failed to download AppImage runtime"
             exit 1
           fi

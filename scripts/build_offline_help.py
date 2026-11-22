@@ -39,6 +39,8 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
 # ---------------------------------------------------------------------------
 # Paths - all relative to the repository root
 # ---------------------------------------------------------------------------
@@ -74,60 +76,79 @@ def _run(cmd: list, description: str) -> None:
         sys.exit(result.returncode)
 
 
-def _find_qhelpgenerator() -> Optional[Path]:  # noqa: C901
-    """Locate the ``qhelpgenerator`` binary, returning *None* if not found.
+def _is_runnable_qhelpgenerator(candidate: Path) -> bool:
+    """Return True if *candidate* exists and executes cleanly without missing shared libs."""
+    if not candidate.is_file():
+        return False
+    try:
+        probe = subprocess.run(
+            [str(candidate), "--version"],
+            capture_output=True,
+            timeout=10,
+            check=False,
+        )
+        return probe.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
 
-    Search order:
-    1. ``qhelpgenerator`` on PATH (system Qt6 install).
-    2. Active Python environment's ``bin`` / ``Scripts`` directory — covers
-       ``pyside6-tools`` and similar pip-installed Qt helper packages that
-       drop the binary alongside the Python interpreter.
-    3. Qt tools bundled by the ``pyside6`` pip package (wheel-internal layout).
-    4. Fuzzy PATH scan for versioned names like ``qhelpgenerator6``.
-    """
-    # 1. Standard PATH lookup
-    found = shutil.which("qhelpgenerator")
-    if found:
-        return Path(found)
 
-    # 2. Same bin/Scripts directory as the running Python interpreter.
-    #    On Unix this is  $(dirname sys.executable)  (e.g. .venv/bin/).
-    #    On Windows both the interpreter and console-scripts land in the same
-    #    Scripts\ folder, so the same logic applies.
-    py_bin = Path(sys.executable).resolve().parent
-    for name in ("qhelpgenerator", "qhelpgenerator.exe"):
-        candidate = py_bin / name
-        if candidate.exists():
-            return candidate
-
-    # 3. Bundled with the pyside6 pip wheel
+def _pyside6_qhelpgenerator_candidates() -> list[Path]:
+    """Return wheel-internal ``qhelpgenerator`` paths shipped with PySide6."""
     try:
         import PySide6
 
         pyside6_dir = Path(PySide6.__file__).parent
-        candidates = [
-            pyside6_dir / "Qt" / "libexec" / "qhelpgenerator",  # macOS/Linux wheel layout
-            pyside6_dir / "qhelpgenerator",  # older wheel layout
-            pyside6_dir / "qhelpgenerator.exe",  # Windows wheel layout
-            pyside6_dir / "Qt" / "bin" / "qhelpgenerator.exe",  # Windows Qt subdir
+        return [
+            pyside6_dir / "Qt" / "libexec" / "qhelpgenerator",
+            pyside6_dir / "qhelpgenerator",
+            pyside6_dir / "qhelpgenerator.exe",
+            pyside6_dir / "Qt" / "bin" / "qhelpgenerator.exe",
         ]
-        for candidate in candidates:
-            if candidate.exists():
-                return candidate
     except ImportError:
-        pass
+        return []
 
-    # 4. Fuzzy PATH scan for versioned names like qhelpgenerator6
-    path_dirs = (Path(p) for p in (os.environ.get("PATH") or "").split(os.pathsep) if p)
-    for directory in path_dirs:
+
+def _fuzzy_path_qhelpgenerator_candidates() -> list[Path]:
+    """Scan PATH directories for versioned binaries such as ``qhelpgenerator6``."""
+    matches: list[Path] = []
+    for directory_str in (os.environ.get("PATH") or "").split(os.pathsep):
+        if not directory_str:
+            continue
+        directory = Path(directory_str)
         if not directory.is_dir():
             continue
         for entry in directory.iterdir():
             if "qhelpgenerator" in entry.name.lower() and entry.is_file():
-                return entry
+                matches.append(entry)
+    return matches
+
+
+def _find_qhelpgenerator() -> Optional[Path]:
+    """Locate a runnable ``qhelpgenerator`` binary, returning *None* if unavailable.
+
+    Search order:
+    1. ``qhelpgenerator`` on PATH (system Qt6 install).
+    2. Active Python environment's ``bin`` / ``Scripts`` directory - covers
+       ``pyside6-tools`` and similar pip-installed Qt helper packages.
+    3. Qt tools bundled by the ``pyside6`` pip package (wheel-internal layout).
+    4. Fuzzy PATH scan for versioned names like ``qhelpgenerator6``.
+    """
+    candidates: list[Path] = []
+    found = shutil.which("qhelpgenerator")
+    if found:
+        candidates.append(Path(found))
+
+    py_bin = Path(sys.executable).resolve().parent
+    candidates.extend([py_bin / "qhelpgenerator", py_bin / "qhelpgenerator.exe"])
+    candidates.extend(_pyside6_qhelpgenerator_candidates())
+    candidates.extend(_fuzzy_path_qhelpgenerator_candidates())
+
+    for candidate in candidates:
+        if _is_runnable_qhelpgenerator(candidate):
+            return candidate
 
     print(
-        "[build_offline_help] qhelpgenerator not found on PATH or in the pyside6 wheel.",
+        "[build_offline_help] Runnable qhelpgenerator not found on PATH or in the pyside6 wheel.",
     )
     return None
 

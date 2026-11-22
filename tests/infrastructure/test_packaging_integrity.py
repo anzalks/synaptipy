@@ -194,6 +194,7 @@ class TestPackagingConfigurations:
     def test_installer_and_release_workflows_verify_packaged_artifacts_across_all_oses(self):
         installer_yml = _read(".github/workflows/installer.yml")
         release_yml = _read(".github/workflows/release.yml")
+        test_yml = _read(".github/workflows/test.yml")
 
         # Dual-arch macOS + post-DMG mount + lipo slice verification
         assert "os: macos-latest" in installer_yml
@@ -211,16 +212,44 @@ class TestPackagingConfigurations:
         assert "maxRelLen -ge 160" in installer_yml
         assert '"/VERYSILENT"' in installer_yml
 
-        # Linux Wayland-safe AppRun + post-AppImage smoke verification
+        # Linux Wayland-safe AppRun + wget retries + post-AppImage smoke verification
         assert 'export QT_QPA_PLATFORM="xcb"' in installer_yml
+        assert "--tries=5" in installer_yml
         assert "--appimage-extract-and-run --smoke-test" in installer_yml
         assert ".[dev,docs,formats]" in installer_yml
 
-        # Release workflow timeout + fast-fail installer conclusion check + dual DMG download
+        # Release workflow libegl1 + boolean dry_run safety + timeout + fast-fail + dual DMG download
+        assert "libegl1" in release_yml
+        assert "(inputs.dry_run == false || github.event.inputs.dry_run == 'false')" in release_yml
+        assert "github.event.inputs.dry_run != 'false'" not in release_yml
         assert "timeout-minutes: 75" in release_yml
         assert "finished with non-success conclusion" in release_yml
         assert "Synaptipy-macOS-arm64.dmg" in release_yml
         assert "Synaptipy-macOS-x86_64.dmg" in release_yml
+
+        # Auto-tag creates annotated tags matching scripts/bump_version.py
+        assert 'git tag -a "${TAG}"' in test_yml
+
+    def test_qhelpgenerator_probe_rejects_broken_binary_and_accepts_working_binary(self, tmp_path):
+        from importlib.util import module_from_spec, spec_from_file_location
+
+        spec = spec_from_file_location("build_offline_help", PROJECT_ROOT / "scripts" / "build_offline_help.py")
+        assert spec is not None and spec.loader is not None
+        mod = module_from_spec(spec)
+        spec.loader.exec_module(mod)
+
+        broken = tmp_path / "qhelpgenerator_broken"
+        broken.write_text("#!/bin/sh\nexit 127\n", encoding="utf-8")
+        broken.chmod(0o755)
+
+        working = tmp_path / "qhelpgenerator_ok"
+        working.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        working.chmod(0o755)
+
+        if sys.platform != "win32":
+            assert mod._is_runnable_qhelpgenerator(broken) is False
+            assert mod._is_runnable_qhelpgenerator(working) is True
+        assert mod._is_runnable_qhelpgenerator(tmp_path / "missing_bin") is False
 
     def test_entrypoints_call_multiprocessing_freeze_support(self):
         pkg_main = _read("src/synaptipy/__main__.py")
@@ -235,9 +264,13 @@ class TestPackagingConfigurations:
         yaml = YAML(typ="safe")
         installer_data = yaml.load(PROJECT_ROOT / ".github" / "workflows" / "installer.yml")
         release_data = yaml.load(PROJECT_ROOT / ".github" / "workflows" / "release.yml")
+        test_data = yaml.load(PROJECT_ROOT / ".github" / "workflows" / "test.yml")
+        docs_data = yaml.load(PROJECT_ROOT / ".github" / "workflows" / "docs.yml")
 
         assert "jobs" in installer_data and "build" in installer_data["jobs"]
         assert "jobs" in release_data and "release" in release_data["jobs"]
+        assert "jobs" in test_data and "auto-tag" in test_data["jobs"]
+        assert "jobs" in docs_data and "docs" in docs_data["jobs"]
 
         linux_steps = [s for s in installer_data["jobs"]["build"]["steps"] if "AppImage" in s.get("name", "")]
         assert len(linux_steps) == 1

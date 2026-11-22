@@ -127,10 +127,17 @@ jobs:
             requirements.txt
             pyproject.toml
 
+      - name: Install Linux Qt runtime libraries for qhelpgenerator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libxkbcommon-x11-0 libxcb-cursor0 qt6-tools-dev-tools
+
       - name: Install build tools and docs dependencies
         run: python -m pip install --upgrade pip build twine -e ".[docs]"
 
-      - name: Build offline Help artefacts (HTML fallback for pip-wheel users)
+      - name: Build offline Help artefacts (QtHelp + HTML fallback for pip-wheel users)
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: python scripts/build_offline_help.py
 
       - name: Build wheel and sdist
@@ -159,7 +166,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.dry_run == false || github.event.inputs.dry_run == 'false'))
     continue-on-error: true
     environment:
       name: testpypi
@@ -192,7 +199,7 @@ jobs:
     # If testpypi-publish was skipped or failed, skip the smoke test too so
     # the pypi-publish job falls through to its own if-guard correctly.
     if: >
-      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')) &&
+      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.dry_run == false || github.event.inputs.dry_run == 'false'))) &&
       needs.testpypi-publish.result == 'success'
 
     steps:
@@ -241,7 +248,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: >
-      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')) &&
+      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.dry_run == false || github.event.inputs.dry_run == 'false'))) &&
       needs.smoke_test_testpypi.result == 'success'
     environment:
       name: pypi
@@ -292,7 +299,7 @@ jobs:
 
       - name: Find installer workflow run for this commit
         id: installer_run
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.dry_run == false || github.event.inputs.dry_run == 'false'))
         uses: actions/github-script@v9
         with:
           script: |
@@ -337,7 +344,7 @@ jobs:
             core.setOutput('run_id', String(run.id));
 
       - name: Download Synaptipy-Linux.AppImage artifact
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.dry_run == false || github.event.inputs.dry_run == 'false'))
         uses: actions/download-artifact@v4
         with:
           repository: ${{ github.repository }}
@@ -347,7 +354,7 @@ jobs:
           path: installer-artifacts/
 
       - name: Download Synaptipy_Setup.exe artifact
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.dry_run == false || github.event.inputs.dry_run == 'false'))
         uses: actions/download-artifact@v4
         with:
           repository: ${{ github.repository }}
@@ -357,7 +364,7 @@ jobs:
           path: installer-artifacts/
 
       - name: Download Synaptipy-macOS-arm64.dmg artifact
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.dry_run == false || github.event.inputs.dry_run == 'false'))
         uses: actions/download-artifact@v4
         with:
           repository: ${{ github.repository }}
@@ -367,7 +374,7 @@ jobs:
           path: installer-artifacts/
 
       - name: Download Synaptipy-macOS-x86_64.dmg artifact
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.dry_run == false || github.event.inputs.dry_run == 'false'))
         uses: actions/download-artifact@v4
         with:
           repository: ${{ github.repository }}
@@ -419,7 +426,7 @@ jobs:
         # "gh release delete + recreate" pattern was destructive: it wiped any
         # .exe / .dmg binaries that installer.yml had already attached, because
         # both workflows fire in parallel on the same tag push.
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'false')
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.dry_run == false || github.event.inputs.dry_run == 'false'))
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
@@ -441,7 +448,7 @@ jobs:
         # artifacts (the 'dist' artifact from the build job is also available).
         # This step provides a second copy with a distinct name so it is easy
         # to find in the Actions run summary.
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run != 'false'
+        if: github.event_name == 'workflow_dispatch' && !(inputs.dry_run == false || github.event.inputs.dry_run == 'false')
         uses: actions/upload-artifact@v4
         with:
           name: dry-run-dist-${{ github.run_id }}

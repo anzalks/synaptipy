@@ -397,7 +397,7 @@ jobs:
             echo "Creating tag ${TAG} at $(git rev-parse HEAD)"
             git config user.email "github-actions[bot]@users.noreply.github.com"
             git config user.name  "github-actions[bot]"
-            git tag "${TAG}"
+            git tag -a "${TAG}" -m "Synaptipy ${TAG}"
             git push origin "${TAG}"
             echo "Tag ${TAG} pushed."
             CREATED=true
