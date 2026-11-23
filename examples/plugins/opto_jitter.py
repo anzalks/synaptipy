@@ -3,8 +3,11 @@
 """
 Example Synaptipy Plugin: Optogenetic Latency Jitter.
 
-Measures the trial-to-trial variability (jitter) in the latency from a TTL
-stimulus pulse to the first evoked spike across sweeps.
+Measures the trial-to-trial variability (sample standard deviation, jitter) in
+the latency from a TTL stimulus pulse to the first evoked spike across sweeps
+(Sabatini & Regehr, 1999, Annu. Rev. Physiol. 61:521-542,
+doi:10.1146/annurev.physiol.61.1.521; Boyden et al., 2005, Nat. Neurosci.
+8:1263-1268, doi:10.1038/nn1525).
 
 Usage
 -----
@@ -34,6 +37,66 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
+def _first_spike_crossing_offset(
+    v_trace: np.ndarray,
+    win_start: int,
+    win_end: int,
+    spike_threshold: float,
+) -> float:
+    """Return sub-sample offset from ``win_start`` of first upward threshold crossing, or NaN."""
+    window = v_trace[win_start:win_end]
+    if window.size == 0:
+        return float("nan")
+    prev_val = float(v_trace[win_start - 1]) if win_start > 0 else float("-inf")
+    padded = np.concatenate(([prev_val], window))
+    upward = np.where((padded[:-1] <= spike_threshold) & (padded[1:] > spike_threshold))[0]
+    if upward.size == 0:
+        return float("nan")
+    idx = int(upward[0])
+    v0 = float(padded[idx])
+    v1 = float(padded[idx + 1])
+    if np.isfinite(v0) and v1 > v0:
+        frac = (spike_threshold - v0) / (v1 - v0)
+        return float(max(0.0, idx - 1.0 + frac))
+    return float(idx)
+
+
+def _collect_sweep_latencies(
+    data: np.ndarray,
+    secondary_data: np.ndarray,
+    ttl_threshold: float,
+    search_start_samples: int,
+    search_end_samples: int,
+    spike_threshold: float,
+    dt: float,
+) -> tuple:
+    """Scan 2-D ``(n_sweeps, n_samples)`` arrays and return ``(latencies_ms, sweep_numbers, n_ttl_sweeps)``."""
+    n_sweeps, n_samples = data.shape
+    latencies_ms = []
+    sweep_numbers = []
+    n_ttl_sweeps = 0
+
+    for sweep_idx in range(n_sweeps):
+        above = secondary_data[sweep_idx] > ttl_threshold
+        crossings = np.where(np.diff(above.astype(int)) == 1)[0]
+        if crossings.size == 0:
+            continue
+        n_ttl_sweeps += 1
+        ttl_onset_idx = int(crossings[0]) + 1
+        win_start = max(0, ttl_onset_idx + search_start_samples)
+        win_end = min(n_samples, ttl_onset_idx + search_end_samples)
+        if win_end <= win_start:
+            continue
+        spike_offset = _first_spike_crossing_offset(data[sweep_idx], win_start, win_end, spike_threshold)
+        if np.isnan(spike_offset):
+            continue
+        latency_s = ((win_start - ttl_onset_idx) + spike_offset) * dt
+        latencies_ms.append(latency_s * 1000.0)
+        sweep_numbers.append(sweep_idx + 1)
+
+    return latencies_ms, sweep_numbers, n_ttl_sweeps
+
+
 def calculate_opto_jitter(
     data: np.ndarray,
     time: np.ndarray,
@@ -48,121 +111,58 @@ def calculate_opto_jitter(
     """
     Compute per-sweep spike latencies from TTL onset and return jitter.
 
-    The function expects ``data`` to be a 2-D array of shape
-    ``(n_sweeps, n_samples)`` or a 1-D array for a single sweep.
-    ``secondary_data`` carries the TTL signal with the same shape.
-
-    The algorithm:
-    1. Detect TTL onset (first crossing of ``ttl_threshold`` from below).
-    2. Apply ``blanking_window`` to skip the first ``blanking_window`` ms
-       after each TTL onset.  This prevents the microsecond photo-electric
-       artifact from being misclassified as a spike.
-    3. Within ``[ttl_onset + max(search_start, blanking_window/1000), ttl_onset + search_end]``
-       find the first sample where ``data`` exceeds ``spike_threshold``.
-    4. Convert the sample offset to milliseconds.
-    5. Report the mean latency, standard deviation (jitter), and the
-       per-sweep latency array.
-
-    Args:
-        data: Voltage trace(s).  Shape ``(n_samples,)`` or
-            ``(n_sweeps, n_samples)``.
-        time: Time vector in seconds, length ``n_samples``.
-        sampling_rate: Sampling rate in Hz.
-        secondary_data: TTL/digital channel with the same shape as ``data``.
-        ttl_threshold: Voltage threshold that defines the TTL rising edge.
-        search_start: Start of the spike-search window relative to TTL onset
-            (seconds).
-        search_end: End of the spike-search window relative to TTL onset
-            (seconds).
-        spike_threshold: Voltage threshold (mV) for spike detection.
-        blanking_window: Duration (ms) immediately following the TTL onset
-            during which any signal change is ignored (photo-electric artifact
-            blanking).  Default 1.0 ms.  The effective search window start
-            is ``max(search_start, blanking_window / 1000)``.
-
-    Returns:
-        Dict with result keys or ``{"error": ...}`` on failure.
+    The function accepts ``data`` as a 2-D array ``(n_sweeps, n_samples)``,
+    a ``List[np.ndarray]`` of sweeps (from ``BatchAnalysisEngine`` when
+    ``expects_list=True``), or a 1-D array for a single sweep.
     """
-    if data.size == 0:
+    if isinstance(data, list):
+        data = np.asarray(data, dtype=float)
+    if isinstance(secondary_data, list):
+        secondary_data = np.asarray(secondary_data, dtype=float)
+
+    if data is None or data.size == 0:
         return {"error": "Empty data array"}
-    if secondary_data.size == 0:
+    if secondary_data is None or secondary_data.size == 0:
         return {"error": "Empty secondary (TTL) channel"}
 
-    # Normalise to 2-D
     if data.ndim == 1:
         data = data[np.newaxis, :]
+    if secondary_data.ndim == 1:
         secondary_data = secondary_data[np.newaxis, :]
 
-    n_sweeps, n_samples = data.shape
+    n_sweeps, _ = data.shape
     if secondary_data.shape != data.shape:
         return {"error": f"Shape mismatch: data {data.shape} vs TTL {secondary_data.shape}"}
 
-    log.info("Opto jitter: processing %d sweeps", n_sweeps)
-
     dt = 1.0 / sampling_rate
-    # Blanking window: enforce that the effective search start is at least
-    # blanking_window ms after the TTL to skip the photo-electric artifact.
-    blanking_s = max(0.0, blanking_window / 1000.0)
-    effective_search_start_s = max(search_start, blanking_s)
+    effective_search_start_s = max(search_start, max(0.0, blanking_window / 1000.0))
     search_start_samples = int(round(effective_search_start_s * sampling_rate))
     search_end_samples = int(round(search_end * sampling_rate))
 
-    latencies_ms = []
-    sweep_numbers = []
+    latencies_ms, sweep_numbers, n_ttl_sweeps = _collect_sweep_latencies(
+        data,
+        secondary_data,
+        ttl_threshold,
+        search_start_samples,
+        search_end_samples,
+        spike_threshold,
+        dt,
+    )
 
-    for sweep_idx in range(n_sweeps):
-        ttl_trace = secondary_data[sweep_idx]
-        v_trace = data[sweep_idx]
-
-        # Detect first TTL rising-edge crossing
-        above = ttl_trace > ttl_threshold
-        crossings = np.where(np.diff(above.astype(int)) == 1)[0]
-        if crossings.size == 0:
-            log.debug("Sweep %d: no TTL crossing found", sweep_idx)
-            continue
-        ttl_onset_idx = int(crossings[0]) + 1  # first sample above threshold
-
-        # Define search window in samples
-        win_start = ttl_onset_idx + search_start_samples
-        win_end = ttl_onset_idx + search_end_samples
-        win_start = max(0, win_start)
-        win_end = min(n_samples, win_end)
-
-        if win_end <= win_start:
-            log.debug("Sweep %d: search window empty after clipping", sweep_idx)
-            continue
-
-        window = v_trace[win_start:win_end]
-        spike_candidates = np.where(window > spike_threshold)[0]
-
-        if spike_candidates.size == 0:
-            log.debug("Sweep %d: no spike above threshold in search window", sweep_idx)
-            continue
-
-        first_spike_offset = int(spike_candidates[0])
-        latency_s = (search_start_samples + first_spike_offset) * dt
-        latency_ms = latency_s * 1000.0
-        latencies_ms.append(latency_ms)
-        sweep_numbers.append(sweep_idx + 1)
-
+    denom_sweeps = n_ttl_sweeps if n_ttl_sweeps > 0 else n_sweeps
     if len(latencies_ms) < 2:
-        # Report counts so callers can distinguish 0% from low-N cases.
         n_detected = len(latencies_ms)
-        n_failures = n_sweeps - n_detected
-        log.info(
-            "Opto jitter: TTL pulses found in %d/%d sweeps",
-            n_detected,
-            n_sweeps,
-        )
+        n_failures = max(0, denom_sweeps - n_detected)
+        log.info("Opto jitter: evoked spikes found in %d/%d TTL sweeps", n_detected, denom_sweeps)
         return {
             "error": (
-                f"Too few sweeps with detected spikes ({n_detected}/{n_sweeps}) " "to compute jitter - need at least 2."
+                f"Too few sweeps with detected spikes ({n_detected}/{denom_sweeps}) "
+                "to compute jitter - need at least 2."
             ),
-            # Include partial counts even on failure so batch engines can aggregate.
             "metrics": {
                 "Success Count": n_detected,
                 "Failure Count": n_failures,
-                "Response Probability (%)": round(n_detected / max(n_sweeps, 1) * 100.0, 2),
+                "Response Probability (%)": (round(n_detected / denom_sweeps * 100.0, 2) if n_ttl_sweeps > 0 else 0.0),
             },
         }
 
@@ -170,8 +170,8 @@ def calculate_opto_jitter(
     jitter_val = float(np.std(lat_arr, ddof=1))
     mean_latency = float(np.mean(lat_arr))
 
-    n_failures = n_sweeps - len(latencies_ms)
-    resp_prob_pct = round(len(latencies_ms) / max(n_sweeps, 1) * 100.0, 2)
+    n_failures = max(0, denom_sweeps - len(latencies_ms))
+    resp_prob_pct = round(len(latencies_ms) / max(denom_sweeps, 1) * 100.0, 2)
 
     log.info(
         "Opto jitter: valid responses in %d sweeps",
@@ -301,6 +301,8 @@ def run_opto_jitter_wrapper(
     ``kwargs["secondary_data"]`` when provided by the batch engine or the
     metadata-driven tab.
     """
+    if isinstance(data, list):
+        data = np.asarray(data, dtype=float)
     secondary_data = kwargs.get("secondary_data", np.array([]))
     if isinstance(secondary_data, list):
         secondary_data = np.asarray(secondary_data, dtype=float)

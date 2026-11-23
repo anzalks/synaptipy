@@ -3,7 +3,10 @@
 """
 Advanced Synaptipy Plugin: Synaptic Charge Transfer (AUC) with Baseline Correction.
 
-Measures the total charge delivered by a postsynaptic current by:
+Measures the total charge delivered by a postsynaptic current (Jonas, Major, &
+Sakmann, 1993, J. Physiol. 472:615-663, doi:10.1113/jphysiol.1993.sp019965;
+Clements & Bekkers, 1997, Biophys. J. 73:220-229,
+doi:10.1016/S0006-3495(97)78062-7) by:
 1. Slicing the trace to a user-defined search window.
 2. Computing the baseline using a pre-window average or global mean.
 3. Subtracting the baseline and locating the peak (largest or most-negative).
@@ -126,7 +129,7 @@ def calculate_synaptic_charge(
         window_end: End of the search window in seconds.
         baseline_method: "Pre-Window" or "Global".
         detection_method: "Absolute Peak" or "Negative Peak".
-        pre_window_duration: Legacy parameter — duration of the full pre-window
+        pre_window_duration: Legacy parameter - duration of the full pre-window
             baseline period (s).  Superseded by ``local_baseline_window_ms``
             for the Pre-Window method.
         local_baseline_window_ms: Duration (ms) of the dynamic local baseline

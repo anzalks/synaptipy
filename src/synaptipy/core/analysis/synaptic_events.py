@@ -3,13 +3,29 @@
 """
 Core Protocol Module 4: Synaptic Events.
 
-Consolidates all synaptic event detection methods (adaptive threshold,
-template matching, baseline-peak-kinetics) from event_detection.py into
-one self-contained module.
+Consolidates spontaneous and miniature synaptic event detection methods
+(adaptive prominence threshold, zero-mean multi-scale matched-filter template
+matching, local foot baseline, dynamic charge integration, and mono-/bi-exponential
+decay kinetics) into one self-contained module.
 
 Registry execution normalises each wrapper output into the shared
 ``AnalysisResult`` schema before it reaches the GUI, batch engine, or exporter.
 
+References
+----------
+- Clements, J. D., & Bekkers, J. M. (1997). Biophys. J., 73(1), 220-229.
+  doi:10.1016/S0006-3495(97)78062-7
+- Pernia-Andrade, A. J., Goswami, S. P., Stickler, Y., Frobe, U., Schlogl, A.,
+  & Jonas, P. (2012). Biophys. J., 103(7), 1429-1439. doi:10.1016/j.bpj.2012.08.039
+- Jonas, P., Major, G., & Sakmann, B. (1993). J. Physiol., 472(1), 615-663.
+  doi:10.1113/jphysiol.1993.sp019965
+- Rall, W. (1967). J. Neurophysiol., 30(5), 1138-1168. doi:10.1152/jn.1967.30.5.1138
+- Major, G., Larkman, A. U., Jonas, P., Sakmann, B., & Jack, J. J. B. (1994).
+  J. Neurosci., 14(8), 4613-4638. doi:10.1523/JNEUROSCI.14-08-04613.1994
+- Hampel, F. R. (1974). J. Am. Stat. Assoc., 69(346), 383-393.
+  doi:10.1080/01621459.1974.10482962
+- Rousseeuw, P. J., & Croux, C. (1993). J. Am. Stat. Assoc., 88(424), 1273-1283.
+  doi:10.1080/01621459.1993.10476408
 """
 
 import logging
@@ -296,28 +312,37 @@ def compute_local_pre_event_baseline(
     pre_event_window_ms: float = 2.0,
     polarity: str = "negative",
     baseline_method: str = "local_extrema",
+    onset_guard_ms: float = 0.5,
 ) -> np.ndarray:
     """Compute a local pre-event baseline voltage/current for each detected event.
 
     ``baseline_method="local_extrema"`` preserves historical foot-of-event
-    behaviour; ``baseline_method="mean"`` computes the unbiased window mean to
-    avoid order-statistic noise bias on small quantal events.
+    behaviour; ``baseline_method="mean"`` or ``"median"`` computes unbiased
+    central tendencies over the pre-event window; ``"pre_onset_mean"`` excludes
+    ``onset_guard_ms`` immediately before the peak to avoid slow rising phases
+    and order-statistic extreme-value bias on small quantal events.
     """
     if len(event_indices) == 0:
         return np.array([], dtype=float)
 
     search_samples = max(1, int(pre_event_window_ms / 1000.0 * sample_rate))
+    guard_samples = max(0, int(onset_guard_ms / 1000.0 * sample_rate))
     local_baselines = np.empty(len(event_indices), dtype=float)
-    use_mean = str(baseline_method or "").strip().lower() == "mean"
+    method_norm = str(baseline_method or "local_extrema").strip().lower()
 
     for k, idx in enumerate(event_indices):
-        win_start = max(0, int(idx) - search_samples)
-        win_end = max(win_start + 1, int(idx))
-        segment = data[win_start:win_end]
+        idx_i = int(idx)
+        win_start = max(0, idx_i - search_samples)
+        win_end = (
+            max(win_start + 1, idx_i - guard_samples) if method_norm == "pre_onset_mean" else max(win_start + 1, idx_i)
+        )
+        segment = data[win_start : min(win_end, idx_i)]
         if segment.size == 0:
-            local_baselines[k] = float(data[max(0, int(idx))])
-        elif use_mean:
+            local_baselines[k] = float(data[max(0, idx_i)])
+        elif method_norm in ("mean", "pre_onset_mean"):
             local_baselines[k] = float(np.mean(segment))
+        elif method_norm == "median":
+            local_baselines[k] = float(np.median(segment))
         elif polarity == "negative":
             local_baselines[k] = float(np.max(segment))
         else:
@@ -663,6 +688,12 @@ def detect_events_threshold(  # noqa: C901
                 _we = min(len(data), _pk + _refine_r + 1)
                 _corr[_i] = _ws + int(np.argmax(_search[_ws:_we]))
             peaks = np.unique(_corr)
+            if artifact_mask is not None and len(peaks) > 0:
+                valid_post = peaks < len(artifact_mask)
+                peaks = peaks[valid_post]
+                clean_post = ~artifact_mask[peaks]
+                n_artifacts_rejected += int(np.sum(~clean_post))
+                peaks = peaks[clean_post]
 
         event_indices = peaks.astype(int)
         if len(event_indices) > 0:
@@ -946,7 +977,11 @@ def detect_events_template(  # noqa: C901
 
         z_traces = []
         for k in kernels:
-            matched_k = k[::-1]
+            # Zero-mean template projection (Clements & Bekkers, 1997): subtracting
+            # the template mean makes cross-correlation invariant to DC offsets and
+            # eliminates zero-padded edge ramps in fftconvolve(..., mode="same").
+            k_zm = k - float(np.mean(k))
+            matched_k = k_zm[::-1]
             filtered = signal.fftconvolve(work_data, matched_k, mode="same")
             mad = median_abs_deviation(filtered, scale="normal")
             if mad == 0:
@@ -964,8 +999,9 @@ def detect_events_template(  # noqa: C901
             z_traces.append(z)
 
         z_score_trace = np.max(np.stack(z_traces, axis=0), axis=0)
-        # Noise estimate from the primary (unscaled) kernel for return metadata
-        mad = float(median_abs_deviation(signal.fftconvolve(work_data, kernels[0][::-1], mode="same"), scale="normal"))
+        # Noise estimate from the primary (unscaled) zero-mean kernel for return metadata
+        primary_zm = kernels[0] - float(np.mean(kernels[0]))
+        mad = float(median_abs_deviation(signal.fftconvolve(work_data, primary_zm[::-1], mode="same"), scale="normal"))
         if mad == 0:
             mad = 1e-12
 
@@ -976,23 +1012,21 @@ def detect_events_template(  # noqa: C901
         if min_dist_samples < 1:
             min_dist_samples = 1
 
-        peak_indices, _ = signal.find_peaks(z_score_trace, height=threshold_std, distance=min_dist_samples)
+        peak_indices, _ = signal.find_peaks(
+            z_score_trace,
+            height=threshold_std,
+            prominence=max(1.0, 0.5 * float(threshold_std)),
+            distance=min_dist_samples,
+        )
 
         # Peak refinement: z_score peaks are aligned to the primary kernel reference,
         # so apply only the primary kernel's offset when searching for the raw data peak.
         kernel_peak_idx = int(np.argmax(primary_kernel))
         template_offset = kernel_peak_idx - kernel_center_0
-        # Refinement radius must cover events much slower than the template (e.g. an EPSP
-        # with tau_decay >> template tau_decay).  tau_rise was previously used here but it
-        # is far too narrow: for a 0.5 ms template vs a 30 ms EPSP the baseline-corrected
-        # work_data peak can be >200 samples earlier than the raw data peak.  Using
-        # tau_decay (×2 for the largest multiplier kernel) as the half-window ensures the
-        # search always brackets the true amplitude maximum even with template mismatch.
         refine_radius = max(20, int(tau_decay * sampling_rate * max(_multipliers)))
-        # Search baseline-corrected work_data within a bounded radius (at most half the
-        # distance to adjacent candidate peaks) so slow drift or nearby larger events
-        # cannot merge two distinct events onto the same sample.
-        _refine_search = baseline_corrected_data
+        # Search polarity-oriented work_data within a Voronoi-bounded radius so argmax
+        # locates the true inward (negative) or outward (positive) event extremum.
+        _refine_search = work_data
 
         if len(peak_indices) > 0:
             corrected_indices = np.empty_like(peak_indices)
@@ -1064,7 +1098,6 @@ def detect_events_template(  # noqa: C901
     plots=[
         {"name": "Trace", "type": "trace", "show_spikes": True},
         {"type": "markers", "x": "_event_times", "y": "_event_peaks", "color": "r", "symbol": "o"},
-        {"type": "threshold_line", "param": "threshold_sd"},
         {"type": "artifact_overlay"},
     ],
     ui_params=[

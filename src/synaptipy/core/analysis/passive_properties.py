@@ -4,7 +4,7 @@
 Core Protocol Module 1: Passive Membrane Properties.
 
 Consolidates: Resting Membrane Potential (RMP), Input Resistance (Rin),
-Membrane Time Constant (Tau), Sag Ratio, and Capacitance analysis.
+Membrane Time Constant (Tau), Sag Ratio, I-V Curve, and Capacitance analysis.
 
 All registry wrapper functions return the standard namespaced schema::
 
@@ -12,6 +12,24 @@ All registry wrapper functions return the standard namespaced schema::
         "module_used": "passive_properties",
         "metrics": { ... flat result keys ... }
     }
+
+References
+----------
+- Rall, W. (1969). Biophys. J., 9(12), 1483-1508. doi:10.1016/S0006-3495(69)86467-2
+- Neher, E., & Sakmann, B. (1976). Nature, 260(5554), 799-802. doi:10.1038/260799a0
+- Hamill, O. P., Marty, A., Neher, E., Sakmann, B., & Sigworth, F. J. (1981).
+  Pflugers Arch., 391(2), 85-100. doi:10.1007/BF00656997
+- Lindau, M., & Neher, E. (1988). Pflugers Arch., 411(2), 137-146. doi:10.1007/BF00582306
+- Spruston, N., & Johnston, D. (1992). J. Neurophysiol., 67(3), 508-529.
+  doi:10.1152/jn.1992.67.3.508
+- Marty, A., & Neher, E. (1995). In Single-Channel Recording (2nd ed., pp. 31-52).
+  Springer. doi:10.1007/978-1-4419-1229-9_2
+- Robinson, R. B., & Siegelbaum, S. A. (2003). Annu. Rev. Physiol., 65, 453-480.
+  doi:10.1146/annurev.physiol.65.092101.142734
+- Golowasch, J., Thomas, G., Taylor, A. L., et al. (2009). J. Neurophysiol.,
+  102(4), 2161-2175. doi:10.1152/jn.00160.2009
+- Taylor, A. L. (2012). J. Comput. Neurosci., 32(1), 167-175.
+  doi:10.1007/s10827-011-0346-8
 """
 
 import logging
@@ -875,13 +893,11 @@ def calculate_iv_curve(
     valid_currents = [current_steps[i] for i in valid_indices]
     valid_delta_vs = [delta_vs[i] for i in valid_indices]
 
-    # Subthreshold Ohmic regression: exclude suprathreshold spiking sweeps (> -15 mV)
-    # when at least two subthreshold sweeps exist so active APs do not distort Rin.
+    # Subthreshold Ohmic regression: exclude suprathreshold spiking sweeps (>= -15 mV
+    # anywhere after baseline_window[1], including early adapting spikes prior to the
+    # late steady-state response_window) when >= 2 subthreshold sweeps exist.
     subthresh_indices = [
-        i
-        for i in valid_indices
-        if np.nanmax(sweeps[i][(time_vectors[i] >= response_window[0]) & (time_vectors[i] < response_window[1])])
-        < -15.0
+        i for i in valid_indices if np.nanmax(sweeps[i][time_vectors[i] >= baseline_window[1]]) < -15.0
     ]
     reg_indices = subthresh_indices if len(subthresh_indices) >= 2 else valid_indices
     reg_currents = [current_steps[i] for i in reg_indices]
@@ -1123,7 +1139,10 @@ def calculate_tau(  # noqa: C901
             fit_time = (t_fit + fit_start_time).tolist()
 
             # Confidence intervals from covariance matrix (95% CI = +/-1.96*SE)
-            perr = np.sqrt(np.diag(pcov))
+            if np.all(np.isfinite(pcov)) and np.all(np.diag(pcov) >= 0):
+                perr = np.sqrt(np.diag(pcov))
+            else:
+                perr = np.full(len(popt), np.nan)
             tau_se_s = float(perr[2])  # SE of tau in seconds
             tau_se_ms = tau_se_s * 1000.0
             tau_ci_lower = tau_ms - 1.96 * tau_se_ms
@@ -1213,7 +1232,10 @@ def calculate_tau(  # noqa: C901
 
             # Confidence intervals from covariance matrix (95% CI = +/-1.96*SE)
             # popt order: [V_ss, A_fast, tau_fast, A_slow, tau_slow]
-            perr_bi = np.sqrt(np.diag(pcov))
+            if np.all(np.isfinite(pcov)) and np.all(np.diag(pcov) >= 0):
+                perr_bi = np.sqrt(np.diag(pcov))
+            else:
+                perr_bi = np.full(len(popt), np.nan)
             tau_fast_se_s = float(perr_bi[2])
             tau_slow_se_s = float(perr_bi[4])
             # If params were swapped above, swap SE too
@@ -1336,7 +1358,7 @@ def calculate_sag_ratio(  # noqa: C901
                 v_rebound_max = float(np.max(rebound_data))
             rebound_depolarization = v_rebound_max - v_baseline
         else:
-            rebound_depolarization = 0.0
+            rebound_depolarization = float(np.nan)
 
         log.debug(
             "Sag Ratio=%.3f, Sag%%=%.1f%%, Rebound=%.3f mV",
@@ -1386,7 +1408,7 @@ def calculate_capacitance_cc(
     Returns:
         Membrane capacitance in pF, or ``None`` when inputs are invalid.
     """
-    if rin_mohm <= 0 or not np.isfinite(rin_mohm) or tau_ms <= 0:
+    if not np.isfinite(rin_mohm) or rin_mohm <= 0 or not np.isfinite(tau_ms) or tau_ms <= 0:
         return None
     if rs_mohm is not None and np.isfinite(rs_mohm) and rs_mohm >= 0.0:
         effective_r = rin_mohm - rs_mohm
@@ -1430,30 +1452,38 @@ def _fit_cm_from_transient(
     t_trans: np.ndarray,
     rs_mohm: float,
     voltage_step_amplitude_mv: float,
-) -> float:
-    """Fit mono-exponential to capacitive transient; fall back to AUC on failure.
+    dt_offset_s: float = 0.0,
+) -> Tuple[float, float]:
+    """Fit unrectified mono-exponential to capacitive transient; fall back to signed AUC.
 
-    Returns Cm in pF.
+    Back-extrapolates fitted amplitude to step onset ``t_trans[0]`` when filter
+    delay ``dt_offset_s`` lies within ``(0, 2 * tau_c]`` (Marty & Neher, 1995;
+    Taylor, 2012). Returns ``(cm_pf, rs_mohm)``.
     """
     from scipy import integrate, optimize
 
     def _mono_exp(t: np.ndarray, a: float, tau: float) -> np.ndarray:
         return a * np.exp(-t / tau)
 
+    abs_dv_mv = abs(float(voltage_step_amplitude_mv))
     if len(t_decay) >= 4 and t_decay[-1] > 0:
         try:
             tau_guess = (t_decay[-1] - t_decay[0]) / 3.0
-            p0 = [float(i_decay[0]), max(tau_guess, 1e-6)]
+            p0 = [max(float(i_decay[0]), 1e-6), max(tau_guess, 1e-6)]
             bounds = ([0.0, 1e-6], [np.inf, float(t_decay[-1]) * 10.0])
             popt, _ = optimize.curve_fit(_mono_exp, t_decay, i_decay, p0=p0, bounds=bounds, maxfev=2000)
+            a_fit = float(popt[0])
             tau_s = float(popt[1])
-            return tau_s / (rs_mohm * 1e6) * 1e12
+            if a_fit > 1e-3 and 0.0 < dt_offset_s <= 2.0 * tau_s:
+                i0_pa = a_fit * float(np.exp(dt_offset_s / tau_s))
+                rs_mohm = abs_dv_mv / i0_pa * 1000.0
+            return tau_s / (rs_mohm * 1e6) * 1e12, rs_mohm
         except (RuntimeError, ValueError):
             pass
 
-    # AUC fallback
-    Q_pc = float(integrate.trapezoid(delta_i, t_trans))
-    return abs(Q_pc / float(voltage_step_amplitude_mv) * 1000.0)
+    # Signed AUC fallback (cancels zero-mean Gaussian noise before taking magnitude)
+    q_pc = abs(float(integrate.trapezoid(delta_i, t_trans)))
+    return q_pc / abs_dv_mv * 1000.0, rs_mohm
 
 
 def calculate_capacitance_vc(
@@ -1466,24 +1496,27 @@ def calculate_capacitance_vc(
     """
     Calculate Cm and Rs from a voltage-clamp capacitive transient.
 
-    Method:
-    1. Rs = ``delta_V / I_peak``  (Ohm's law at the instant of the step).
-    2. Fit a mono-exponential to the transient decay -> tau_transient.
-    3. Cm = tau_transient / Rs.
+    Method (Lindau & Neher, 1988; Marty & Neher, 1995; Taylor, 2012):
 
-    Falls back to the charge-integral (AUC) method for Cm when the
-    exponential fit fails.
+    1. Isolate baseline- and steady-state-subtracted transient ``delta_i(t)``.
+    2. Fit an unrectified polarity-oriented mono-exponential decay from peak
+       onward (avoiding positive noise-rectification bias in the tail) and
+       back-extrapolate ``I_0`` to step onset when filter lag separates onset
+       from peak: ``Rs = |delta_V| / |I_0|``, ``Cm = tau_transient / Rs``.
+    3. Compute ``capacitance_charge_pf`` from the signed integral
+       ``|integral(delta_i dt)| / |delta_V|`` so zero-mean thermal noise
+       cancels rather than rectifying into spurious capacitance.
 
     Args:
         current_trace: 1-D current array (pA).
         time_vector: Corresponding time array (s).
         baseline_window: (start, end) in seconds for pre-step baseline.
         transient_window: (start, end) in seconds covering the capacitive transient.
-        voltage_step_amplitude_mv: Voltage command step (mV).  Sign is ignored.
+        voltage_step_amplitude_mv: Voltage command step (mV). Sign is ignored.
 
     Returns:
-        Dict with keys ``capacitance_pf`` (pF) and ``series_resistance_mohm`` (MOhm),
-        or None on failure.
+        Dict with keys ``capacitance_pf`` (pF), ``capacitance_charge_pf`` (pF),
+        and ``series_resistance_mohm`` (MOhm), or None on failure.
     """
     if voltage_step_amplitude_mv == 0:
         return None
@@ -1498,33 +1531,32 @@ def calculate_capacitance_vc(
             return None
 
         t_trans = time_vector[trans_mask]
-        # Baseline-subtracted transient current (pA)
         i_trans = current_trace[trans_mask] - i_baseline
 
         # Steady-state: mean of the last 20 % of the transient window
         n = len(i_trans)
         ss_start = max(0, int(n * 0.8))
         i_ss = float(np.mean(i_trans[ss_start:])) if ss_start < n else float(i_trans[-1])
-        # Transient component (charge-carrying, decays to zero)
         delta_i = i_trans - i_ss
 
-        # --- Rs via Ohm's law ---
-        # Rs [MOhm] = |delta_V [mV]| / |I_peak [pA]| * 1000
-        # Derivation: Rs = V/I = (V_mV * 1e-3) / (I_pA * 1e-12) * 1e-6  (MOhm)
-        #           = V_mV / I_pA * 1e3
-        i_peak_abs = float(np.max(np.abs(delta_i)))
+        i_peak_idx = int(np.argmax(np.abs(delta_i)))
+        i_peak_abs = float(abs(delta_i[i_peak_idx]))
         if i_peak_abs < 1e-3:  # guard: < 1 fA is non-physical
             return None
-        rs_mohm = abs(float(voltage_step_amplitude_mv)) / i_peak_abs * 1000.0
+        abs_dv_mv = abs(float(voltage_step_amplitude_mv))
+        rs_mohm_init = abs_dv_mv / i_peak_abs * 1000.0
 
-        # --- Exponential fit for tau_transient ---
-        i_peak_idx = int(np.argmax(np.abs(delta_i)))
+        # Polarity-oriented unrectified decay preserves zero-mean tail noise
+        sign_pol = -1.0 if float(delta_i[i_peak_idx]) < 0.0 else 1.0
         t_decay = t_trans[i_peak_idx:] - t_trans[i_peak_idx]
-        i_decay = np.abs(delta_i[i_peak_idx:])
+        i_decay = sign_pol * delta_i[i_peak_idx:]
+        dt_offset_s = float(t_trans[i_peak_idx] - t_trans[0])
 
-        cm_pf = _fit_cm_from_transient(t_decay, i_decay, delta_i, t_trans, rs_mohm, voltage_step_amplitude_mv)
-        charge_coulombs = float(np.trapezoid(np.abs(delta_i) * 1e-12, t_trans)) if len(t_trans) >= 2 else 0.0
-        cm_charge_pf = (charge_coulombs / (abs(float(voltage_step_amplitude_mv)) * 1e-3)) * 1e12
+        cm_pf, rs_mohm = _fit_cm_from_transient(
+            t_decay, i_decay, delta_i, t_trans, rs_mohm_init, voltage_step_amplitude_mv, dt_offset_s=dt_offset_s
+        )
+        charge_coulombs = abs(float(np.trapezoid(delta_i * 1e-12, t_trans))) if len(t_trans) >= 2 else 0.0
+        cm_charge_pf = (charge_coulombs / (abs_dv_mv * 1e-3)) * 1e12
 
         return {
             "capacitance_pf": float(cm_pf),
@@ -2542,6 +2574,7 @@ def run_capacitance_analysis_wrapper(
             "module_used": "passive_properties",
             "metrics": {
                 "capacitance_pf": vc_result["capacitance_pf"],
+                "capacitance_charge_pf": vc_result.get("capacitance_charge_pf"),
                 "series_resistance_mohm": vc_result["series_resistance_mohm"],
                 "mode": mode,
             },

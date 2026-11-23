@@ -39,6 +39,8 @@ def assess_trial_eligibility(
         return TrialQCDecision(trial_index, "excluded", "manual exclusion")
     trace = np.asarray(data, dtype=float)
     axis = np.asarray(time, dtype=float)
+    if trace.ndim != 1 or axis.ndim != 1:
+        return TrialQCDecision(trial_index, "excluded", "trace and time axis must be 1D")
     if trace.size == 0 or axis.size == 0:
         return TrialQCDecision(trial_index, "excluded", "empty trace or time axis")
     if trace.size != axis.size:

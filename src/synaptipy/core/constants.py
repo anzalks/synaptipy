@@ -50,13 +50,13 @@ EPSILON_ISI_SUM_SQ = 1e-15
 
 # dV/dt threshold for AP onset detection (phase-plane method).
 # Bean (2007) "The action potential in mammalian central neurons"
-# Nature Reviews Neuroscience 8:451-465.
+# Nature Reviews Neuroscience 8(6):451-465 (doi:10.1038/nrn2148).
 # Cortical pyramidal neurons: AP onset ~10-30 V/s; 20 V/s is a robust default.
 DVDT_THRESHOLD_VS = 20.0  # V/s
 
 # Artifact ceiling: maximum physiological dV/dt for fastest cortical APs.
 # Naundorf, Wolf & Volgushev (2006) "Unique features of action potential
-# initiation in cortical neurons" Nature 440:1060-1063.
+# initiation in cortical neurons" Nature 440(7087):1060-1063 (doi:10.1038/nature04610).
 # Fastest cortical APs show ~250-300 V/s rising rates; above this is artifact.
 DVDT_ARTIFACT_CEILING_VS = 300.0  # V/s
 
@@ -75,12 +75,13 @@ MIN_RISING_PHASE_MS = 0.2  # ms
 #
 # Storm (1987) "Action potential repolarization and a fast
 # after-hyperpolarization in rat hippocampal pyramidal cells"
-# J Physiol 385:733-759.
+# J Physiol 385:733-759 (doi:10.1113/jphysiol.1987.sp016517).
 #
 # Sah & Faber (2002) "Channels underlying neuronal calcium-activated
-# potassium currents" Nature Reviews Neuroscience 3:175-190.
+# potassium currents" Progress in Neurobiology 66(5):345-353
+# (doi:10.1016/S0301-0082(02)00004-7).
 
-# Fast AHP (fAHP): BK (big-conductance Ca2+-activated K+) channel-mediated.
+# Fast AHP (fAHP): BK and Kv3 K+ channel-mediated fast repolarisation.
 # Peaks 1-5 ms after AP repolarisation.
 FAHP_WINDOW_MS = (1.0, 5.0)
 
@@ -93,9 +94,10 @@ MAHP_WINDOW_MS = (10.0, 50.0)
 # BURST DETECTION
 # ===========================================================================
 # Grace & Bunney (1984) "The control of firing pattern in nigral dopamine
-# neurons: burst firing" J Neurosci 4:2877-2890.
-# Adapted for cortical use: a burst is defined by ISIs shorter than a
-# fraction of the mean ISI.
+# neurons: burst firing" J Neurosci 4(11):2877-2890
+# (doi:10.1523/JNEUROSCI.04-11-02877.1984).
+# Dynamic ISI fraction motivated by Harris et al. (2001) Neuron 32(1):141-149
+# (doi:10.1016/S0896-6273(01)00447-0).
 
 # Fraction of mean ISI that defines the burst boundary.
 # ISIs below (BURST_ISI_FRACTION * mean_ISI) are considered intra-burst.

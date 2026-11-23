@@ -3,8 +3,10 @@
 """
 Core Protocol Module 5: Evoked Responses.
 
-Consolidates optogenetic stimulus synchronization (TTL-gated latency,
-probability, jitter analysis) from optogenetics.py.
+Consolidates optogenetic/electrical stimulus synchronization (TTL-gated latency,
+response probability, and trial-to-trial jitter), N-pulse Paired-Pulse Ratio
+with iterative cumulative residual decay subtraction, and stimulus-train
+short-term synaptic plasticity (STP).
 
 All registry wrapper functions return::
 
@@ -12,6 +14,23 @@ All registry wrapper functions return::
         "module_used": "evoked_responses",
         "metrics": { ... flat result keys ... }
     }
+
+References
+----------
+- Sabatini, B. L., & Regehr, W. G. (1999). Annu. Rev. Physiol., 61, 521-542.
+  doi:10.1146/annurev.physiol.61.1.521
+- Kim, J., & Alger, B. E. (2001). J. Neurosci., 21(24), 9608-9618.
+  doi:10.1523/JNEUROSCI.21-24-09608.2001
+- Zucker, R. S., & Regehr, W. G. (2002). Annu. Rev. Physiol., 64, 355-405.
+  doi:10.1146/annurev.physiol.64.092501.114547
+- Wesseling, J. F., & Lo, D. C. (2002). J. Neurosci., 22(22), 9708-9720.
+  doi:10.1523/JNEUROSCI.22-22-09708.2002
+- Boyden, E. S., Zhang, F., Bamberg, E., Nagel, G., & Deisseroth, K. (2005).
+  Nat. Neurosci., 8(9), 1263-1268. doi:10.1038/nn1525
+- Regehr, W. G. (2012). Cold Spring Harb. Perspect. Biol., 4(7), a005702.
+  doi:10.1101/cshperspect.a005702
+- Thanawala, M. S., & Regehr, W. G. (2013). J. Neurosci., 33(11), 4625-4633.
+  doi:10.1523/JNEUROSCI.4031-12.2013
 """
 
 import logging
@@ -42,6 +61,7 @@ class OptoSyncResult(AnalysisResult):
     optical_latency_ms: Optional[float] = None
     response_probability: Optional[float] = None
     spike_jitter_ms: Optional[float] = None
+    spike_jitter_sample_sd_ms: Optional[float] = None
     stimulus_count: int = 0
     success_count: int = 0
     failure_count: int = 0
@@ -135,9 +155,10 @@ def calculate_optogenetic_sync(
     time: np.ndarray,
     ttl_threshold: float = 2.5,
     response_window_ms: float = 20.0,
+    artifact_blanking_ms: float = 0.0,
 ) -> OptoSyncResult:
     """
-    Correlate TTL stimuli with action potential times.
+    Correlate TTL stimuli with action potential or synaptic event times.
 
     Args:
         ttl_data: Digital signal data trace.
@@ -145,6 +166,8 @@ def calculate_optogenetic_sync(
         time: Timestamps of the trace.
         ttl_threshold: Voltage threshold for TTL edge detection.
         response_window_ms: Search window for APs after stimulus onset (ms).
+        artifact_blanking_ms: Post-onset window excluded from latency matching
+            to reject photoelectric or electrical stimulus artifacts (ms).
 
     Returns:
         OptoSyncResult.
@@ -164,12 +187,19 @@ def calculate_optogenetic_sync(
         )
 
     window_s = response_window_ms / 1000.0
+    blank_s = max(0.0, float(artifact_blanking_ms) / 1000.0)
     latencies = []
     responding_spikes = []
     response_count = 0
 
-    for onset in onsets:
-        valid_spikes = _find_spikes_in_window(action_potential_times, onset, onset + window_s)
+    for idx, onset in enumerate(onsets):
+        win_start = float(onset) + blank_s
+        win_end = float(onset) + window_s
+        if idx + 1 < stimulus_count:
+            win_end = min(win_end, float(onsets[idx + 1]) - 1e-9)
+        valid_spikes = (
+            _find_spikes_in_window(action_potential_times, win_start, win_end) if win_end >= win_start else np.array([])
+        )
         responding_spikes.append(valid_spikes.tolist())
         if valid_spikes.size > 0:
             response_count += 1
@@ -178,14 +208,17 @@ def calculate_optogenetic_sync(
     failure_count = stimulus_count - response_count
 
     # Latency and jitter are computed only over *successful* trials to prevent
-    # NaN propagation from failure trials.
+    # NaN propagation from failure trials. Both population SD (spike_jitter_ms)
+    # and Bessel-corrected sample SD (spike_jitter_sample_sd_ms, N-1) are stored.
     if response_count > 0:
         optical_latency_ms = float(np.mean(latencies))
         spike_jitter_ms = float(np.std(latencies)) if len(latencies) > 1 else 0.0
+        spike_jitter_sample_sd_ms = float(np.std(latencies, ddof=1)) if len(latencies) > 1 else np.nan
         response_probability = float(response_count / stimulus_count)
     else:
         optical_latency_ms = np.nan
         spike_jitter_ms = np.nan
+        spike_jitter_sample_sd_ms = np.nan
         response_probability = 0.0
 
     return OptoSyncResult(
@@ -195,13 +228,18 @@ def calculate_optogenetic_sync(
         optical_latency_ms=optical_latency_ms,
         response_probability=response_probability,
         spike_jitter_ms=spike_jitter_ms,
+        spike_jitter_sample_sd_ms=spike_jitter_sample_sd_ms,
         stimulus_count=stimulus_count,
         success_count=response_count,
         failure_count=failure_count,
         stimulus_onsets=onsets,
         stimulus_offsets=offsets,
         responding_spikes=responding_spikes,
-        parameters={"ttl_threshold": ttl_threshold, "response_window_ms": response_window_ms},
+        parameters={
+            "ttl_threshold": ttl_threshold,
+            "response_window_ms": response_window_ms,
+            "artifact_blanking_ms": artifact_blanking_ms,
+        },
     )
 
 
@@ -581,24 +619,15 @@ def calculate_n_pulse_ratio(  # noqa: C901
             return float(np.mean(seg))
         return float(data[_nearest_idx(stim_onset_s)])
 
-    def _response_peak(onset_s: float) -> Tuple[float, float]:
-        blank_s = artifact_blanking_ms / 1000.0
-        win_s = response_window_ms / 1000.0
-        i0 = _nearest_idx(onset_s + blank_s)
-        i1 = min(_nearest_idx(onset_s + win_s) + 1, len(data))
-        if i1 <= i0:
-            return 0.0, onset_s
-        seg = data[i0:i1]
-        idx = int(np.argmin(seg)) if polarity == "negative" else int(np.argmax(seg))
-        return float(seg[idx]), float(time[i0 + idx])
-
     bl1 = _local_baseline(stim_onsets[0])
 
-    def _mono_exp(t, a, tau, c):
-        return a * np.exp(-t / tau) + c
+    # Fix asymptote to resting baseline bl1 so independent c_k offsets cannot
+    # accumulate unboundedly across multi-pulse stimulus trains.
+    def _mono_exp(t, a, tau):
+        return a * np.exp(-t / tau) + bl1
 
-    def _bi_exp(t, a_f, tau_f, a_s, tau_s, c):
-        return a_f * np.exp(-t / tau_f) + a_s * np.exp(-t / tau_s) + c
+    def _bi_exp(t, a_f, tau_f, a_s, tau_s):
+        return a_f * np.exp(-t / tau_f) + a_s * np.exp(-t / tau_s) + bl1
 
     # Each entry: (fit_func, popt, t_ref_s) where t_ref_s is the absolute
     # time corresponding to t_rel=0 in the fit.  Evaluating at absolute
@@ -622,8 +651,31 @@ def calculate_n_pulse_ratio(  # noqa: C901
                 res[mask] += ff(t_rel[mask], *pp) - bl1
         return res
 
+    def _response_peak(onset_s: float, next_onset_s: Optional[float] = None) -> Tuple[float, float]:
+        blank_s = artifact_blanking_ms / 1000.0
+        win_s = response_window_ms / 1000.0
+        end_s = onset_s + win_s
+        if next_onset_s is not None:
+            end_s = min(end_s, next_onset_s)
+        i0 = _nearest_idx(onset_s + blank_s)
+        i1 = min(_nearest_idx(end_s) + 1, len(data))
+        if i1 <= i0:
+            return 0.0, onset_s
+        seg = data[i0:i1]
+        # Search on the residual-subtracted waveform so steep prior decay tails
+        # do not shift peak detection onto the stimulus onset boundary.
+        iso_seg = seg - _cumulative_residual_array(time[i0:i1]) if _decay_fits else seg
+        idx = int(np.argmin(iso_seg)) if polarity == "negative" else int(np.argmax(iso_seg))
+        return float(seg[idx]), float(time[i0 + idx])
+
+    out["_peak_times"] = []
+    out["_peak_amps"] = []
+
     for i in range(n):
-        peak_raw, peak_time = _response_peak(stim_onsets[i])
+        next_onset = float(stim_onsets[i + 1]) if i < n - 1 else None
+        peak_raw, peak_time = _response_peak(float(stim_onsets[i]), next_onset)
+        out["_peak_times"].append(float(peak_time))
+        out["_peak_amps"].append(float(peak_raw))
 
         cum_res = _cumulative_residual_scalar(peak_time) if _decay_fits else 0.0
 
@@ -641,12 +693,13 @@ def calculate_n_pulse_ratio(  # noqa: C901
 
         # --- Fit this pulse's isolated decay ---
         if i < n - 1:
-            fit_end_s = stim_onsets[i + 1]
+            fit_end_s = float(stim_onsets[i + 1])
         else:
-            fit_end_s = stim_onsets[i] + (fit_decay_from_ms + fit_decay_window_ms) / 1000.0
+            fit_end_s = float(stim_onsets[i]) + (fit_decay_from_ms + fit_decay_window_ms) / 1000.0
         fit_end_s = min(fit_end_s, float(time[-1]))
 
-        fit_start_s = stim_onsets[i] + fit_decay_from_ms / 1000.0
+        nominal_fit_start_s = float(stim_onsets[i]) + fit_decay_from_ms / 1000.0
+        fit_start_s = max(nominal_fit_start_s, peak_time) if nominal_fit_start_s < fit_end_s else nominal_fit_start_s
         i_fit0 = _nearest_idx(fit_start_s)
         i_fit1 = _nearest_idx(fit_end_s)
 
@@ -673,13 +726,13 @@ def calculate_n_pulse_ratio(  # noqa: C901
             if len(t_fit) >= 8:
                 try:
                     if polarity == "negative":
-                        bi_p0 = [-a0 * 0.7, tau0 * 0.3, -a0 * 0.3, tau0, bl1]
-                        bi_lb = [-amp_bound, 0.1, -amp_bound, 0.1, bl1 - abs(amp_corrected) * 2]
-                        bi_ub = [0.0, tau0 * 100, 0.0, tau0 * 100, bl1 + abs(amp_corrected)]
+                        bi_p0 = [-a0 * 0.7, tau0 * 0.3, -a0 * 0.3, tau0]
+                        bi_lb = [-amp_bound, 0.1, -amp_bound, 0.1]
+                        bi_ub = [0.0, tau0 * 100, 0.0, tau0 * 100]
                     else:
-                        bi_p0 = [a0 * 0.7, tau0 * 0.3, a0 * 0.3, tau0, bl1]
-                        bi_lb = [0.0, 0.1, 0.0, 0.1, bl1 - abs(amp_corrected)]
-                        bi_ub = [amp_bound, tau0 * 100, amp_bound, tau0 * 100, bl1 + abs(amp_corrected) * 2]
+                        bi_p0 = [a0 * 0.7, tau0 * 0.3, a0 * 0.3, tau0]
+                        bi_lb = [0.0, 0.1, 0.0, 0.1]
+                        bi_ub = [amp_bound, tau0 * 100, amp_bound, tau0 * 100]
                     popt_bi, pcov_bi = curve_fit(
                         _bi_exp,
                         t_fit,
@@ -690,7 +743,7 @@ def calculate_n_pulse_ratio(  # noqa: C901
                     )
                     if np.any(~np.isfinite(pcov_bi)):
                         raise ValueError("degenerate")
-                    a_f, tau_f, a_s, tau_s, _ = popt_bi
+                    a_f, tau_f, a_s, tau_s = popt_bi
                     total = abs(a_f) + abs(a_s)
                     if total > 1e-12:
                         tau_ms = (abs(a_f) * tau_f + abs(a_s) * tau_s) / total
@@ -706,11 +759,8 @@ def calculate_n_pulse_ratio(  # noqa: C901
                             _mono_exp,
                             t_fit,
                             y_fit,
-                            p0=[-a0, tau0, bl1],
-                            bounds=(
-                                [-amp_bound, 0.1, bl1 - abs(amp_corrected) * 2],
-                                [0.0, tau0 * 50, bl1 + abs(amp_corrected)],
-                            ),
+                            p0=[-a0, tau0],
+                            bounds=([-amp_bound, 0.1], [0.0, tau0 * 50]),
                             maxfev=3000,
                         )
                     else:
@@ -718,11 +768,8 @@ def calculate_n_pulse_ratio(  # noqa: C901
                             _mono_exp,
                             t_fit,
                             y_fit,
-                            p0=[a0, tau0, bl1],
-                            bounds=(
-                                [0.0, 0.1, bl1 - abs(amp_corrected)],
-                                [amp_bound, tau0 * 50, bl1 + abs(amp_corrected) * 2],
-                            ),
+                            p0=[a0, tau0],
+                            bounds=([0.0, 0.1], [amp_bound, tau0 * 50]),
                             maxfev=3000,
                         )
                     tau_ms = float(popt_m[1])
@@ -1117,6 +1164,7 @@ def run_opto_sync_wrapper(  # noqa: C901
         time=time,
         ttl_threshold=ttl_threshold,
         response_window_ms=response_window_ms,
+        artifact_blanking_ms=artifact_blanking_ms,
     )
 
     if not result.is_valid:
@@ -1183,6 +1231,7 @@ def run_opto_sync_wrapper(  # noqa: C901
             "response_probability": result.response_probability,
             "response_probability_pct": resp_prob_pct,
             "spike_jitter_ms": result.spike_jitter_ms,
+            "spike_jitter_sample_sd_ms": result.spike_jitter_sample_sd_ms,
             "mean_response_amplitude": _mean_amp,
             "response_amplitude_sd": _sd_amp,
             "stimulus_count": result.stimulus_count,
@@ -1456,14 +1505,18 @@ def run_ppr_wrapper(  # noqa: C901
         artifact_blanking_ms=artifact_blanking_ms,
     )
 
-    blank_s = artifact_blanking_ms / 1000.0
-    win_s = response_window_ms / 1000.0
-    peak_times = []
-    peak_amps = []
-    for onset in stim_onsets:
-        pt, pv = _peak_pos_s(data, time, onset, polarity, blank_s, win_s)
-        peak_times.append(pt)
-        peak_amps.append(pv)
+    if result.get("_peak_times") and len(result["_peak_times"]) == len(stim_onsets):
+        peak_times = list(result["_peak_times"])
+        peak_amps = list(result["_peak_amps"])
+    else:
+        blank_s = artifact_blanking_ms / 1000.0
+        win_s = response_window_ms / 1000.0
+        peak_times = []
+        peak_amps = []
+        for onset in stim_onsets:
+            pt, pv = _peak_pos_s(data, time, onset, polarity, blank_s, win_s)
+            peak_times.append(pt)
+            peak_amps.append(pv)
 
     n_actual = len(stim_onsets)
     metrics: Dict[str, Any] = {
@@ -1579,15 +1632,23 @@ def calculate_stimulus_train_stp(  # noqa: C901
     for i in range(1, n):
         ratios[f"R{i + 1}/R1"] = float(amplitudes_norm[i])
 
-    steady_tail = amplitudes_norm[-min(3, n) :] if n >= 2 else []
+    post_r1 = amplitudes_norm[1:] if n >= 2 else []
+    steady_tail = post_r1[-min(3, len(post_r1)) :] if post_r1 else []
     steady_state_ratio = float(np.nanmean(steady_tail)) if steady_tail else float("nan")
 
     stp_type = "none"
     if n >= 2:
-        if n >= 4 and (amplitudes[1] > amplitudes[0]) != (amplitudes[-1] > amplitudes[0]):
+        rel_tol = max(1e-12, 0.02 * abs(amplitudes[0]))
+        d2 = amplitudes[1] - amplitudes[0]
+        dn = amplitudes[-1] - amplitudes[0]
+        if abs(d2) <= rel_tol and abs(dn) <= rel_tol:
+            stp_type = "none"
+        elif n >= 4 and abs(d2) > rel_tol and abs(dn) > rel_tol and ((d2 > 0) != (dn > 0)):
             stp_type = "biphasic"
+        elif d2 > rel_tol or (abs(d2) <= rel_tol and dn > rel_tol):
+            stp_type = "facilitation"
         else:
-            stp_type = "facilitation" if amplitudes[1] > amplitudes[0] else "depression"
+            stp_type = "depression"
 
     return {
         "pulse_count": n,

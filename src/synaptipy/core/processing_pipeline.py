@@ -3,8 +3,16 @@
 """
 Signal Processing Pipeline.
 
-Formalizes the order of operations for signal processing (e.g., Baseline -> Filter).
-Ensures that both visualization and analysis use the exact same processing sequence.
+Formalizes the order of operations for signal processing (e.g., LJP -> P/N ->
+Baseline -> Artifact Interpolation -> Digital Filter) so both interactive
+visualization and headless batch analysis execute the identical sequence.
+
+References
+----------
+- Armstrong, C. M., & Bezanilla, F. (1977). J. Gen. Physiol., 70(5), 567-590. doi:10.1085/jgp.70.5.567
+- Bezanilla, F., & Armstrong, C. M. (1977). J. Gen. Physiol., 70(5), 549-566. doi:10.1085/jgp.70.5.549
+- Barry, P. H., & Lynch, J. W. (1991). J. Membr. Biol., 121(2), 101-117. doi:10.1007/BF01870526
+- Neher, E. (1992). Methods Enzymol., 207, 123-131. doi:10.1016/0076-6879(92)07008-C
 """
 
 import logging
@@ -140,29 +148,39 @@ class SignalProcessingPipeline:
                 elif op_type == "filter":
                     method = step.get("method")
                     order = int(step.get("order", 5))
+                    filter_type = str(step.get("filter_type", "butterworth"))
 
                     if method == "lowpass":
                         cutoff = step.get("cutoff")
                         if cutoff is None:
                             raise ValueError("lowpass filter requires 'cutoff'")
-                        result = signal_processor.lowpass_filter(result, float(cutoff), fs, order=order)
+                        result = signal_processor.lowpass_filter(
+                            result, float(cutoff), fs, order=order, filter_type=filter_type
+                        )
                     elif method == "highpass":
                         cutoff = step.get("cutoff")
                         if cutoff is None:
                             raise ValueError("highpass filter requires 'cutoff'")
-                        result = signal_processor.highpass_filter(result, float(cutoff), fs, order=order)
+                        result = signal_processor.highpass_filter(
+                            result, float(cutoff), fs, order=order, filter_type=filter_type
+                        )
                     elif method == "bandpass":
                         low_cut, high_cut = step.get("low_cut"), step.get("high_cut")
                         if low_cut is None or high_cut is None:
                             raise ValueError("bandpass filter requires 'low_cut' and 'high_cut'")
                         result = signal_processor.bandpass_filter(
-                            result, float(low_cut), float(high_cut), fs, order=order
+                            result, float(low_cut), float(high_cut), fs, order=order, filter_type=filter_type
                         )
                     elif method == "notch":
                         freq, q_factor = step.get("freq"), step.get("q_factor")
                         if freq is None or q_factor is None:
                             raise ValueError("notch filter requires 'freq' and 'q_factor'")
                         result = signal_processor.notch_filter(result, float(freq), float(q_factor), fs)
+                    elif method == "comb":
+                        freq, q_factor = step.get("freq"), step.get("q_factor", 30.0)
+                        if freq is None:
+                            raise ValueError("comb filter requires 'freq'")
+                        result = signal_processor.comb_filter(result, float(freq), float(q_factor), fs)
 
                 elif op_type == "artifact":
                     if time_vector is not None:
@@ -175,13 +193,13 @@ class SignalProcessingPipeline:
 
                 # Revert if the step produced NaN/Inf
                 if result is not None and (np.any(np.isnan(result)) or np.any(np.isinf(result))):
-                    msg = f"Preprocessing step '{op_type}/{step.get('method')}' produced NaN/Inf — reverted"
+                    msg = f"Preprocessing step '{op_type}/{step.get('method')}' produced NaN/Inf - reverted"
                     log.warning(msg)
                     self.last_warnings.append(msg)
                     result = pre_step
 
             except Exception as e:
-                msg = f"Preprocessing step '{step.get('type')}/{step.get('method')}' failed ({e}) — skipped"
+                msg = f"Preprocessing step '{step.get('type')}/{step.get('method')}' failed ({e}) - skipped"
                 log.warning(msg)
                 self.last_warnings.append(msg)
                 result = pre_step
@@ -208,22 +226,41 @@ def _apply_ljp_offset(result: np.ndarray, ljp_mv: float, units: str) -> np.ndarr
     return result - float(ljp_mv)
 
 
-def _apply_pn_subtraction(result: np.ndarray, pn_traces, pn_scale: float) -> np.ndarray:
-    """Step B: P/N leak subtraction helper."""
+def _apply_pn_subtraction(
+    result: np.ndarray,
+    pn_traces,
+    pn_scale: float,
+    time: Optional[np.ndarray] = None,
+    pn_baseline_window_s: Optional[tuple] = None,
+) -> np.ndarray:
+    """Step B: P/N leak subtraction helper (Armstrong & Bezanilla, 1977)."""
     pn_arr = np.asarray(pn_traces, dtype=float)
     if pn_arr.ndim == 1:
         pn_arr = pn_arr[np.newaxis, :]
     if pn_arr.shape[1] == result.shape[0]:
-        pn_mean = pn_arr.mean(axis=0) * float(pn_scale)
-        result = result - pn_mean
+        pn_mean = pn_arr.mean(axis=0)
+        if pn_baseline_window_s is not None and time is not None and time.size == result.shape[0]:
+            b0, b1 = float(pn_baseline_window_s[0]), float(pn_baseline_window_s[1])
+            b_mask = (time >= b0) & (time < b1)
+            if np.any(b_mask):
+                hold_test = float(np.mean(result[b_mask]))
+                hold_pn = float(np.mean(pn_mean[b_mask]))
+                result = (result - hold_test) - (pn_mean - hold_pn) * float(pn_scale) + hold_test
+                log.debug(
+                    "apply_trace_corrections: Step B - holding-zeroed P/N leak subtracted (%d sweeps, scale=%.3f).",
+                    pn_arr.shape[0],
+                    pn_scale,
+                )
+                return result
+        result = result - pn_mean * float(pn_scale)
         log.debug(
-            "apply_trace_corrections: Step B — P/N leak subtracted (%d sweeps, scale=%.3f).",
+            "apply_trace_corrections: Step B - P/N leak subtracted (%d sweeps, scale=%.3f).",
             pn_arr.shape[0],
             pn_scale,
         )
     else:
         log.warning(
-            "apply_trace_corrections: Step B skipped — pn_traces length %d != data length %d.",
+            "apply_trace_corrections: Step B skipped - pn_traces length %d != data length %d.",
             pn_arr.shape[1],
             result.shape[0],
         )
@@ -261,6 +298,7 @@ def apply_trace_corrections(
     units: str = "mV",
     pn_traces: Optional[np.ndarray] = None,
     pn_scale: float = 1.0,
+    pn_baseline_window_s: Optional[tuple] = None,
     pre_event_window_s: Optional[tuple] = None,
     artifact_interp_steps: Optional[List[Dict[str, Any]]] = None,
     filter_steps: Optional[List[Dict[str, Any]]] = None,
@@ -335,10 +373,12 @@ def apply_trace_corrections(
         result = _apply_ljp_offset(result, ljp_mv, units)
 
     # ------------------------------------------------------------------
-    # Step B — P/N Leak Subtraction
+    # Step B - P/N Leak Subtraction
     # ------------------------------------------------------------------
     if pn_traces is not None:
-        result = _apply_pn_subtraction(result, pn_traces, pn_scale)
+        result = _apply_pn_subtraction(
+            result, pn_traces, pn_scale, time=time, pn_baseline_window_s=pn_baseline_window_s
+        )
 
     # ------------------------------------------------------------------
     # Step C — Pre-event Scalar Zeroing (median of pre-event window)

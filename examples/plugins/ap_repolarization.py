@@ -4,9 +4,9 @@
 Example Synaptipy Plugin: Maximum Action-Potential Repolarization Rate.
 
 Measures the steepest rate of membrane-potential decline (dV/dt minimum)
-during the falling phase of an action potential.  A large negative dV/dt
-corresponds to rapid repolarization, which reflects the combined activity of
-voltage-gated potassium channels and sodium-channel inactivation.
+during the falling phase of the first action potential in a search window
+(Storm, 1987, J. Physiol. 385:733-759, doi:10.1113/jphysiol.1987.sp016517;
+Bean, 2007, Nat. Rev. Neurosci. 8:451-465, doi:10.1038/nrn2148).
 
 Usage
 -----
@@ -84,6 +84,12 @@ def calculate_ap_repolarization(
         return {"error": f"No spike crossing {spike_threshold} mV found in window"}
 
     ap_start_idx = int(crossings[0]) + 1
+    # Bound to the first action potential (before any subsequent upward crossing
+    # and at most 25 ms post-onset) so later spikes or step-off transients cannot
+    # corrupt the first AP's repolarization rate.
+    next_ap_idx = int(crossings[1]) if crossings.size > 1 else win_data.size
+    max_ap_samples = max(8, int(0.025 * sampling_rate)) if sampling_rate > 0 else win_data.size
+    ap_end_idx = min(win_data.size, next_ap_idx, ap_start_idx + max_ap_samples)
 
     log.info(
         "AP repolarization: AP onset at sample %d (%.4f s)",
@@ -91,15 +97,25 @@ def calculate_ap_repolarization(
         float(win_time[ap_start_idx]) if ap_start_idx < win_time.size else 0.0,
     )
 
-    # Work on data from AP onset to end of window
-    ap_data = win_data[ap_start_idx:]
-    ap_time = win_time[ap_start_idx:]
+    ap_data = win_data[ap_start_idx:ap_end_idx]
+    ap_time = win_time[ap_start_idx:ap_end_idx]
 
     if ap_data.size < 4:
         return {"error": "Too few samples after AP onset"}
 
+    # At high acquisition rates (>25 kHz), apply a 10 kHz zero-phase Bessel filter
+    # before differentiation so digitization noise does not bias min(dV/dt).
+    ap_for_deriv = ap_data
+    if sampling_rate > 25_000.0 and ap_data.size >= 15:
+        from scipy.signal import bessel
+
+        from synaptipy.core.signal_processor import _sosfiltfilt_safe
+
+        sos = bessel(4, 10_000.0, btype="low", output="sos", fs=sampling_rate, norm="mag")
+        ap_for_deriv = _sosfiltfilt_safe(sos, ap_data)
+
     # Input is millivolts, while the public metric is volts per second.
-    dvdt = np.gradient(ap_data / 1000.0, ap_time)
+    dvdt = np.gradient(ap_for_deriv / 1000.0, ap_time)
 
     # Max repolarization = most negative dV/dt
     min_idx = int(np.argmin(dvdt))

@@ -4,7 +4,7 @@
 Core Protocol Module 3: Firing Dynamics.
 
 Consolidates: Excitability (F-I curve), Burst Analysis, and Spike Train
-    Dynamics into one self-contained module.
+Dynamics into one self-contained module.
 
 All registry wrapper functions return::
 
@@ -12,6 +12,23 @@ All registry wrapper functions return::
         "module_used": "firing_dynamics",
         "metrics": { ... flat result keys ... }
     }
+
+References
+----------
+- Grace, A. A., & Bunney, B. S. (1984). J. Neurosci., 4(11), 2877-2890.
+  doi:10.1523/JNEUROSCI.04-11-02877.1984
+- Connors, B. W., & Gutnick, M. J. (1990). Trends Neurosci., 13(3), 99-104.
+  doi:10.1016/0166-2236(90)90185-D
+- Holt, G. R., Softky, W. R., Koch, C., & Douglas, R. J. (1996). J. Neurophysiol.,
+  75(5), 1806-1814. doi:10.1152/jn.1996.75.5.1806
+- Shao, L.-R., Halvorsrud, R., Borg-Graham, L., & Storm, J. F. (1999).
+  J. Physiol., 521(1), 135-146. doi:10.1111/j.1469-7793.1999.00135.x
+- Harris, K. D., Hirase, H., Leinekugel, X., Henze, D. A., & Buzsaki, G. (2001).
+  Neuron, 32(1), 141-149. doi:10.1016/S0896-6273(01)00447-0
+- Shinomoto, S., Shima, K., & Tanji, J. (2003). Neural Comput., 15(12), 2823-2842.
+  doi:10.1162/089976603322518759
+- Gouwens, N. W., Sorensen, S. A., Berg, J., et al. (2019). Nat. Neurosci.,
+  22(7), 1182-1195. doi:10.1038/s41593-019-0417-0
 """
 
 import logging
@@ -85,16 +102,17 @@ def calculate_fi_curve(  # noqa: C901
         sweep_dur = float(time[-1] - time[0]) if len(time) > 1 else 0.0
         win_freq = (count / sweep_dur) if sweep_dur > 0 else 0.0
         freq = result.mean_frequency if result.mean_frequency is not None else 0.0
-        # Guard F-I curves against single-spike censorship and onset-doublet depolarization block:
-        # if 1 spike occurred, or spikes ceased within the first 25% of the window (<=3 spikes),
-        # report true sustained window firing rate (count / sweep_dur).
+        # Guard F-I curves against single-spike censorship and early depolarization block:
+        # if 1 spike occurred, or spikes ceased within the first 25% of the window followed
+        # by >50% terminal silence (Na+ inactivation block), report sustained window rate.
         if count == 1 and sweep_dur > 0:
             freq = win_freq
         elif (
-            2 <= count <= 3
+            count >= 2
             and sweep_dur > 0
             and result.spike_times is not None
             and (result.spike_times[-1] - result.spike_times[0]) < 0.25 * sweep_dur
+            and (float(time[-1]) - float(result.spike_times[-1])) > 0.5 * sweep_dur
         ):
             freq = win_freq
         spike_counts.append(count)
@@ -652,26 +670,21 @@ def calculate_train_dynamics(spike_times: np.ndarray, analysis_start_s: float = 
             first_spike_delay_s=first_spike_delay_s,
         )
 
-    isis = np.diff(spike_times)
+    raw_isis = np.diff(spike_times)
+    isis = raw_isis[raw_isis > 0]
+    if len(isis) < 1:
+        return TrainDynamicsResult(
+            value=None,
+            unit="",
+            is_valid=False,
+            error_message="Requires at least 2 distinct spike timestamps for ISI calculations.",
+            spike_count=spike_count,
+            first_spike_delay_s=first_spike_delay_s,
+        )
+
     mean_isi = float(np.mean(isis))
     cv = float(np.std(isis) / mean_isi) if mean_isi > 0 else np.nan
 
-    if spike_count < 3:
-        return TrainDynamicsResult(
-            value=mean_isi,
-            unit="s",
-            is_valid=True,
-            spike_count=spike_count,
-            mean_isi_s=mean_isi,
-            cv=cv,
-            cv2=np.nan,
-            lv=np.nan,
-            adaptation_index=np.nan,
-            first_spike_delay_s=first_spike_delay_s,
-            isis=isis,
-        )
-
-    isis = isis[isis > 0]
     if len(isis) < 2:
         return TrainDynamicsResult(
             value=mean_isi,
@@ -775,7 +788,7 @@ def run_train_dynamics_wrapper(  # noqa: C901
     """Wrapper for Spike Train Dynamics."""
     from synaptipy.core.analysis.single_spike import calculate_spike_features
 
-    ap_threshold = kwargs.get("spike_threshold", 0.0)
+    ap_threshold = kwargs.get("spike_threshold", -20.0)
     ap_times = kwargs.get("action_potential_times", None)
     analysis_start_s = float(kwargs.get("analysis_start_s", 0.0))
     analysis_end_s = float(kwargs.get("analysis_end_s", 0.0))

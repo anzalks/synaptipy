@@ -370,3 +370,189 @@ def test_tau_wrapper_exposes_95_ci_bounds() -> None:
     assert metrics["tau_ci_95_low"] is not None and math.isfinite(metrics["tau_ci_95_low"])
     assert metrics["tau_ci_95_high"] is not None and math.isfinite(metrics["tau_ci_95_high"])
     assert metrics["tau_ci_95_low"] < metrics["tau_ms"] < metrics["tau_ci_95_high"]
+
+
+def test_template_matching_inward_epsc_peak_refinement_and_dc_invariance() -> None:
+    """Inward negative EPSCs must refine to true negative peak (not positive noise) regardless of DC offset."""
+    from synaptipy.core.analysis.synaptic_events import detect_events_template
+
+    rng = np.random.default_rng(2026)
+    fs = 20_000.0
+    t = np.arange(0.0, 0.5, 1.0 / fs)
+    # Non-zero holding current (-120 pA) + realistic Gaussian noise
+    trace = -120.0 + rng.normal(0.0, 1.2, size=t.size)
+
+    tau_r, tau_d = 0.0005, 0.005
+    kt = np.arange(0.0, 0.04, 1.0 / fs)
+    epsc = -(np.exp(-kt / tau_d) - np.exp(-kt / tau_r))
+    epsc = epsc / np.max(np.abs(epsc)) * 35.0
+    onset_idx = int(0.20 * fs)
+    true_peak_idx = onset_idx + int(np.argmin(epsc))
+    trace[onset_idx : onset_idx + epsc.size] += epsc
+
+    res = detect_events_template(
+        data=trace,
+        sampling_rate=fs,
+        threshold_std=5.5,
+        tau_rise=tau_r,
+        tau_decay=tau_d,
+        polarity="negative",
+        rolling_baseline_window_ms=100.0,
+        time=t,
+    )
+    assert res.is_valid and res.event_count == 1
+    assert abs(int(res.event_indices[0]) - true_peak_idx) <= 5
+    # Signed amplitude on inward EPSC must be strongly negative, never positive noise!
+    assert float(res.event_amplitudes[0]) < -25.0
+
+
+def test_vc_capacitance_noisy_signed_charge_and_filter_lag_extrapolation() -> None:
+    """VC capacitance must cancel zero-mean tail noise and back-extrapolate Rs across filter lag."""
+    rng = np.random.default_rng(99)
+    fs = 50_000.0
+    t = np.arange(0.0, 0.06, 1.0 / fs)
+    rs_true_mohm = 10.0
+    cm_true_pf = 100.0
+    v_step_mv = -10.0
+    tau_c = rs_true_mohm * 1e6 * cm_true_pf * 1e-12  # 1.0 ms
+
+    i_trace = rng.normal(0.0, 20.0, size=t.size)
+    step = t >= 0.010
+    i_trace[step] += -1000.0 * np.exp(-(t[step] - 0.010) / tau_c)
+
+    cap = calculate_capacitance_vc(
+        i_trace,
+        t,
+        baseline_window=(0.0, 0.008),
+        transient_window=(0.010, 0.040),
+        voltage_step_amplitude_mv=v_step_mv,
+    )
+    assert cap is not None
+    # Signed integral cancels zero-mean 20 pA noise (rectifying |delta_i| would inflate by >+45 pF!)
+    assert math.isclose(cap["capacitance_charge_pf"], cm_true_pf, rel_tol=0.10)
+    assert math.isclose(cap["capacitance_pf"], cm_true_pf, rel_tol=0.10)
+
+
+def test_n_pulse_ppr_steep_tail_peak_localization_and_fixed_asymptote() -> None:
+    """calculate_n_pulse_ratio must find true R2/R3 peaks on steep summating decay tails."""
+    from synaptipy.core.analysis.evoked_responses import calculate_n_pulse_ratio
+
+    fs = 20_000.0
+    t = np.arange(0.0, 0.15, 1.0 / fs)
+    trace = np.full_like(t, -10.0)
+    onsets = np.array([0.020, 0.035, 0.050])  # 15 ms ISI on a 25 ms decay tail
+    tau_r, tau_d = 0.001, 0.025
+    kt = np.arange(0.0, 0.12, 1.0 / fs)
+    psc = -(np.exp(-kt / tau_d) - np.exp(-kt / tau_r))
+    psc = psc / np.max(np.abs(psc)) * 60.0
+
+    for onset in onsets:
+        idx0 = int((onset + 0.0015) * fs)
+        end = min(trace.size, idx0 + psc.size)
+        trace[idx0:end] += psc[: end - idx0]
+
+    out = calculate_n_pulse_ratio(
+        data=trace,
+        time=t,
+        stim_onsets=onsets,
+        response_window_ms=12.0,
+        fit_decay_from_ms=4.0,
+        polarity="negative",
+        artifact_blanking_ms=1.0,
+    )
+    assert out["ppr_error"] is None
+    assert math.isclose(out["ratios"][1], 1.0, rel_tol=0.06)
+    assert math.isclose(out["ratios"][2], 1.0, rel_tol=0.08)
+
+
+def test_opto_jitter_plugin_accepts_batch_list_input() -> None:
+    """opto_jitter (expects_list=True) must accept Python list of sweeps without AttributeError."""
+    plugin_path = Path(__file__).resolve().parents[2] / "examples" / "plugins" / "opto_jitter.py"
+    spec = importlib.util.spec_from_file_location("opto_jitter_reg_test", plugin_path)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    fs = 10_000.0
+    t = np.arange(1000) / fs
+    v_sweeps = []
+    ttl_sweeps = []
+    for delay_ms in (4.0, 5.0, 6.0):
+        v = np.full(1000, -70.0)
+        ttl = np.zeros(1000)
+        ttl[100:200] = 5.0
+        sp_idx = 100 + int(round(delay_ms * 1e-3 * fs))
+        v[sp_idx : sp_idx + 4] = 25.0
+        v_sweeps.append(v)
+        ttl_sweeps.append(ttl)
+
+    res = mod.run_opto_jitter_wrapper(
+        data=v_sweeps,
+        time=t,
+        sampling_rate=fs,
+        secondary_data=ttl_sweeps,
+        ttl_threshold=2.5,
+        spike_threshold=-20.0,
+    )
+    assert "error" not in res
+    assert math.isclose(res["metrics"]["Jitter_ms"], 1.0, abs_tol=0.15)
+    assert math.isclose(res["metrics"]["Response Probability (%)"], 100.0, abs_tol=1e-6)
+
+
+def test_fast_spiking_deduplication_and_ljp_invariant_phase_plane_area() -> None:
+    """High-frequency (>250 Hz) spikes must not duplicate and phase_plane_area must be LJP-invariant."""
+    fs = 40_000.0
+    t = np.arange(0.0, 0.05, 1.0 / fs)
+    v = np.full_like(t, -70.0)
+    # 3 spikes 3 ms apart (~333 Hz) with wide 10 ms peak_search_window_samples
+    for sp_t in (0.010, 0.013, 0.016):
+        c = int(sp_t * fs)
+        v[c - 8 : c + 1] = np.linspace(-70.0, 35.0, 9)
+        v[c : c + 20] = np.linspace(35.0, -76.0, 20)
+
+    det = detect_spikes_threshold(
+        v,
+        t,
+        threshold=-20.0,
+        refractory_samples=int(0.0015 * fs),
+        peak_search_window_samples=int(0.010 * fs),
+    )
+    assert det.value == 3
+    assert len(np.unique(det.spike_indices)) == 3
+    assert np.all(np.diff(det.spike_times) > 0.002)
+
+    feats_raw = calculate_spike_features(v, t, det.spike_indices)
+    feats_ljp = calculate_spike_features(v - 14.5, t, det.spike_indices)
+    assert math.isclose(feats_raw[0].phase_plane_area, feats_ljp[0].phase_plane_area, rel_tol=1e-9)
+
+
+def test_dsp_bessel_mag_gaussian_hp_comb_dc_and_drift_qc() -> None:
+    """Verify -3 dB Bessel/Gaussian HP cutoffs, DC-preserving sparse comb filter, and drift QC."""
+    from synaptipy.core.signal_processor import check_trace_quality, comb_filter
+
+    fs = 20_000.0
+    t = np.arange(0.0, 2.0, 1.0 / fs)
+    fc = 200.0
+    sine_fc = np.sin(2.0 * np.pi * fc * t)
+
+    # Zero-phase (two-pass) Bessel norm="mag" at fc has single-pass -3 dB -> two-pass 0.5 amplitude
+    bessel_fc = lowpass_filter(sine_fc, cutoff=fc, fs=fs, order=4, filter_type="bessel")
+    steady_amp_bessel = float(np.max(np.abs(bessel_fc[4000:-4000])))
+    assert math.isclose(steady_amp_bessel, 0.5, abs_tol=0.04)
+
+    # Single-stage Gaussian highpass at fc has exact -3 dB (1/sqrt(2) ~ 0.7071) amplitude
+    gauss_hp_fc = highpass_filter(sine_fc, cutoff=fc, fs=fs, filter_type="gaussian")
+    steady_amp_ghp = float(np.max(np.abs(gauss_hp_fc[4000:-4000])))
+    assert math.isclose(steady_amp_ghp, 1.0 / math.sqrt(2.0), abs_tol=0.03)
+
+    # Sparse comb filter removes 50 Hz & 150 Hz while preserving -70 mV resting potential
+    noisy_dc = -70.0 + 5.0 * np.sin(2.0 * np.pi * 50.0 * t) + 3.0 * np.sin(2.0 * np.pi * 150.0 * t)
+    cleaned = comb_filter(noisy_dc, freq=50.0, Q=30.0, fs=fs)
+    assert math.isclose(float(np.mean(cleaned)), -70.0, abs_tol=1e-3)
+    assert float(np.std(cleaned[4000:-4000])) < 0.25
+
+    # Linear drift of 5 mV over 0.2 mV thermal noise triggers baseline drift warning
+    rng = np.random.default_rng(11)
+    drifting = -70.0 + 2.5 * t + rng.normal(0.0, 0.2, size=t.size)
+    qc = check_trace_quality(drifting, sampling_rate=fs)
+    assert any("baseline drift" in w.lower() for w in qc["warnings"])

@@ -56,15 +56,15 @@ The code/software described in the paper is freely available online at [URL reda
 The primary objective of SynaptiPy is to provide a unified analytical pipeline for intracellular electrophysiology that integrates interactive visual exploration with automated batch processing. The software encompasses data parsing, signal conditioning, feature extraction, and modular extensibility via a plugin architecture. In practice, a standard user workflow consists of three stages: data ingestion, visual configuration, and batch execution. First, native data parsing enables direct loading of proprietary file formats (e.g., ABF, WCP, NWB, etc.). Second, users configure and validate signal conditioning and feature extraction parameters on representative recordings through the graphical user interface (GUI). Finally, these optimized parameters are serialized and applied programmatically across full datasets utilizing a headless processing engine. This architecture ensures that interactive parameter selection translates directly to standardized, reproducible high-throughput analysis, without requiring advanced programming expertise. Comprehensive step-by-step tutorials detailing this workflow are available in the official documentation at https://synaptipy.readthedocs.io/en/latest/.
 
 ## Signal Conditioning and Dynamic Baseline Estimation 
-Before feature extraction, SynaptiPy employs a robust signal-conditioning pipeline to mitigate experimental noise. For dynamic baseline estimation, the algorithm utilises localized detrending using a rolling median filter over the target epoch. To determine precise thresholds for active event detection, the pipeline isolates a minimum-variance sliding window to calculate a quiescent root-mean-square (RMS) noise floor. This approach mathematically isolates random high-frequency thermal noise from slow biological baseline drift, ensuring highly reliable feature extraction across variable recording conditions.
+Before feature extraction, SynaptiPy employs a robust signal-conditioning pipeline (Colquhoun and Sigworth, 1995; Widmann et al., 2015) to mitigate experimental noise. For dynamic baseline estimation, the algorithm utilises localized detrending using a rolling median filter over the target epoch. To determine precise thresholds for active and miniature synaptic event detection (Clements and Bekkers, 1997; Hampel, 1974), the pipeline isolates a minimum-variance sliding window to calculate a quiescent root-mean-square (RMS) noise floor. This approach mathematically isolates random high-frequency thermal noise from slow biological baseline drift, ensuring highly reliable feature extraction across variable recording conditions.
 
 ## Biophysically Accurate Passive Property Extraction 
-To accurately capture subthreshold membrane dynamics, SynaptiPy abandons naive fixed-window subtractions in favor of biophysically representative calculations. Specifically, the passive properties module actively separates peak input resistance $R_{in}$ from steady-state $R_{in}$. This separation effectively isolates hyperpolarization-activated cyclic nucleotide-gated $I_h$ channel conductance, allowing for precise quantification of the voltage sag ratio. Because $I_h$ activation kinetics vary significantly across cell types and experimental temperatures, this analysis is exposed as a built-in plugin with dedicated UI controls, enabling experimentalists to dynamically adjust baseline, peak, and steady-state extraction windows to match specific biological realities while maintaining interactive visual validation.
+To accurately capture subthreshold membrane dynamics, SynaptiPy abandons naive fixed-window subtractions in favor of biophysically representative calculations (Hamill et al., 1981; Rall, 1969; Taylor, 2012). Specifically, the passive properties module actively separates peak input resistance $R_{in}$ from steady-state $R_{in}$. This separation effectively isolates hyperpolarization-activated cyclic nucleotide-gated $I_h$ channel conductance (Robinson and Siegelbaum, 2003), allowing for precise quantification of the voltage sag ratio. Because $I_h$ activation kinetics vary significantly across cell types and experimental temperatures, this analysis is exposed as a built-in plugin with dedicated UI controls, enabling experimentalists to dynamically adjust baseline, peak, and steady-state extraction windows to match specific biological realities while maintaining interactive visual validation.
 
 ## Algorithmic Parity against Computational Benchmarks
-SynaptiPy successfully processed the targeted datasets via the `BatchAnalysisEngine`. To validate the feature extraction pipeline, the results were statistically compared with two established standards in the field: the Electrophysiology Feature Extraction Library (eFEL) (Mandge et al., 2026) and the Allen Institute's Intrinsic Physiology Feature Extractor (IPFX) (Gouwens et al., 2019).
+SynaptiPy successfully processed the targeted datasets via the `BatchAnalysisEngine` and supports archival export to Neurodata Without Borders (NWB) 2.x (Rubel et al., 2022). To validate the feature extraction pipeline, the results were statistically compared with two established standards in the field: the Electrophysiology Feature Extraction Library (eFEL) (Mandge et al., 2026) and the Allen Institute's Intrinsic Physiology Feature Extractor (IPFX) (Gouwens et al., 2019).
 
-For active properties, SynaptiPy utilized a standard dynamic derivative-crossing threshold ($dV/dt > 20$ V/s). The resulting measurements for action potential onset, amplitudes, and phase-plane dynamics demonstrated mathematical agreement with both libraries (Table 1, Figure 2). For subthreshold properties, SynaptiPy's dynamic extraction algorithms yielded steady-state input resistance, resting membrane potential, and time constant estimates that closely matched the results of eFEL and IPFX values (Table 2).
+For active properties, SynaptiPy utilized a standard dynamic derivative-crossing threshold ($dV/dt > 20$ V/s; Hodgkin and Huxley, 1952; Bean, 2007; Jenerick, 1963), while evoked and paired-pulse protocols incorporate iterative residual decay subtraction (Zucker and Regehr, 2002; Thanawala and Regehr, 2013). The resulting measurements for action potential onset, amplitudes, and phase-plane dynamics demonstrated mathematical agreement with both libraries (Table 1, Figure 2). For subthreshold properties, SynaptiPy's dynamic extraction algorithms yielded steady-state input resistance, resting membrane potential, and time constant estimates that closely matched the results of eFEL and IPFX values (Table 2).
 
 <!-- TABLES_START -->
 
@@ -72,18 +72,18 @@ For active properties, SynaptiPy utilized a standard dynamic derivative-crossing
 
 | Metric | SynaptiPy vs IPFX Pearson *r* | Mean bias vs IPFX | LoA vs IPFX | SynaptiPy vs eFEL Pearson *r* | Mean bias vs eFEL | LoA vs eFEL |
 |--------|-------------------------------|-------------------|-------------|-------------------------------|-------------------|-------------|
-| AP threshold (mV) | 0.9132 (*p* = 1.41e-17, *n* = 43)<sup>a</sup> | -0.007 mV | [-1.79, +1.77] mV | 0.9252 (*p* = 7.43e-19, *n* = 43)<sup>b</sup> | -0.607 mV | [-2.23, +1.02] mV |
-| AP amplitude (mV) | 0.9942 (*p* = 2.24e-41, *n* = 43)<sup>c</sup> | +0.027 mV | [-1.76, +1.82] mV | 0.9959 (*p* = 1.93e-44, *n* = 43)<sup>d</sup> | +0.578 mV | [-0.98, +2.13] mV |
-| AP half-width (ms) | 0.9878 (*p* = 1.01e-34, *n* = 43)<sup>e</sup> | -0.094 ms | [-0.19, -0.00] ms | 0.9995 (*p* = 2.21e-62, *n* = 43)<sup>f</sup> | +0.002 ms | [-0.01, +0.02] ms |
-| Max dV/dt (V/s) | 0.9918 (*p* = 2.66e-38, *n* = 43)<sup>g</sup> | -6.488 V/s | [-19.53, +6.55] V/s | 0.9879 (*p* = 7.89e-35, *n* = 43)<sup>h</sup> | -34.340 V/s | [-65.71, -2.97] V/s |
+| AP threshold (mV) | 0.9765 (*p* = 5.95e-29, *n* = 43)<sup>a</sup> | +0.274 mV | [-0.67, +1.21] mV | 0.9799 (*p* = 2.48e-30, *n* = 43)<sup>b</sup> | -0.325 mV | [-1.17, +0.52] mV |
+| AP amplitude (mV) | 0.9980 (*p* = 5.46e-51, *n* = 43)<sup>c</sup> | -0.254 mV | [-1.24, +0.73] mV | 0.9997 (*p* = 2.53e-67, *n* = 43)<sup>d</sup> | +0.296 mV | [-0.10, +0.69] mV |
+| AP half-width (ms) | 0.9876 (*p* = 1.41e-34, *n* = 43)<sup>e</sup> | -0.095 ms | [-0.19, -0.00] ms | 0.9995 (*p* = 3.05e-63, *n* = 43)<sup>f</sup> | +0.001 ms | [-0.01, +0.01] ms |
+| Max dV/dt (V/s) | 0.9946 (*p* = 6.77e-42, *n* = 43)<sup>g</sup> | -9.436 V/s | [-22.07, +3.20] V/s | 0.9829 (*p* = 9.71e-32, *n* = 43)<sup>h</sup> | -37.288 V/s | [-77.53, +2.95] V/s |
 | AP Delay (Time to first spike) (ms) | 1.0000 (*p* = 0.00e+00, *n* = 43)<sup>i</sup> | -0.000 ms | [-0.00, +0.00] ms | 1.0000 (*p* = 1.51e-153, *n* = 43)<sup>j</sup> | -0.002 ms | [-0.01, +0.01] ms |
-| Upstroke/Downstroke Ratio | 0.9996 (*p* = 6.03e-66, *n* = 43)<sup>k</sup> | -0.073 Ratio | [-0.16, +0.02] Ratio | 0.9988 (*p* = 2.06e-55, *n* = 43)<sup>l</sup> | -0.211 Ratio | [-0.34, -0.09] Ratio |
-| Fast AHP depth (mV) | 0.9802 (*p* = 1.75e-30, *n* = 43)<sup>m</sup> | +0.718 mV | [-3.79, +5.22] mV | 0.9820 (*p* = 3.35e-26, *n* = 36)<sup>n</sup> | +0.844 mV | [-3.91, +5.59] mV |
-| ADP amplitude (mV) | 0.9061 (*p* = 0.0939, *n* = 4)<sup>o</sup> | -0.110 mV | [-0.25, +0.03] mV | 0.6555 (*p* = 0.0017, *n* = 20)<sup>p</sup> | +5.768 mV | [-10.94, +22.48] mV |
+| Upstroke/Downstroke Ratio | 0.9998 (*p* = 1.56e-70, *n* = 43)<sup>k</sup> | -0.083 Ratio | [-0.14, -0.02] Ratio | 0.9990 (*p* = 4.50e-57, *n* = 43)<sup>l</sup> | -0.220 Ratio | [-0.32, -0.12] Ratio |
+| Fast AHP depth (mV) | 0.9886 (*p* = 2.41e-35, *n* = 43)<sup>m</sup> | +1.000 mV | [-2.48, +4.49] mV | 0.9847 (*p* = 2.13e-27, *n* = 36)<sup>n</sup> | +1.181 mV | [-2.60, +4.96] mV |
+| ADP amplitude (mV) | 0.9061 (*p* = 0.0939, *n* = 4)<sup>o</sup> | -0.110 mV | [-0.25, +0.03] mV | 0.7584 (*p* = 0.0001, *n* = 20)<sup>p</sup> | +5.048 mV | [-8.16, +18.25] mV |
 | Mean Firing Frequency (Hz) | 1.0000 (*p* = 6.93e-92, *n* = 43)<sup>q</sup> | -0.047 Hz | [-0.46, +0.37] Hz | 0.4501 (*p* = 0.0025, *n* = 43)<sup>r</sup> | -22.496 Hz | [-111.15, +66.16] Hz |
 | Spike Frequency Adaptation | 0.9999 (*p* = 1.97e-52, *n* = 30)<sup>s</sup> | -0.000 Ratio | [-0.00, +0.00] Ratio | 0.8215 (*p* = 8.43e-08, *n* = 28)<sup>t</sup> | +0.012 Ratio | [-0.02, +0.04] Ratio |
 
-*All correlations are Pearson's r (two-sided) with exact *p*-values and valid pair counts reported across *n* = 43 sweeps nested within *N* = 6 independent cells (cell-clustered mean correlations and non-parametric Spearman *rho* are reported in the Statistical Table). Bias = mean signed difference (SynaptiPy minus benchmark, per-sweep means). LoA = 95% Bland-Altman limits of agreement. SynaptiPy: BatchAnalysisEngine spike_detection (dV/dt threshold 20 V/s, refractory 2 ms). eFEL: BlueBrain eFEL (dV/dt threshold 20 V/s, >= 0.02 ms resampling step). IPFX: Allen IPFX SpikeFeatureExtractor, 9.9 kHz Bessel filter. Superscript letters refer to the statistical table. N/A = no direct benchmark equivalent.*
+*All correlations are Pearson's r (two-sided) with exact *p*-values and valid pair counts reported across *n* = 43 sweeps nested within *N* = 6 independent cells (cell-clustered mean correlations and non-parametric Spearman *rho* are reported in the Statistical Table). Bias = mean signed difference (SynaptiPy minus benchmark, per-sweep means). LoA = 95% Bland-Altman limits of agreement. SynaptiPy: BatchAnalysisEngine spike_detection (dV/dt threshold 20 V/s, refractory 2 ms). eFEL: BlueBrain eFEL at native sampling interval. IPFX: Allen IPFX SpikeFeatureExtractor, 9.9 kHz Bessel filter. Superscript letters refer to the statistical table. N/A = no direct benchmark equivalent.*
 
 **Table 2-2: Subthreshold passive properties benchmark on hyperpolarizing steps (Allen Dataset).**
 
@@ -102,22 +102,22 @@ For active properties, SynaptiPy utilized a standard dynamic derivative-crossing
 
 | | Data structure | Type of test | Statistical value |
 |---|---|---|---|
-| a | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9132 (*p* = 1.41e-17); Spearman *rho* = 0.8647 (*p* = 7.85e-14); Shapiro-Wilk *W* = 0.7255 (*p* = 1.25e-07); cell-mean *r* = 0.9422 |
-| b | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9252 (*p* = 7.43e-19); Spearman *rho* = 0.8748 (*p* = 1.74e-14); Shapiro-Wilk *W* = 0.6277 (*p* = 3.29e-09); cell-mean *r* = 0.9441 |
-| c | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9942 (*p* = 2.24e-41); Spearman *rho* = 0.9929 (*p* = 1.52e-39); Shapiro-Wilk *W* = 0.7400 (*p* = 2.29e-07); cell-mean *r* = 0.9983 |
-| d | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9959 (*p* = 1.93e-44); Spearman *rho* = 0.9971 (*p* = 1.37e-47); Shapiro-Wilk *W* = 0.6657 (*p* = 1.25e-08); cell-mean *r* = 0.9988 |
-| e | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9878 (*p* = 1.01e-34); Spearman *rho* = 0.9825 (*p* = 1.46e-31); Shapiro-Wilk *W* = 0.8281 (*p* = 1.54e-05); cell-mean *r* = 0.9878 |
-| f | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9995 (*p* = 2.21e-62); Spearman *rho* = 0.9971 (*p* = 1.38e-47); Shapiro-Wilk *W* = 0.7127 (*p* = 7.44e-08); cell-mean *r* = 0.9999 |
-| g | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9918 (*p* = 2.66e-38); Spearman *rho* = 0.9908 (*p* = 3.13e-37); Shapiro-Wilk *W* = 0.7978 (*p* = 3.23e-06); cell-mean *r* = 0.9995 |
-| h | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9879 (*p* = 7.89e-35); Spearman *rho* = 0.9869 (*p* = 4.37e-34); Shapiro-Wilk *W* = 0.8750 (*p* = 0.0002); cell-mean *r* = 0.9920 |
+| a | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9765 (*p* = 5.95e-29); Spearman *rho* = 0.9479 (*p* = 5.57e-22); Shapiro-Wilk *W* = 0.6030 (*p* = 1.45e-09); cell-mean *r* = 0.9919 |
+| b | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9799 (*p* = 2.48e-30); Spearman *rho* = 0.9547 (*p* = 3.39e-23); Shapiro-Wilk *W* = 0.3789 (*p* = 2.93e-12); cell-mean *r* = 0.9972 |
+| c | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9980 (*p* = 5.46e-51); Spearman *rho* = 0.9946 (*p* = 6.55e-42); Shapiro-Wilk *W* = 0.6277 (*p* = 3.28e-09); cell-mean *r* = 0.9994 |
+| d | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9997 (*p* = 2.53e-67); Spearman *rho* = 0.9985 (*p* = 2.68e-53); Shapiro-Wilk *W* = 0.9331 (*p* = 0.0149); cell-mean *r* = 0.9999 |
+| e | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9876 (*p* = 1.41e-34); Spearman *rho* = 0.9833 (*p* = 5.96e-32); Shapiro-Wilk *W* = 0.8319 (*p* = 1.88e-05); cell-mean *r* = 0.9877 |
+| f | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9995 (*p* = 3.05e-63); Spearman *rho* = 0.9975 (*p* = 7.69e-49); Shapiro-Wilk *W* = 0.6958 (*p* = 3.83e-08); cell-mean *r* = 1.0000 |
+| g | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9946 (*p* = 6.77e-42); Spearman *rho* = 0.9890 (*p* = 1.22e-35); Shapiro-Wilk *W* = 0.8066 (*p* = 5.00e-06); cell-mean *r* = 0.9964 |
+| h | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9829 (*p* = 9.71e-32); Spearman *rho* = 0.9819 (*p* = 3.04e-31); Shapiro-Wilk *W* = 0.8287 (*p* = 1.58e-05); cell-mean *r* = 0.9781 |
 | i | Zero-variance paired differences | Pearson correlation (two-sided, *n* = 43 sweeps) | *r* = 1.0000 (*p* = 0.00e+00); Spearman *rho* = 1.0000 (*p* = 0.00e+00); Shapiro-Wilk N/A (exact identity); cell-mean *r* = 1.0000 |
 | j | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 1.0000 (*p* = 1.51e-153); Spearman *rho* = 1.0000 (*p* = 0.00e+00); Shapiro-Wilk *W* = 0.8358 (*p* = 2.34e-05); cell-mean *r* = 1.0000 |
-| k | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9996 (*p* = 6.03e-66); Spearman *rho* = 0.9938 (*p* = 9.35e-41); Shapiro-Wilk *W* = 0.8733 (*p* = 0.0002); cell-mean *r* = 1.0000 |
-| l | Normal paired differences | Pearson correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9988 (*p* = 2.06e-55); Spearman *rho* = 0.9881 (*p* = 6.12e-35); Shapiro-Wilk *W* = 0.9777 (*p* = 0.5593); cell-mean *r* = 0.9993 |
-| m | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9802 (*p* = 1.75e-30); Spearman *rho* = 0.9444 (*p* = 2.02e-21); Shapiro-Wilk *W* = 0.9121 (*p* = 0.0030); cell-mean *r* = 0.9905 |
-| n | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 36 sweeps) | *r* = 0.9820 (*p* = 3.35e-26); Spearman *rho* = 0.9207 (*p* = 1.87e-15); Shapiro-Wilk *W* = 0.9395 (*p* = 0.0489); cell-mean *r* = 0.9774 |
+| k | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9998 (*p* = 1.56e-70); Spearman *rho* = 0.9964 (*p* = 1.63e-45); Shapiro-Wilk *W* = 0.8102 (*p* = 6.00e-06); cell-mean *r* = 0.9999 |
+| l | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9990 (*p* = 4.50e-57); Spearman *rho* = 0.9902 (*p* = 1.14e-36); Shapiro-Wilk *W* = 0.9034 (*p* = 0.0016); cell-mean *r* = 0.9993 |
+| m | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.9886 (*p* = 2.41e-35); Spearman *rho* = 0.9479 (*p* = 5.57e-22); Shapiro-Wilk *W* = 0.9453 (*p* = 0.0404); cell-mean *r* = 0.9934 |
+| n | Normal paired differences | Pearson correlation (two-sided, *n* = 36 sweeps) | *r* = 0.9847 (*p* = 2.13e-27); Spearman *rho* = 0.9207 (*p* = 1.87e-15); Shapiro-Wilk *W* = 0.9719 (*p* = 0.4811); cell-mean *r* = 0.9799 |
 | o | Small sample (*n* < 8) | Pearson correlation (two-sided, *n* = 4 sweeps) | *r* = 0.9061 (*p* = 0.0939); Spearman *rho* = 0.4000 (*p* = 0.6000); Shapiro-Wilk N/A |
-| p | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 20 sweeps) | *r* = 0.6555 (*p* = 0.0017); Spearman *rho* = 0.5188 (*p* = 0.0191); Shapiro-Wilk *W* = 0.8608 (*p* = 0.0081); cell-mean *r* = 0.9309 |
+| p | Normal paired differences | Pearson correlation (two-sided, *n* = 20 sweeps) | *r* = 0.7584 (*p* = 0.0001); Spearman *rho* = 0.6135 (*p* = 0.0040); Shapiro-Wilk *W* = 0.9133 (*p* = 0.0738); cell-mean *r* = 0.9188 |
 | q | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 1.0000 (*p* = 6.93e-92); Spearman *rho* = 0.9997 (*p* = 1.37e-67); Shapiro-Wilk *W* = 0.2189 (*p* = 8.68e-14); cell-mean *r* = 1.0000 |
 | r | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 43 sweeps) | *r* = 0.4501 (*p* = 0.0025); Spearman *rho* = 0.4187 (*p* = 0.0052); Shapiro-Wilk *W* = 0.5265 (*p* = 1.40e-10); cell-mean *r* = 0.9373 |
 | s | Non-normal paired differences | Pearson + Spearman correlation (two-sided, *n* = 30 sweeps) | *r* = 0.9999 (*p* = 1.97e-52); Spearman *rho* = 0.9991 (*p* = 4.76e-40); Shapiro-Wilk *W* = 0.2343 (*p* = 2.05e-11); cell-mean *r* = 1.0000 |
@@ -160,25 +160,53 @@ While software packages like **Clampfit** and **Axograph** remain robust industr
 
 # References
 
-Dempster J (1997) A new version of the Strathclyde Electrophysiology software package running within the Microsoft Windows environment. *J Physiol* 504:P57–P57.
+Bean BP (2007) The action potential in mammalian central neurons. *Nat Rev Neurosci* 8:451-465. doi:10.1038/nrn2148
+
+Clements JD, Bekkers JM (1997) Detection of spontaneous synaptic events with an optimally scaled template. *Biophys J* 73:220-229. doi:10.1016/S0006-3495(97)78062-7
+
+Colquhoun D, Sigworth FJ (1995) Fitting and statistical analysis of single-channel records. In: *Single-Channel Recording* (Sakmann B, Neher E, eds), 2nd ed, pp483-587. New York: Springer. doi:10.1007/978-1-4419-1229-9_19
+
+Dempster J (1997) A new version of the Strathclyde Electrophysiology software package running within the Microsoft Windows environment. *J Physiol* 504:P57-P57.
 
 Garcia S, Guarino D, Jaillet F, Jennings TR, Pröpper R, Rautenberg PL, Rodgers C, Sobolev A, Wachtler T, Yger P, Davison AP (2014) Neo: an object model for handling electrophysiology data in multiple formats. *Front Neuroinform* 8:10. doi:10.3389/fninf.2014.00010
 
-Gouwens NW et al. (2019) Classification of electrophysiological and morphological neuron types in the mouse visual cortex. *Nat Neurosci* 22:1182–1195. doi:10.1038/s41593-019-0417-0
+Gouwens NW et al. (2019) Classification of electrophysiological and morphological neuron types in the mouse visual cortex. *Nat Neurosci* 22:1182-1195. doi:10.1038/s41593-019-0417-0
 
 Guzman SJ, Schlögl A, Schmidt-Hieber C (2014) Stimfit: quantifying electrophysiological data with Python. *Front Neuroinform* 8:16. doi:10.3389/fninf.2014.00016
 
-Harris CR, Millman KJ, van der Walt SJ, Gommers R, Virtanen P, Cournapeau D, Wieser E, Taylor J, Berg S, Smith NJ, Kern R, Picus M, Hoyer S, van Kerkwijk MH, Brett M, Haldane A, del Río JF, Wiebe M, Peterson P, Gérard-Marchant P, Sheppard K, Reddy T, Weckesser W, Abbasi H, Gohlke C, Oliphant TE (2020) Array programming with NumPy. *Nature* 585:357–362. doi:10.1038/s41586-020-2649-2
+Hamill OP, Marty A, Neher E, Sakmann B, Sigworth FJ (1981) Improved patch-clamp techniques for high-resolution current recording from cells and cell-free membrane patches. *Pflugers Arch* 391:85-100. doi:10.1007/BF00656997
+
+Hampel FR (1974) The influence curve and its role in robust estimation. *J Am Stat Assoc* 69:383-393. doi:10.1080/01621459.1974.10482962
+
+Harris CR, Millman KJ, van der Walt SJ, Gommers R, Virtanen P, Cournapeau D, Wieser E, Taylor J, Berg S, Smith NJ, Kern R, Picus M, Hoyer S, van Kerkwijk MH, Brett M, Haldane A, del Río JF, Wiebe M, Peterson P, Gérard-Marchant P, Sheppard K, Reddy T, Weckesser W, Abbasi H, Gohlke C, Oliphant TE (2020) Array programming with NumPy. *Nature* 585:357-362. doi:10.1038/s41586-020-2649-2
+
+Hodgkin AL, Huxley AF (1952) A quantitative description of membrane current and its application to conduction and excitation in nerve. *J Physiol* 117:500-544. doi:10.1113/jphysiol.1952.sp004764
 
 Hu M, Jiang X (2022) PatchView: a Python package for patch-clamp data analysis and visualization. *J Open Source Softw* 7:4706. doi:10.21105/joss.04706
 
+Jenerick H (1963) Phase plane trajectories of the muscle spike potential. *Biophys J* 3:363-377. doi:10.1016/S0006-3495(63)86827-7
+
 Mandge D, Tuncel A, Jaquier A, Kilic I, Damart T, Markram H, Van Geit W, Ranjan R (2026) eFEL: electrophysiology feature extraction library. *Bioinformatics* 42:btag328. doi:10.1093/bioinformatics/btag328
 
-McKinney W (2010) Data structures for statistical computing in Python. In: Proceedings of the 9th Python in Science Conference, pp56–61. doi:10.25080/Majora-92bf1922-00a
+McKinney W (2010) Data structures for statistical computing in Python. In: Proceedings of the 9th Python in Science Conference, pp56-61. doi:10.25080/Majora-92bf1922-00a
+
+Rall W (1969) Time constants and electrotonic length of membrane cylinders and neurons. *Biophys J* 9:1483-1508. doi:10.1016/S0006-3495(69)86467-2
+
+Robinson RB, Siegelbaum SA (2003) Hyperpolarization-activated cation currents: from molecules to physiological function. *Annu Rev Physiol* 65:453-480. doi:10.1146/annurev.physiol.65.092101.142734
 
 Rothman JS, Silver RA (2018) NeuroMatic: an integrated open-source software toolkit for acquisition, analysis and simulation of electrophysiological data. *Front Neuroinform* 12:14. doi:10.3389/fninf.2018.00014
 
-Virtanen P, Gommers R, Oliphant TE, Haberland M, Reddy T, Cournapeau D, Burovski E, Peterson P, Weckesser W, Bright J, van der Walt SJ, Brett M, Wilson J, Millman KJ, Mayorov N, Nelson ARJ, Jones E, Kern R, Larson E, Carey CJ, Polat İ, Feng Y, Moore EW, VanderPlas J, Laxalde D, Perktold J, Cimrman R, Henriksen I, Quintero EA, Harris CR, Archibald AM, Ribeiro AH, Pedregosa F, van Mulbregt P (2020) SciPy 1.0: fundamental algorithms for scientific computing in Python. *Nat Methods* 17:261–272. doi:10.1038/s41592-019-0686-2
+Rubel O et al. (2022) The Neurodata Without Borders ecosystem for neurophysiological data science. *eLife* 11:e78362. doi:10.7554/eLife.78362
+
+Taylor AL (2012) What we talk about when we talk about capacitance measured with the voltage-clamp step method. *J Comput Neurosci* 32:167-175. doi:10.1007/s10827-011-0346-8
+
+Thanawala MS, Regehr WG (2013) Presynaptic calcium influx controls neurotransmitter release in part by regulating the effective size of the readily releasable pool. *J Neurosci* 33:4625-4633. doi:10.1523/JNEUROSCI.4031-12.2013
+
+Virtanen P, Gommers R, Oliphant TE, Haberland M, Reddy T, Cournapeau D, Burovski E, Peterson P, Weckesser W, Bright J, van der Walt SJ, Brett M, Wilson J, Millman KJ, Mayorov N, Nelson ARJ, Jones E, Kern R, Larson E, Carey CJ, Polat İ, Feng Y, Moore EW, VanderPlas J, Laxalde D, Perktold J, Cimrman R, Henriksen I, Quintero EA, Harris CR, Archibald AM, Ribeiro AH, Pedregosa F, van Mulbregt P (2020) SciPy 1.0: fundamental algorithms for scientific computing in Python. *Nat Methods* 17:261-272. doi:10.1038/s41592-019-0686-2
+
+Widmann A, Schröger E, Maess B (2015) Digital filter design for electrophysiological data: a practical approach. *J Neurosci Methods* 250:34-46. doi:10.1016/j.jneumeth.2014.08.002
+
+Zucker RS, Regehr WG (2002) Short-term synaptic plasticity. *Annu Rev Physiol* 64:355-405. doi:10.1146/annurev.physiol.64.092501.114547
 
 # Figure Legends
 

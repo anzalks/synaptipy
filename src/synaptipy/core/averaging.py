@@ -57,7 +57,10 @@ def compute_time_aligned_average(
     if not valid_rows:
         return TimeAlignedAverage(None, None, None, decisions)
 
-    target_time = max((time for _, time in valid_rows), key=len)
+    target_time = max(
+        (time for _, time in valid_rows),
+        key=lambda t: (float(t[-1] - t[0]) if t.size > 1 else 0.0, int(t.size)),
+    )
     aligned = np.full((len(valid_rows), target_time.size), np.nan, dtype=float)
     for row, (trace, time) in enumerate(valid_rows):
         in_range = (target_time >= time[0]) & (target_time <= time[-1])

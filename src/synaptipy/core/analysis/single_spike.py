@@ -4,7 +4,8 @@
 Core Protocol Module 2: Single Spike Analysis.
 
 Consolidates: Spike Detection, AP Characterisation (threshold, amplitude,
-half-width, rise/decay times, AHP) and Phase Plane (dV/dt vs V) analysis.
+half-width, rise/decay times, fAHP/mAHP, ADP) and Phase Plane (dV/dt vs V)
+analysis.
 
 All registry wrapper functions return::
 
@@ -12,6 +13,28 @@ All registry wrapper functions return::
         "module_used": "single_spike",
         "metrics": { ... flat result keys ... }
     }
+
+References
+----------
+- Hodgkin, A. L., & Huxley, A. F. (1952). J. Physiol., 117(4), 500-544.
+  doi:10.1113/jphysiol.1952.sp004764
+- Jenerick, H. (1963). Biophys. J., 3(5), 363-377.
+  doi:10.1016/S0006-3495(63)86827-7
+- Storm, J. F. (1987). J. Physiol., 385, 733-759.
+  doi:10.1113/jphysiol.1987.sp016517
+- Azouz, R., Jensen, M. S., & Yaari, Y. (1996). J. Physiol., 492(1), 211-223.
+  doi:10.1113/jphysiol.1996.sp021302
+- Henze, D. A., & Buzsaki, G. (2001). Neuroscience, 105(1), 121-130.
+  doi:10.1016/S0306-4522(01)00167-1
+- Sah, P., & Faber, E. S. L. (2002). Prog. Neurobiol., 66(5), 345-353.
+  doi:10.1016/S0301-0082(02)00004-7
+- Sekerli, M., Del Negro, C. A., Lee, R. H., & Butera, R. J. (2004).
+  IEEE Trans. Biomed. Eng., 51(9), 1665-1672. doi:10.1109/TBME.2004.827827
+- Naundorf, B., Wolf, F., & Volgushev, M. (2006). Nature, 440(7087), 1060-1063.
+  doi:10.1038/nature04610
+- Bean, B. P. (2007). Nat. Rev. Neurosci., 8(6), 451-465. doi:10.1038/nrn2148
+- Gouwens, N. W., Sorensen, S. A., Berg, J., et al. (2019). Nat. Neurosci.,
+  22(7), 1182-1195. doi:10.1038/s41593-019-0417-0
 """
 
 import logging
@@ -159,22 +182,24 @@ def detect_spikes_threshold(  # noqa: C901
             )
 
         last_accepted_crossing = -refractory_samples - 1 if refractory_samples > 0 else -1
-        for crossing_idx in crossings:
+        for idx_c, crossing_idx in enumerate(crossings):
             if refractory_samples > 0 and (crossing_idx - last_accepted_crossing) < refractory_samples:
                 continue
-            search_start = crossing_idx
-            search_end = min(crossing_idx + peak_search_window_samples, len(data))
+            search_start = int(crossing_idx)
+            next_crossing = int(crossings[idx_c + 1]) if idx_c + 1 < len(crossings) else len(data)
+            search_end = min(search_start + peak_search_window_samples, next_crossing, len(data))
             if search_start >= search_end:
-                peak_idx = crossing_idx
+                peak_idx = search_start
             else:
                 try:
                     relative_peak_idx = int(np.argmax(data[search_start:search_end]))
                     peak_idx = search_start + relative_peak_idx
                 except ValueError:
-                    peak_idx = crossing_idx
+                    peak_idx = search_start
 
             # Only commit refractory suppression when peak actually crosses voltage threshold
-            if data[peak_idx] >= threshold:
+            # and does not duplicate the preceding spike peak in high-frequency trains (>200 Hz).
+            if data[peak_idx] >= threshold and (not peak_indices_list or peak_idx > peak_indices_list[-1]):
                 peak_indices_list.append(peak_idx)
                 last_accepted_crossing = crossing_idx
 
@@ -260,44 +285,49 @@ def calculate_spike_features(  # noqa: C901
         log.warning("Invalid time vector (dt <= 0). Cannot calculate features.")
         return []
 
-    # Apply 9.9 kHz low-pass Bessel filter for clean derivative calculation
-    from scipy.signal import bessel, sosfiltfilt
+    # Apply 9.9 kHz low-pass Bessel filter for clean derivative calculation (BLAS-safe)
+    from scipy.signal import bessel
+
+    from synaptipy.core.signal_processor import _sosfiltfilt_safe
 
     nyq = 0.5 / dt
     if 9900.0 < nyq:
         sos = bessel(4, 9900.0, btype="low", output="sos", fs=1.0 / dt)
-        data_filtered = sosfiltfilt(sos, data)
+        data_filtered = _sosfiltfilt_safe(sos, data)
     else:
         data_filtered = data
 
     dvdt = np.gradient(data_filtered, dt)
 
-    lookback_samples = int(onset_lookback / dt)
+    lookback_samples = max(1, int(onset_lookback / dt))
     post_peak_samples = int(0.01 / dt)
     ahp_max_samples = int(ahp_window_sec / dt)
 
     # --- AP Threshold (onset) via dV/dt threshold crossing ---
-    # The true physiological base of the action potential is standardly defined
-    # as the point where the rising phase crosses a specific dV/dt threshold (e.g. 20 V/s).
-    # The previous maximum curvature (d2vdt2) method was erroneously flagging the middle
-    # of the upstroke due to extreme voltage acceleration.
+    # Bound each spike's lookback window strictly after the preceding spike peak so
+    # fast-spiking (>100 Hz) trains never lock onto the prior spike's upstroke while
+    # preserving full inter-spike ramps on slower trains.
     lookback_range = np.arange(-lookback_samples, 0)
-    onset_window_indices = spike_indices[:, None] + lookback_range
-    np.clip(onset_window_indices, 0, n_data - 1, out=onset_window_indices)
+    raw_onset_indices = spike_indices[:, None] + lookback_range
+    onset_min_idx = np.zeros(n_spikes, dtype=int)
+    if n_spikes > 1:
+        onset_min_idx[1:] = spike_indices[:-1] + 1
+    in_interspike_window = raw_onset_indices >= onset_min_idx[:, None]
+    onset_window_indices = np.clip(raw_onset_indices, 0, n_data - 1)
 
     onset_dvdt_windows = dvdt[onset_window_indices]
+    masked_upstroke_dvdt = np.where(in_interspike_window, onset_dvdt_windows, -np.inf)
 
     # We use the explicit dvdt_threshold parameter (converted to mV/s) to find the onset.
     target_thresh_mvs = dvdt_threshold * 1000.0
 
     # PHASE-PLANE BACKWARD SEARCH:
-    # Instead of scanning backward from the peak (where dV/dt drops to 0),
-    # we must scan backward from the point of MAXIMUM dV/dt to find the true onset crossing.
-    max_dvdt_rel_idx = np.argmax(onset_dvdt_windows, axis=1)
+    # Scan backward from the point of MAXIMUM dV/dt within the bounded pre-spike window.
+    max_dvdt_rel_idx = np.argmax(masked_upstroke_dvdt, axis=1)
 
-    # Create a mask that is only valid BEFORE the max dV/dt point
+    # Create a mask that is only valid within the inter-spike window and BEFORE max dV/dt
     col_idxs = np.tile(np.arange(lookback_samples), (n_spikes, 1))
-    valid_search_mask = col_idxs <= max_dvdt_rel_idx[:, None]
+    valid_search_mask = (col_idxs <= max_dvdt_rel_idx[:, None]) & in_interspike_window
 
     below_thresh_mask = (onset_dvdt_windows < target_thresh_mvs) & valid_search_mask
     has_crossing = np.any(below_thresh_mask, axis=1)
@@ -484,15 +514,18 @@ def calculate_spike_features(  # noqa: C901
     temp_ahp[~valid_ahp_mask] = np.inf
 
     # DYNAMIC AHP BOUNDING:
-    # Instead of unbounded argmin, use the first zero-crossing of the derivative
-    # (negative to positive) indicating the end of repolarization.
+    # Require V < ap_threshold at the upward dV/dt zero-crossing so suprathreshold
+    # repolarisation shoulders/ADPs above threshold are not mistaken for the AHP trough.
     ahp_dvdt = dvdt[ahp_indices]
     ahp_dvdt[~valid_ahp_mask] = -1.0  # Ignore invalid regions
-    crossing_mask = (ahp_dvdt[:, :-1] < 0) & (ahp_dvdt[:, 1:] >= 0)
-    has_crossing = np.any(crossing_mask, axis=1) if crossing_mask.shape[1] > 0 else np.zeros(n_spikes, dtype=bool)
-    first_crossing_idx = (
-        np.argmax(crossing_mask, axis=1) + 1 if crossing_mask.shape[1] > 0 else np.zeros(n_spikes, dtype=int)
-    )
+    if ahp_dvdt.shape[1] > 1:
+        below_ap_thr = np.isnan(ap_thresholds[:, None]) | (ahp_waveforms[:, :-1] < ap_thresholds[:, None])
+        crossing_mask = (ahp_dvdt[:, :-1] < 0) & (ahp_dvdt[:, 1:] >= 0) & below_ap_thr
+        has_crossing = np.any(crossing_mask, axis=1)
+        first_crossing_idx = np.argmax(crossing_mask, axis=1) + 1
+    else:
+        has_crossing = np.zeros(n_spikes, dtype=bool)
+        first_crossing_idx = np.zeros(n_spikes, dtype=int)
 
     # Fallback to argmin if no clean zero-crossing is found
     ahp_min_rel_indices = np.where(has_crossing, first_crossing_idx, np.argmin(temp_ahp, axis=1))
@@ -564,22 +597,29 @@ def calculate_spike_features(  # noqa: C901
                     break
 
     # --- fAHP and mAHP (separate physiological windows) ---
-    # fAHP: fast AHP (default 1-5 ms post-peak): Na+ channel-mediated repolarisation overshoot
-    # mAHP: medium AHP (default 10-50 ms post-peak): K+ channel-mediated hyperpolarisation
+    # fAHP: fast AHP (default 1-5 ms post-peak): BK and Kv3 K+ channel-mediated fast repolarisation (Storm, 1987)
+    # mAHP: medium AHP (default 10-50 ms post-peak): SK Ca2+-activated K+ channel hyperpolarisation (Sah & Faber, 2002)
     fahp_start = max(1, int(fahp_window_ms[0] / 1000.0 / dt))
     fahp_end = max(fahp_start + 1, int(fahp_window_ms[1] / 1000.0 / dt))
     mahp_start = max(1, int(mahp_window_ms[0] / 1000.0 / dt))
     mahp_end = max(mahp_start + 1, int(mahp_window_ms[1] / 1000.0 / dt))
 
+    next_spike_limit = np.full(n_spikes, n_data, dtype=int)
+    if n_spikes > 1:
+        next_spike_limit[:-1] = np.minimum(n_data, thresh_indices[1:])
+
     def _window_min(start_s: int, end_s: int) -> np.ndarray:
-        """Return per-spike min voltage in [peak+start_s, peak+end_s)."""
+        """Return per-spike min voltage in [peak+start_s, min(peak+end_s, next_onset, n_data))."""
         w_len = end_s - start_s
         if w_len <= 0:
             return np.full(n_spikes, np.nan)
         w_range = np.arange(start_s, end_s)
-        w_indices = spike_indices[:, None] + w_range
-        np.clip(w_indices, 0, n_data - 1, out=w_indices)
-        return np.min(data[w_indices], axis=1)
+        raw_w_idx = spike_indices[:, None] + w_range
+        valid_w = (raw_w_idx >= 0) & (raw_w_idx < next_spike_limit[:, None])
+        safe_w_idx = np.clip(raw_w_idx, 0, n_data - 1)
+        vals = np.where(valid_w, data[safe_w_idx], np.inf)
+        mins = np.min(vals, axis=1)
+        return np.where(np.isfinite(mins), mins, np.nan)
 
     fahp_min_vals = _window_min(fahp_start, fahp_end)
     mahp_min_vals = _window_min(mahp_start, mahp_end)
@@ -650,7 +690,9 @@ def calculate_spike_features(  # noqa: C901
                 y = full_dvdt[i, rel_start:rel_end]
 
                 if len(x) == len(y):
-                    area = 0.5 * np.abs(np.dot(x[:-1], y[1:]) - np.dot(x[1:], y[:-1]))
+                    # Closed Shoelace polygon (Jenerick, 1963): closing edge makes area
+                    # strictly invariant to scalar voltage offsets (e.g. LJP correction).
+                    area = 0.5 * np.abs(np.dot(x[:-1], y[1:]) - np.dot(x[1:], y[:-1]) + x[-1] * y[0] - x[0] * y[-1])
                     phase_plane_areas[i] = area
 
     features_list = []
@@ -776,12 +818,17 @@ def _resolve_single_kink_index(
     """Resolve the AP onset index within [lower_bound, peak_idx)."""
     if dvdt_slice.size == 0:
         return max(0, int(peak_idx) - 1)
-    below_mask = np.where(dvdt_slice <= dvdt_threshold)[0]
-    if below_mask.size > 0 and below_mask[-1] + 1 < dvdt_slice.size:
-        return lower_bound + int(below_mask[-1]) + 1
-    crossings = np.where(dvdt_slice > dvdt_threshold)[0]
-    if crossings.size > 0:
-        return lower_bound + int(crossings[0])
+    # Search backward only up to peak upstroke velocity so dV/dt -> 0 near the
+    # AP peak cannot misplace threshold onto the peak shoulder.
+    upstroke_end = int(np.argmax(dvdt_slice)) + 1
+    upstroke_dvdt = dvdt_slice[:upstroke_end]
+    if np.any(upstroke_dvdt > dvdt_threshold):
+        below_mask = np.where(upstroke_dvdt <= dvdt_threshold)[0]
+        if below_mask.size > 0 and below_mask[-1] + 1 < upstroke_dvdt.size:
+            return lower_bound + int(below_mask[-1]) + 1
+        crossings = np.where(upstroke_dvdt > dvdt_threshold)[0]
+        if crossings.size > 0:
+            return lower_bound + int(crossings[0])
     if kink_slope > 0 and v_slice.size >= 3:
         dv = np.diff(v_slice)
         ddvdt = np.diff(dvdt_slice)

@@ -48,6 +48,27 @@ hippocampal pyramidal cells in vivo is increased by recent spiking activity.
 > $\text{Na}^+$ channel inactivation across a spike train (`single_spike.py`,
 > Section 15.2).
 
+**Jenerick, H. (1963).** Phase plane trajectories of the muscle spike potential.
+*Biophysical Journal*, 3(5), 363-377.
+[doi:10.1016/S0006-3495(63)86827-7](https://doi.org/10.1016/S0006-3495(63)86827-7)
+> Foundational $(V, dV/dt)$ phase-plane trajectory and closed-loop area
+> analysis (`single_spike.py`, Section 6.9 and Section 11).
+
+**Azouz, R., Jensen, M. S., & Yaari, Y. (1996).** Ionic basis of spike
+after-depolarization and burst generation in adult rat hippocampal CA1 pyramidal
+cells. *Journal of Physiology*, 492(1), 211-223.
+[doi:10.1113/jphysiol.1996.sp021302](https://doi.org/10.1113/jphysiol.1996.sp021302)
+> Biophysical characterisation of spike afterdepolarisation (`adp_amplitude`
+> prominence-gated detection in `single_spike.py`, Section 6.8).
+
+**Gouwens, N. W., Sorensen, S. A., Berg, J., et al. (2019).** Classification of
+electrophysiological and morphological neuron types in the mouse visual cortex.
+*Nature Neuroscience*, 22(7), 1182-1195.
+[doi:10.1038/s41593-019-0417-0](https://doi.org/10.1038/s41593-019-0417-0)
+> Standardised intracellular feature definitions (9.9 kHz 4-pole Bessel
+> derivative pre-filter, $dV/dt$ threshold crossing, upstroke/downstroke ratio,
+> and adaptation index) benchmarked in `single_spike.py` and `firing_dynamics.py`.
+
 ---
 
 ## After-Hyperpolarisation (AHP)
@@ -91,6 +112,49 @@ cation currents: From molecules to physiological function.
 > HCN channel physiology - basis for peak vs. steady-state $R_{\text{in}}$
 > distinction (Section 2.2) and sag ratio interpretation (Section 4,
 > `passive_properties.py`).
+
+**Rall, W. (1969).** Time constants and electrotonic length of membrane
+cylinders and neurons. *Biophysical Journal*, 9(12), 1483-1508.
+[doi:10.1016/S0006-3495(69)86467-2](https://doi.org/10.1016/S0006-3495(69)86467-2)
+> Multi-exponential cable charging theory underlying mono- and bi-exponential
+> membrane time-constant ($\tau_m$, $\tau_{\text{fast}}$, $\tau_{\text{slow}}$)
+> fitting in `passive_properties.py` (Section 3).
+
+**Spruston, N., & Johnston, D. (1992).** Perforated patch-clamp analysis of the
+passive membrane properties of three classes of hippocampal neurons.
+*Journal of Neurophysiology*, 67(3), 508-529.
+[doi:10.1152/jn.1992.67.3.508](https://doi.org/10.1152/jn.1992.67.3.508)
+> Subthreshold current-step estimation of passive $\tau_m$ and $R_{\text{in}}$
+> while avoiding $I_h$ sag contamination (`passive_properties.py`, Section 3).
+
+**Lindau, M., & Neher, E. (1988).** Patch-clamp techniques for time-resolved
+capacitance measurements in single cells. *Pflugers Archiv*, 411(2), 137-146.
+[doi:10.1007/BF00582306](https://doi.org/10.1007/BF00582306)
+> Equivalent whole-cell $R_s$-$C_m$-$R_m$ circuit analysis for voltage-clamp
+> capacitive transient measurements (`passive_properties.py`, Section 5.2).
+
+**Marty, A., & Neher, E. (1995).** Tight-seal whole-cell recording. In B. Sakmann
+& E. Neher (Eds.), *Single-Channel Recording* (2nd ed., pp. 31-52). Springer.
+[doi:10.1007/978-1-4419-1229-9_2](https://doi.org/10.1007/978-1-4419-1229-9_2)
+> Series-resistance estimation via initial capacitive current back-extrapolation
+> to step onset and signed capacitive charge integration (`passive_properties.py`,
+> Section 5.2 and Section 15.1).
+
+**Golowasch, J., Thomas, G., Taylor, A. L., Patel, A., Pineda, A., Khalil, C.,
+& Nadim, F. (2009).** Membrane capacitance measurements revisited: dependence of
+capacitance value on measurement method in nonisopotential neurons.
+*Journal of Neurophysiology*, 102(4), 2161-2175.
+[doi:10.1152/jn.00160.2009](https://doi.org/10.1152/jn.00160.2009)
+> Comparison of current-clamp ($\tau_m / R_{\text{in}}$) and voltage-clamp step
+> capacitance estimators in branched neurons (`passive_properties.py`, Section 5).
+
+**Taylor, A. L. (2012).** What we talk about when we talk about capacitance
+measured with the voltage-clamp step method. *Journal of Computational
+Neuroscience*, 32(1), 167-175.
+[doi:10.1007/s10827-011-0346-8](https://doi.org/10.1007/s10827-011-0346-8)
+> Theoretical analysis of exponential-fit vs. signed charge-integral ($Q / \Delta V$)
+> whole-cell capacitance estimators reported side by side by
+> `calculate_capacitance_vc` (`passive_properties.py`, Section 5.2 and Section 15.1).
 
 ---
 
@@ -141,21 +205,42 @@ data by simplified least squares procedures. *Analytical Chemistry*, 36(8),
 > topology for lowpass, highpass, and bandpass filters in Section 14.1
 > (`signal_processor.py`, `core/analysis/preprocessing.py`) and the 5 kHz spike
 > detection pre-filter (`single_spike.py`, Section 6.1). `signal_processor.py`
-> also provides phase-matched Bessel (`scipy.signal.bessel(..., norm="phase")`,
-> used as well for the 9.9 kHz AP onset pre-filter in `single_spike.py`),
-> Gaussian (`scipy.ndimage.gaussian_filter1d`), notch (`scipy.signal.iirnotch`),
-> and harmonic comb (`scipy.signal.iircomb`) filters, applied zero-phase via
-> `_sosfiltfilt_safe` (closed-form biquad steady-state `zi` and odd-reflection
-> padding around `scipy.signal.sosfilt`).
+> also provides $-3\,\text{dB}$ magnitude-normalised Bessel
+> (`scipy.signal.bessel(..., norm="mag")`), $-3\,\text{dB}$ Gaussian
+> (`scipy.ndimage.gaussian_filter1d`), notch (`scipy.signal.iirnotch`), and
+> DC-preserving sparse harmonic comb (`scipy.signal.iircomb`) filters.
 
 **Thomson, W. E. (1949).** Delay networks having maximally flat frequency
 characteristics. *Proceedings of the IEE - Part III: Radio and Communication
 Engineering*, 96(44), 487-490.
 [doi:10.1049/pi-3.1949.0101](https://doi.org/10.1049/pi-3.1949.0101)
 > Bessel-Thomson linear-phase filter design (`scipy.signal.bessel`), used for
-> phase-matched transient filtering in `signal_processor.py` (Section 14.1) and
+> zero-overshoot transient filtering in `signal_processor.py` (Section 14.1) and
 > the 4th-order 9.9 kHz derivative pre-filter in `calculate_spike_features`
 > (`single_spike.py`, Section 6.2).
+
+**Colquhoun, D., & Sigworth, F. J. (1995).** Fitting and statistical analysis of
+single-channel records. In B. Sakmann & E. Neher (Eds.), *Single-Channel
+Recording* (2nd ed., Ch. 19, pp. 483-587). Springer.
+[doi:10.1007/978-1-4419-1229-9_19](https://doi.org/10.1007/978-1-4419-1229-9_19)
+> Patch-clamp $-3\,\text{dB}$ Gaussian digital filter $\sigma$ derivation and
+> $-3\,\text{dB}$ Bessel filter cutoff convention (`signal_processor.py`,
+> Section 14.1).
+
+**Gustafsson, F. (1996).** Determining the initial states in forward-backward
+filtering. *IEEE Transactions on Signal Processing*, 44(4), 988-992.
+[doi:10.1109/78.492552](https://doi.org/10.1109/78.492552)
+> Steady-state initial-condition formulation for zero-phase forward-backward IIR
+> filtering (`_compute_sos_zi_safe` and `_sosfiltfilt_safe` in
+> `signal_processor.py`, Section 14.1).
+
+**Widmann, A., Schroger, E., & Maess, B. (2015).** Digital filter design for
+electrophysiological data: a practical approach. *Journal of Neuroscience
+Methods*, 250, 34-46.
+[doi:10.1016/j.jneumeth.2014.08.002](https://doi.org/10.1016/j.jneumeth.2014.08.002)
+> Zero-phase filtering best practices, cutoff definitions, and step/impulse
+> artifact prevention in electrophysiological recordings (`signal_processor.py`
+> and `processing_pipeline.py`, Section 14.1 and Section 16).
 
 **Welch, P. D. (1967).** The use of fast Fourier transform for the estimation
 of power spectra: A method based on time averaging over short, modified
@@ -191,6 +276,28 @@ deviation. *Journal of the American Statistical Association*, 88(424),
 ---
 
 ## Synaptic Event Detection
+
+**Clements, J. D., & Bekkers, J. M. (1997).** Detection of spontaneous synaptic
+events with an optimally scaled template. *Biophysical Journal*, 73(1), 220-229.
+[doi:10.1016/S0006-3495(97)78062-7](https://doi.org/10.1016/S0006-3495(97)78062-7)
+> Canonical zero-mean sliding template-matching detection of spontaneous miniature
+> EPSCs/IPSCs (`detect_events_template` in `synaptic_events.py`, Section 7.2).
+
+**Pernia-Andrade, A. J., Goswami, S. P., Stickler, Y., Frobe, U., Schlogl, A.,
+& Jonas, P. (2012).** A deconvolution-based method with high sensitivity and
+temporal resolution for detection of spontaneous synaptic currents in vitro and
+in vivo. *Biophysical Journal*, 103(7), 1429-1439.
+[doi:10.1016/j.bpj.2012.08.039](https://doi.org/10.1016/j.bpj.2012.08.039)
+> Bi-exponential synaptic kernel parameterisation and z-scored detection
+> threshold (`threshold_sd`, default `4.0`) in `synaptic_events.py` (Section 7.2).
+
+**Jonas, P., Major, G., & Sakmann, B. (1993).** Quantal components of unitary
+EPSCs at the mossy fibre synapse on CA3 pyramidal cells of rat hippocampus.
+*Journal of Physiology*, 472(1), 615-663.
+[doi:10.1113/jphysiol.1993.sp019965](https://doi.org/10.1113/jphysiol.1993.sp019965)
+> Bi-exponential EPSC decay fitting (`fit_biexponential_decay`) and synaptic
+> charge transfer integration (`calculate_event_charge_dynamic` and
+> `examples/plugins/synaptic_charge.py`, Section 7.1).
 
 **Rall, W. (1967).** Distinguishing theoretical synaptic potentials computed
 for different soma-dendritic distributions of synaptic input.
@@ -241,9 +348,47 @@ controlling the release-ready supply of synaptic vesicles.
 > Cumulative amplitude analysis with iterative decay correction for
 > stimulus trains (`evoked_responses.py`).
 
+**Kim, J., & Alger, B. E. (2001).** Random response fluctuations lead to
+spurious paired-pulse facilitation. *Journal of Neuroscience*, 21(24),
+9608-9618.
+[doi:10.1523/JNEUROSCI.21-24-09608.2001](https://doi.org/10.1523/JNEUROSCI.21-24-09608.2001)
+> Statistical motivation for reporting individual $R_1$ and $R_2$ amplitudes
+> alongside sweep-level ratios so ratio-of-means ($\overline{R}_2 / \overline{R}_1$)
+> can be evaluated free of Jensen's-inequality small-denominator bias
+> (`evoked_responses.py`, Section 13.2).
+
+**Sabatini, B. L., & Regehr, W. G. (1999).** Timing of synaptic transmission.
+*Annual Review of Physiology*, 61, 521-542.
+[doi:10.1146/annurev.physiol.61.1.521](https://doi.org/10.1146/annurev.physiol.61.1.521)
+> Synaptic latency and trial-to-trial latency standard deviation (jitter)
+> definitions in `calculate_optogenetic_sync` (`evoked_responses.py`,
+> Section 13.1) and `examples/plugins/opto_jitter.py`.
+
+**Boyden, E. S., Zhang, F., Bamberg, E., Nagel, G., & Deisseroth, K. (2005).**
+Millisecond-timescale, genetically targeted optical control of neural activity.
+*Nature Neuroscience*, 8(9), 1263-1268.
+[doi:10.1038/nn1525](https://doi.org/10.1038/nn1525)
+> Foundational optogenetic photostimulation paradigm (TTL-locked optical latency,
+> spike fidelity/probability, and sub-millisecond spike jitter) implemented in
+> `evoked_responses.py` and `examples/plugins/opto_jitter.py`.
+
 ---
 
-## Spike-Train Statistics
+## Excitability and Spike-Train Statistics
+
+**Connors, B. W., & Gutnick, M. J. (1990).** Intrinsic firing patterns of
+diverse neocortical neurons. *Trends in Neurosciences*, 13(3), 99-104.
+[doi:10.1016/0166-2236(90)90185-D](https://doi.org/10.1016/0166-2236(90)90185-D)
+> F-I slope gain, rheobase, and spike-frequency adaptation classification
+> (`calculate_fi_curve` in `firing_dynamics.py`, Section 10).
+
+**Shao, L.-R., Halvorsrud, R., Borg-Graham, L., & Storm, J. F. (1999).** The
+role of BK-type $\text{Ca}^{2+}$-dependent $\text{K}^+$ channels in spike
+broadening during repetitive firing in rat hippocampal pyramidal cells.
+*Journal of Physiology*, 521(1), 135-146.
+[doi:10.1111/j.1469-7793.1999.00135.x](https://doi.org/10.1111/j.1469-7793.1999.00135.x)
+> Cumulative action-potential half-width broadening (`broadening_indices` and
+> `spike_broadening_index` in `firing_dynamics.py`, Section 10 and Section 12).
 
 **Holt, G. R., Softky, W. R., Koch, C., & Douglas, R. J. (1996).** Comparison
 of discharge variability in vitro and in vivo in cat visual cortex neurons.
@@ -321,7 +466,7 @@ Array programming with NumPy. *Nature*, 585, 357-362.
 > adaptation index).
 
 **McKinney, W. (2010).** Data structures for statistical computing in Python.
-*Proceedings of the 9th Python in Science Conference* (SciPy 2010), 51-56.
+*Proceedings of the 9th Python in Science Conference* (SciPy 2010), 56-61.
 [doi:10.25080/Majora-92bf1922-00a](https://doi.org/10.25080/Majora-92bf1922-00a)
 > `pandas.DataFrame` - batch-engine CSV output, wide and long format tables
 > compatible with Python, R, and MATLAB downstream workflows.

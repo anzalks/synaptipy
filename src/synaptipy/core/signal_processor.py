@@ -1,6 +1,20 @@
 """
-Signal processing utilities for synaptipy.
-Includes filtering and trace quality checks.
+Signal processing utilities for Synaptipy.
+
+Includes zero-phase digital filtering (Butterworth, Bessel, Gaussian, notch,
+and harmonic comb topologies), baseline conditioning, stimulus-artifact
+blanking, and trace quality assessment.
+
+References
+----------
+- Butterworth, S. (1930). Wireless Engineer, 7, 536-541.
+- Thomson, W. E. (1949). Proc. IEE Part III, 96(44), 487-490. doi:10.1049/pi-3.1949.0101
+- Welch, P. D. (1967). IEEE Trans. Audio Electroacoust., 15(2), 70-73. doi:10.1109/TAU.1967.1161901
+- Colquhoun, D., & Sigworth, F. J. (1995). In Single-Channel Recording (2nd ed., Ch. 19, pp. 483-587).
+  Springer. doi:10.1007/978-1-4419-1229-9_19
+- Gustafsson, F. (1996). IEEE Trans. Signal Process., 44(4), 988-992. doi:10.1109/78.492552
+- Widmann, A., Schroger, E., & Maess, B. (2015). J. Neurosci. Methods, 250, 34-46.
+  doi:10.1016/j.jneumeth.2014.08.002
 """
 
 import logging
@@ -81,8 +95,8 @@ def check_trace_quality(data: np.ndarray, sampling_rate: float) -> Dict[str, Any
             results["warnings"].append("Scipy not installed. Detailed quality metrics unavailable.")
             return results
 
-        # 1. Baseline Drift (Linear Trend)
-        # Fit a line to the data to estimate drift
+        # 1. Baseline Drift (Linear Trend) & Detrended RMS Noise
+        # Fit a line to the data to estimate drift and evaluate residual noise
         x = np.arange(len(data))
         slope, intercept, r_value, p_value, std_err = stats.linregress(x, data)
 
@@ -91,24 +105,22 @@ def check_trace_quality(data: np.ndarray, sampling_rate: float) -> Dict[str, Any
         results["metrics"]["drift_slope"] = slope
         results["metrics"]["total_drift"] = total_drift
 
-        # Flag drift if it exceeds BASELINE_DRIFT_THRESHOLD_MV standard deviations
-        # of the signal -- indicates recording instability (seal degradation, etc.)
-        if abs(total_drift) > BASELINE_DRIFT_THRESHOLD_MV * np.std(data):
-            results["warnings"].append(f"Significant baseline drift detected ({total_drift:.2f} units)")
-            # results['is_good'] = False  # Don't fail automatically, just warn
-
-        # 2. RMS Noise / SNR
-        # Estimate noise from the detrended signal
+        # 2. RMS Noise / SNR from the detrended signal
         detrended = data - (slope * x + intercept)
-        rms_noise = np.sqrt(np.mean(detrended**2))
+        rms_noise = float(np.sqrt(np.mean(detrended**2)))
         results["metrics"]["rms_noise"] = rms_noise
 
-        # SNR is hard without knowing what the "Signal" is (spikes? PSPs?)
-        # We can just report the noise level for now.
+        # Flag drift if total excursion exceeds BASELINE_DRIFT_THRESHOLD_MV times
+        # the detrended RMS noise floor (for true OLS, rms_noise <= std(data) always).
+        noise_ref = max(min(rms_noise, float(np.std(data))), 1e-12)
+        if abs(total_drift) > BASELINE_DRIFT_THRESHOLD_MV * noise_ref:
+            results["warnings"].append(f"Significant baseline drift detected ({total_drift:.2f} units)")
 
         # 3. Line Noise (50Hz / 60Hz)
-        # Compute Power Spectral Density
-        freqs, psd = signal.welch(detrended, fs=sampling_rate, nperseg=min(len(data), 4096))
+        # Ensure <= 1 Hz frequency resolution even at 50-100 kHz sampling rates
+        welch_nperseg = min(len(detrended), max(4096, int(round(sampling_rate))))
+        welch_nperseg = max(2, welch_nperseg)
+        freqs, psd = signal.welch(detrended, fs=sampling_rate, nperseg=welch_nperseg)
 
         # Check 50Hz and 60Hz bands
         def check_freq_power(target_freq, bandwidth=2.0):
@@ -278,10 +290,11 @@ def _validate_filter_input(data: np.ndarray, fs: float, order: int = 5) -> tuple
 
 
 def _design_iir_sos(signal_mod: Any, order: int, wn: Any, btype: str, filter_type: str) -> np.ndarray:
-    """Design a Butterworth or phase-matched Bessel SOS filter."""
+    """Design a Butterworth or -3 dB magnitude-normalized Bessel SOS filter."""
     ftype = str(filter_type or "butterworth").strip().lower()
     if ftype == "bessel":
-        return signal_mod.bessel(order, wn, btype=btype, analog=False, output="sos", norm="phase")
+        # Patch-clamp standard (Colquhoun & Sigworth, 1995): specify Bessel cutoff at -3 dB ("mag").
+        return signal_mod.bessel(order, wn, btype=btype, analog=False, output="sos", norm="mag")
     return signal_mod.butter(order, wn, btype=btype, analog=False, output="sos")
 
 
@@ -412,8 +425,13 @@ def highpass_filter(
 
     try:
         if str(filter_type or "").strip().lower() == "gaussian":
-            lp = lowpass_filter(data, cutoff=cutoff, fs=fs, order=order, filter_type="gaussian")
-            return np.asarray(data, dtype=np.float64) - lp
+            import scipy.ndimage as ndimage
+
+            # Exact -3 dB complement sigma: 1 - exp(-2*pi^2*sigma_s^2*(fc/fs)^2) = 1/sqrt(2)
+            x_arr = np.asarray(data, dtype=np.float64)
+            sigma_hp = float(fs) / (np.sqrt(2.0) * np.pi * float(cutoff)) * np.sqrt(-np.log(1.0 - 1.0 / np.sqrt(2.0)))
+            lp = ndimage.gaussian_filter1d(x_arr, sigma=max(sigma_hp, 1e-6))
+            return x_arr - lp
         sos = _design_iir_sos(signal, order, normal_cutoff, "high", filter_type)
         return _sosfiltfilt_safe(sos, data)
     except Exception as e:
@@ -471,6 +489,35 @@ def notch_filter(data: np.ndarray, freq: float, Q: float, fs: float) -> np.ndarr
         return data
 
 
+def _filtfilt_comb_safe(signal_mod: Any, b: np.ndarray, a: np.ndarray, data: np.ndarray) -> np.ndarray:
+    """Zero-phase sparse IIR comb filter preserving DC without companion-matrix root finding.
+
+    ``scipy.signal.iircomb`` returns sparse polynomials of degree ``N = fs / f0`` (e.g.
+    degree 1000 at 50 kHz / 50 Hz) whose notch comb transfer function also zeroes 0 Hz.
+    Evaluating ``lfilter(b, a, ...)`` directly on the mean-centered, odd-reflected trace
+    avoids ``tf2zpk`` degree-N polynomial root overflow and preserves DC resting potential.
+    """
+    x = np.ascontiguousarray(data, dtype=np.float64)
+    n_samples = x.shape[0]
+    if n_samples <= 1:
+        return x.copy()
+    dc_mean = float(np.mean(x))
+    x_ac = x - dc_mean
+    comb_order = max(len(b), len(a)) - 1
+    padlen = min(3 * max(comb_order, 1), n_samples - 1)
+    if padlen > 0:
+        left_ext = 2.0 * x_ac[0] - x_ac[padlen:0:-1]
+        right_ext = 2.0 * x_ac[-1] - x_ac[-2 : -padlen - 2 : -1]
+        x_pad = np.ascontiguousarray(np.concatenate((left_ext, x_ac, right_ext)), dtype=np.float64)
+    else:
+        x_pad = x_ac
+    y_fwd = signal_mod.lfilter(b, a, x_pad)
+    y_bwd = signal_mod.lfilter(b, a, np.ascontiguousarray(y_fwd[::-1], dtype=np.float64))[::-1]
+    y_ac = y_bwd[padlen : padlen + n_samples] if padlen > 0 else y_bwd
+    y_ac = y_ac - float(np.mean(y_ac))
+    return np.ascontiguousarray(y_ac + dc_mean, dtype=np.float64)
+
+
 def comb_filter(data: np.ndarray, freq: float, Q: float, fs: float) -> np.ndarray:
     """
     Apply an IIR comb filter to remove a fundamental frequency and its harmonics.
@@ -507,13 +554,10 @@ def comb_filter(data: np.ndarray, freq: float, Q: float, fs: float) -> np.ndarra
         Q = 30.0
 
     try:
-        # scipy.signal.iircomb removes harmonics of the base frequency
+        # scipy.signal.iircomb removes harmonics of the base frequency; evaluate directly
+        # via sparse difference equation without degree-N companion-matrix root finding.
         b, a = signal.iircomb(freq, Q, ftype="notch", fs=fs)
-        # Convert to SOS for stability
-        z, p, k = signal.tf2zpk(b, a)
-        sos = signal.zpk2sos(z, p, k)
-        y = _sosfiltfilt_safe(sos, data)
-        return y
+        return _filtfilt_comb_safe(signal, b, a, data)
     except Exception as e:
         log.error(f"Comb filter failed: {e}")
         return data
@@ -856,15 +900,13 @@ def multi_harmonic_notch(
         log.warning("Invalid fundamental_hz or fs for multi_harmonic_notch.")
         return data
 
-    # Try the efficient IIR comb approach first.
+    # Try the efficient IIR comb approach first when all harmonics below Nyquist are requested.
     nyq = 0.5 * fs
     freq_norm = fundamental_hz / nyq
-    if 0 < freq_norm < 1:
+    if max_harmonics is None and 0 < freq_norm < 1:
         try:
             b, a = scipy_signal.iircomb(fundamental_hz, Q, ftype="notch", fs=fs)
-            z, p, k = scipy_signal.tf2zpk(b, a)
-            sos = scipy_signal.zpk2sos(z, p, k)
-            return _sosfiltfilt_safe(sos, data)
+            return _filtfilt_comb_safe(scipy_signal, b, a, data)
         except Exception as exc:
             log.debug("iircomb unavailable or failed (%s); falling back to cascaded notch.", exc)
 

@@ -255,7 +255,8 @@ $$
 
 where $\mathcal{R}$ spans `rebound_window_ms` (default `100.0 ms`) immediately
 following `response_steady_state_window[1]`, smoothed with the same
-Savitzky-Golay window when sufficient samples are present.
+Savitzky-Golay window when sufficient samples are present (returning `NaN` when
+no samples fall within $\mathcal{R}$).
 
 ---
 
@@ -266,7 +267,7 @@ Savitzky-Golay window when sufficient samples are present.
 ### 5.1 Current-clamp mode
 
 Accounts for the series (access) resistance $R_s$, which acts in series with
-$R_{\text{in}}$:
+$R_{\text{in}}$ (Golowasch et al., 2009):
 
 $$
 C_m \;(\text{pF}) = \frac{\tau \;(\text{ms})}{R_{\text{in}} - R_s \;(\text{M}\Omega)} \times 10^3
@@ -274,14 +275,15 @@ $$
 
 When $R_s$ is unavailable or $R_s \ge R_{\text{in}}$, the fallback
 $C_m = (\tau / R_{\text{in}}) \times 10^3\;\text{pF}$ is used and a warning is
-logged (requiring effective resistance $\ge 0.1\,\text{M}\Omega$). Both $\tau$
-and $R_{\text{in}}$ are computed from the same current-step trace, and
-$R_s^{\text{CC}}$ (`rs_cc_mohm`) is estimated via
-`calculate_cc_series_resistance_fast` (Section 5.3).
+logged (requiring finite positive $\tau$ and $R_{\text{in}}$ with effective
+resistance $\ge 0.1\,\text{M}\Omega$). Both $\tau$ and $R_{\text{in}}$ are
+computed from the same current-step trace, and $R_s^{\text{CC}}$ (`rs_cc_mohm`)
+is estimated via `calculate_cc_series_resistance_fast` (Section 5.3).
 
 ### 5.2 Voltage-clamp mode
 
-*(Follows Hamill et al., 1981; see Section 15.1 for step-by-step derivation.)*
+*(Follows Hamill et al., 1981; Lindau & Neher, 1988; Marty & Neher, 1995;
+Taylor, 2012; see Section 15.1 for step-by-step derivation.)*
 
 Given baseline-subtracted transient current $I_{\text{trans}}(t) = I(t) - \bar{I}_{\text{baseline}}$,
 steady-state leak $I_{\text{ss}} = \bar{I}_{\text{trans, last 20\%}}$, and purely
@@ -289,22 +291,27 @@ capacitive component $\Delta I(t) = I_{\text{trans}}(t) - I_{\text{ss}}$,
 `calculate_capacitance_vc` **always computes both** capacitance estimators
 alongside series resistance:
 
-1. **Series resistance (`series_resistance_mohm`):**
+1. **Exponential-fit capacitance (`capacitance_pf`) and back-extrapolated $R_s$ (`series_resistance_mohm`):**
+   Fits an **unrectified** polarity-oriented mono-exponential
+   $s \cdot \Delta I(t) = A e^{-(t - t_{\text{peak}})/\tau_{\text{trans}}}$
+   ($s = \operatorname{sign}(\Delta I(t_{\text{peak}}))$) from $t_{\text{peak}}$
+   onward so zero-mean Gaussian tail noise is never folded positive. When filter
+   lag separates step onset $t_0$ from $t_{\text{peak}}$ within
+   $0 < t_{\text{peak}} - t_0 \le 2\tau_{\text{trans}}$, initial current is
+   back-extrapolated to $I_0 = A e^{(t_{\text{peak}} - t_0)/\tau_{\text{trans}}}$
+   (otherwise $I_0 = \max_t |\Delta I(t)|$):
    $$
-   R_s \;(\text{M}\Omega) = \frac{|\Delta V \;(\text{mV})|}{\max_t |\Delta I(t) \;(\text{pA})|} \times 10^3
-   $$
-2. **Exponential-fit capacitance (`capacitance_pf`):** Fits
-   $|\Delta I(t)| = A e^{-t/\tau_{\text{trans}}}$ from the transient peak
-   onward and computes
-   $$
+   R_s \;(\text{M}\Omega) = \frac{|\Delta V \;(\text{mV})|}{I_0 \;(\text{pA})} \times 10^3,
+   \qquad
    C_m \;(\text{pF}) = \frac{\tau_{\text{trans}} \;(\text{s})}{R_s \;(\text{M}\Omega) \times 10^6} \times 10^{12}
    $$
-   falling back to the charge-integral estimate if the mono-exponential fit
-   fails or has fewer than 4 decay samples.
-3. **Charge-integral capacitance (`capacitance_charge_pf`):** Computed
-   unconditionally via trapezoidal integration (`numpy.trapezoid`):
+   falling back to the signed charge-integral estimate if the mono-exponential
+   fit fails or has fewer than 4 decay samples.
+2. **Signed charge-integral capacitance (`capacitance_charge_pf`):** Integrates
+   signed $\Delta I(t)$ via `numpy.trapezoid` **before** taking absolute value
+   so zero-mean thermal noise cancels rather than rectifying into positive charge:
    $$
-   C_{m,\text{charge}} \;(\text{pF}) = \frac{\int_{t_0}^{t_1} |\Delta I(t)| \, dt \;(\text{pA}\cdot\text{s})}{|\Delta V \;(\text{mV})|} \times 10^3
+   C_{m,\text{charge}} \;(\text{pF}) = \frac{\left|\int_{t_0}^{t_1} \Delta I(t) \, dt\right| \;(\text{pA}\cdot\text{s})}{|\Delta V \;(\text{mV})|} \times 10^3
    $$
 
 ### 5.3 Current-clamp series resistance ($R_s^{\text{CC}}$)
@@ -351,29 +358,34 @@ $$
    $\frac{dV}{dt}[i-1] < 1000\,\theta_{dV/dt}$ and
    $\frac{dV}{dt}[i] \ge 1000\,\theta_{dV/dt}$ (default $\theta_{dV/dt} = 20.0\,\text{V/s}$).
 3. **Peak search and voltage gate:** Searches forward over
-   `peak_search_window_samples` (default `5 ms`) for the local maximum
+   `peak_search_window_samples` (default `5 ms`, strictly bounded before any
+   subsequent upward $dV/dt$ crossing) for the local maximum
    $i_{\text{peak}} = \arg\max V$.
-4. **Conditional refractory commit:** Accepts $i_{\text{peak}}$ and commits
+4. **Conditional refractory commit and deduplication:** Accepts $i_{\text{peak}}$
+   (requiring $i_{\text{peak}} > i_{\text{peak,prev}}$) and commits
    `refractory_samples` suppression **only** when $V[i_{\text{peak}}] \ge V_{\text{threshold}}$
    (default `-20.0 mV`), preventing sub-threshold $dV/dt$ glitches from masking
-   subsequent genuine spikes.
+   subsequent genuine spikes and preventing duplicate peaks in $>200\,\text{Hz}$
+   fast-spiking trains.
 
 ### 6.2 Action potential onset / threshold (`calculate_spike_features`)
 
-*(Default threshold $\theta_{dV/dt} = 20\,\text{V/s}$, Bean, 2007; artifact ceiling
+*(Default threshold $\theta_{dV/dt} = 20\,\text{V/s}$, Bean, 2007; 9.9 kHz Bessel
+convention, Gouwens et al., 2019; artifact ceiling
 `DVDT_ARTIFACT_CEILING_VS = 300 V/s`, Naundorf et al., 2006; minimum rising phase
 `MIN_RISING_PHASE_MS = 0.2 ms`.)*
 
 1. **9.9 kHz 4th-order Bessel pre-filter:** When $9900\,\text{Hz} < f_{\text{Nyquist}}$,
    `calculate_spike_features` filters the trace with a zero-phase 4th-order
    Bessel low-pass filter (`scipy.signal.bessel(4, 9900.0, btype="low", output="sos", fs=fs)`
-   via `sosfiltfilt`), preserving linear phase across fast upstrokes before
-   computing $\frac{dV}{dt} = \nabla V_{\text{filt}} / \Delta t$.
-2. **Backward search from peak $dV/dt$:** Within the pre-peak `onset_lookback`
-   window (default `10 ms`), Synaptipy locates the upstroke velocity maximum
-   $k_{\max} = \arg\max_{k} \frac{dV}{dt}[k]$ and scans **backward** from
-   $k_{\max}$ to find the last sample $k_{\text{below}} \le k_{\max}$ with
-   $\frac{dV}{dt}[k_{\text{below}}] < 1000\,\theta_{dV/dt}$. Action potential
+   via BLAS-safe `_sosfiltfilt_safe`), preserving linear phase across fast
+   upstrokes before computing $\frac{dV}{dt} = \nabla V_{\text{filt}} / \Delta t$.
+2. **Inter-spike bounded backward search from peak $dV/dt$:** Within the pre-peak
+   `onset_lookback` window (default `10 ms`, bounded after the preceding
+   inter-spike voltage minimum for spike trains), Synaptipy locates the upstroke
+   velocity maximum $k_{\max} = \arg\max_{k} \frac{dV}{dt}[k]$ and scans
+   **backward** from $k_{\max}$ to find the last sample $k_{\text{below}} \le k_{\max}$
+   with $\frac{dV}{dt}[k_{\text{below}}] < 1000\,\theta_{dV/dt}$. Action potential
    onset is the next sample $k_{\text{thresh}} = \min(k_{\text{below}} + 1,\; N_{\text{lookback}} - 1)$
    (with a $2\,\text{ms}$ pre-peak fallback if no sample falls below threshold).
 3. **Boundary artifact QC (`at_edge`):** When $k_{\text{thresh}} = 0$ (crossing
@@ -480,12 +492,13 @@ $$
 \text{Upstroke/Downstroke Ratio} = \frac{(dV/dt)_{\max}}{|(dV/dt)_{\min}|}
 $$
 
-**Phase-plane loop area (`phase_plane_area`):** Enclosed area of the $(V, dV/dt)$
-loop from $i_{\text{thresh}}$ to post-peak threshold crossing via the Shoelace
-formula:
+**Phase-plane loop area (`phase_plane_area`, Jenerick, 1963):** Enclosed area of
+the closed $(V, dV/dt)$ polygon from $i_{\text{thresh}}$ to post-peak threshold
+crossing ($M$ vertices) via the closed Shoelace formula (strictly invariant to
+scalar LJP voltage offsets):
 
 $$
-\text{Area} = \frac{1}{2} \left| \sum_k V_k \dot{V}_{k+1} - \sum_k V_{k+1} \dot{V}_k \right|
+\text{Area} = \frac{1}{2} \left| \sum_{k=0}^{M-2} \bigl(V_k \dot{V}_{k+1} - V_{k+1} \dot{V}_k\bigr) + V_{M-1}\dot{V}_0 - V_0\dot{V}_{M-1} \right|
 $$
 
 ### 6.10 Absolute Peak Voltage, Overshoot, and AP Delay
@@ -559,13 +572,15 @@ $$
 k_s(t) = \frac{\tilde{k}_s(t)}{\max_t |\tilde{k}_s(t)|}
 $$
 
-Each kernel is **cross-correlated** (matched-filtered, not deconvolved) with the
-polarity-oriented baseline-corrected signal $x[n]$ via FFT convolution with the
-time-reversed kernel $k_s[-n]$ (`scipy.signal.fftconvolve(x, k_s[::-1], mode="same")`),
-then z-scored using its own Gaussian-scaled MAD:
+Each unit-peak-normalised kernel is **mean-centred** ($\hat{k}_s = k_s - \bar{k}_s$;
+Clements & Bekkers, 1997) so matched-filter projection is orthogonal to DC
+holding offsets and immune to zero-padded FFT edge ramps, then cross-correlated
+with the polarity-oriented baseline-corrected signal $x[n]$ via
+`scipy.signal.fftconvolve(x, k_s_zm[::-1], mode="same")` and z-scored using its
+Gaussian-scaled MAD (Pernia-Andrade et al., 2012):
 
 $$
-c_s[n] = (x \star k_s)[n],
+c_s[n] = (x \star \hat{k}_s)[n],
 \qquad
 z_s[n] = \frac{c_s[n] - \operatorname{median}(c_s)}{1.4826 \times \operatorname{MAD}(c_s)}
 $$
@@ -653,11 +668,11 @@ I_n = I_{\text{start}} + n \times I_{\text{step}}, \qquad
 $$
 
 **Subthreshold Ohmic sweep selection:** To prevent active action potentials on
-depolarising steps from distorting the passive slope resistance, sweeps whose
-maximum response-window voltage reaches or exceeds $-15.0\,\text{mV}$
-($\max_{t \in \mathcal{W}_{\text{resp}}} V_n(t) \ge -15.0\,\text{mV}$) are
-excluded from linear regression whenever at least two subthreshold sweeps
-($\max V_n < -15.0\,\text{mV}$) exist:
+depolarising steps (including early adapting spikes prior to the late
+steady-state window) from distorting the passive slope resistance, sweeps whose
+maximum post-baseline voltage reaches or exceeds $-15.0\,\text{mV}$
+($\max_{t \ge t_{\text{base,end}}} V_n(t) \ge -15.0\,\text{mV}$) are excluded
+from linear regression whenever at least two subthreshold sweeps exist:
 
 $$
 R_{\text{in,aggregate}} \;(\text{M}\Omega) =
@@ -718,7 +733,7 @@ f_n =
 \begin{cases}
 0 & N_n = 0 \\
 \dfrac{N_n}{T_{\text{window},n}} & N_n = 1 \;\text{(single-spike censorship guard)} \\[8pt]
-\dfrac{N_n}{T_{\text{window},n}} & 2 \le N_n \le 3 \text{ and } (t_{N_n} - t_1) < 0.25\,T_{\text{window},n} \;\text{(early depolarisation block)} \\[8pt]
+\dfrac{N_n}{T_{\text{window},n}} & N_n \ge 2,\; (t_{N_n} - t_1) < 0.25\,T_{\text{window},n},\; (t_{\text{end}} - t_{N_n}) > 0.5\,T_{\text{window},n} \;\text{(depolarisation block)} \\[8pt]
 \dfrac{N_n - 1}{t_{N_n} - t_1} & \text{otherwise (mean instantaneous firing rate)}
 \end{cases}
 $$
@@ -853,19 +868,26 @@ For trains with $N \ge 3$ spikes ($M \ge 2$ positive ISIs):
 and fixed threshold yields zero edges) and locates rising edges via `numpy.diff`.
 
 Over stimuli $j = 1, \ldots, N_{\text{stim}}$ that elicit at least one detected
-spike or synaptic event within $[t_{\text{stim},j},\; t_{\text{stim},j} + T_{\text{resp}}]$
+spike or synaptic event within
+$\bigl[t_{\text{stim},j} + t_{\text{blank}},\; \min(t_{\text{stim},j} + T_{\text{resp}},\, t_{\text{stim},j+1})\bigr]$
 ($N_{\text{resp}}$ successful trials, first-event latency
-$L_j = (t_{\text{event},j,1} - t_{\text{stim},j}) \times 10^3\,\text{ms}$):
+$L_j = (t_{\text{event},j,1} - t_{\text{stim},j}) \times 10^3\,\text{ms}$;
+Sabatini & Regehr, 1999; Boyden et al., 2005):
 
 $$
 \bar{L} = \frac{1}{N_{\text{resp}}} \sum_{j=1}^{N_{\text{resp}}} L_j,
 \qquad
 P_{\text{resp}} = \frac{N_{\text{resp}}}{N_{\text{stim}}},
 \qquad
-\text{Jitter} = \sigma(L_j)
+\text{Jitter}_{\text{pop}} = \sigma_{N}(L_j),
+\qquad
+\text{Jitter}_{\text{sample}} = s_{N-1}(L_j)
 $$
 
-Peak evoked amplitude (`mean_response_amplitude`) is measured per stimulus over
+Both population standard deviation (`spike_jitter_ms`) and Bessel-corrected
+sample standard deviation (`spike_jitter_sample_sd_ms`, `ddof=1` for
+$N_{\text{resp}} \ge 2$) are reported. Peak evoked amplitude
+(`mean_response_amplitude`) is measured per stimulus over
 `[t_stim + t_blank, t_stim + amplitude_window_ms]` relative to the preceding
 `baseline_window_ms` mean.
 
@@ -873,15 +895,12 @@ Peak evoked amplitude (`mean_response_amplitude`) is measured per stimulus over
 
 Both two-pulse `calculate_paired_pulse_ratio` and general $N$-pulse
 `calculate_n_pulse_ratio` (`run_ppr_wrapper`) correct for temporal summation by
-evaluating the fitted exponential decay tail of preceding response(s) **at the
-subsequent response's actual peak timestamp $t_{\text{peak},i}$** rather than at
-stimulus onset $t_{\text{stim},i}$. In the two-pulse function, $R_1$'s tail is
-fitted with a bi-exponential model (falling back to mono-exponential) over
-`[stim1 + fit_decay_from_ms, min(stim1 + fit_decay_from_ms + fit_decay_window_ms, stim2)]`,
-evaluated at $t_{\text{peak},2}$ to obtain $V_{\text{tail}}(t_{\text{peak},2})$,
-and subtracted from $V(t_{\text{peak},2})$ (while also reporting diagnostic
-`residual_at_stim2`; see Section 15.5 and Section 15.6 for the full $N$-pulse
-formulation).
+searching for subsequent response peaks on the **residual-subtracted waveform**
+and evaluating the fitted exponential decay tail of preceding response(s) **at
+the subsequent response's actual peak timestamp $t_{\text{peak},i}$** rather
+than at stimulus onset $t_{\text{stim},i}$ (Zucker & Regehr, 2002;
+Wesseling & Lo, 2002; Thanawala & Regehr, 2013; individual pulse amplitudes are
+always exported alongside ratios per Kim & Alger, 2001).
 
 ### 13.3 Stimulus Train Short-Term Plasticity (`stimulus_train_stp`)
 
@@ -901,30 +920,15 @@ R_k =
 r_k = \frac{R_k}{R_1} \quad (|R_1| > 10^{-12})
 $$
 
-**Steady-state ratio (`steady_state_ratio`):** Arithmetic mean of normalised
-amplitudes over the terminal $m = \min(3, N)$ pulses (for $N \ge 2$, else `NaN`):
+**Steady-state ratio (`steady_state_ratio`):** Arithmetic mean of post-$R_1$
+normalised amplitudes over the terminal $m = \min(3, N - 1)$ pulses (for
+$N \ge 2$, excluding $r_1 \equiv 1$, else `NaN`).
 
-$$
-\text{SSR} = \frac{1}{\min(3, N)} \sum_{k = N - \min(3, N) + 1}^{N} r_k
-$$
-
-**Short-term plasticity classification (`stp_type`):** Compares initial
-paired-pulse direction ($R_2$ vs. $R_1$) against late-train direction
-($R_N$ vs. $R_1$):
-
-$$
-\text{stp\_type} =
-\begin{cases}
-\texttt{"none"} & N < 2 \\
-\texttt{"biphasic"} & N \ge 4 \text{ and } (R_2 > R_1) \neq (R_N > R_1) \\
-\texttt{"facilitation"} & R_2 > R_1 \text{ (otherwise)} \\
-\texttt{"depression"} & R_2 \le R_1 \text{ (otherwise)}
-\end{cases}
-$$
-
-For example, a synapse that facilitates on pulse 2 ($R_2 > R_1$) before
-depleting below baseline at the end of a $\ge 4$-pulse train ($R_N \le R_1$) is
-classified as `"biphasic"`.
+**Short-term plasticity classification (`stp_type`):** Uses a $2\%$ relative
+deadband $\delta = 0.02\,|R_1|$ to classify stationary responses as `"none"`,
+opposing early ($R_2 - R_1$) vs. terminal ($R_N - R_1$) directions ($N \ge 4$)
+as `"biphasic"`, and monotonic $> \delta$ changes as `"facilitation"` or
+`"depression"`.
 
 ---
 
@@ -941,10 +945,10 @@ notch and harmonic comb line-noise filters:
 | Filter / Topology | Design Formulation |
 |-------------------|--------------------|
 | **Butterworth** (`filter_type="butterworth"`, default) | Maximally flat passband magnitude IIR (`scipy.signal.butter(order, Wn, output="sos")`, order clamped to $[1, 10]$; Butterworth, 1930) |
-| **Bessel** (`filter_type="bessel"`) | Phase-matched linear-phase IIR (`scipy.signal.bessel(order, Wn, norm="phase", output="sos")`; Thomson, 1949) preserving step and AP waveforms without ringing |
-| **Gaussian** (`filter_type="gaussian"`, lowpass/highpass) | Symmetric time-domain Gaussian kernel (`scipy.ndimage.gaussian_filter1d`) with $-3\,\text{dB}$ width $\sigma_{\text{samples}} = \frac{f_s}{2\pi f_c}\sqrt{\ln 2}$; Gaussian highpass returns $x - \text{LP}_{\text{Gaussian}}(x)$ |
+| **Bessel** (`filter_type="bessel"`) | $-3\,\text{dB}$ magnitude-normalised linear-phase IIR (`scipy.signal.bessel(order, Wn, norm="mag", output="sos")`; Thomson, 1949; Colquhoun & Sigworth, 1995) preserving step and AP waveforms without ringing |
+| **Gaussian** (`filter_type="gaussian"`, lowpass/highpass) | Symmetric time-domain Gaussian kernel (`scipy.ndimage.gaussian_filter1d`; Colquhoun & Sigworth, 1995) with $-3\,\text{dB}$ lowpass $\sigma_{\text{LP}} = \frac{f_s}{2\pi f_c}\sqrt{\ln 2}$ and exact $-3\,\text{dB}$ highpass complement $\sigma_{\text{HP}} = \frac{f_s}{\sqrt{2}\pi f_c}\sqrt{-\ln(1 - 1/\sqrt{2})}$ |
 | **Notch** (`notch_filter`) | Narrowband IIR notch (`scipy.signal.iirnotch(f_0 / f_{\text{Nyq}}, Q)`) converted via `tf2zpk` -> `zpk2sos` |
-| **Comb** (`comb_filter` / `multi_harmonic_notch`) | Harmonic notch comb (`scipy.signal.iircomb(f_0, Q, ftype="notch", fs=fs)` -> `tf2zpk` -> `zpk2sos`), with cascaded `notch_filter` fallback across $f_0, 2f_0, \ldots < f_{\text{Nyq}}$ (up to optional `max_harmonics`) |
+| **Comb** (`comb_filter` / `multi_harmonic_notch`) | DC-preserving sparse harmonic notch comb (`scipy.signal.iircomb(f_0, Q, ftype="notch", fs=fs)` evaluated directly via `_filtfilt_comb_safe` without degree-$N$ companion-matrix root finding), with cascaded `notch_filter` when `max_harmonics` is specified |
 
 **BLAS-safe zero-phase SOS filtering (`_sosfiltfilt_safe`):** All SOS IIR filters
 execute forward-backward zero-phase filtering without calling
@@ -999,9 +1003,9 @@ three replacement modes are available:
 
 ### 14.4 Trace quality assessment (`check_trace_quality`)
 
-- **Baseline drift:** OLS regression slope over the full trace (`scipy.stats.linregress`), flagged when total drift exceeds `5.0 * std(data)`.
+- **Baseline drift:** OLS regression slope over the full trace (`scipy.stats.linregress`), flagged when total drift exceeds `5.0 * rms_noise` (evaluated against the detrended RMS noise floor rather than raw `std(data)`).
 - **RMS noise:** Root-mean-square of the linearly detrended trace.
-- **Line noise (50/60 Hz):** Welch PSD (`scipy.signal.welch`, Hann window, `nperseg = min(N, 4096)`; Welch, 1967) comparing mean power within $\pm 2\,\text{Hz}$ of 50 Hz and 60 Hz against flanking $[f_0 - 10, f_0 - 2) \cup (f_0 + 2, f_0 + 10]\,\text{Hz}$ reference bands (flagged when ratio $> 10$).
+- **Line noise (50/60 Hz):** Welch PSD (`scipy.signal.welch`, Hann window, `nperseg = min(N, max(4096, round(fs)))` for $\le 1\,\text{Hz}$ bin resolution; Welch, 1967) comparing mean power within $\pm 2\,\text{Hz}$ of 50 Hz and 60 Hz against flanking $[f_0 - 10, f_0 - 2) \cup (f_0 + 2, f_0 + 10]\,\text{Hz}$ reference bands (flagged when ratio $> 10$).
 - **Low-frequency instability:** Forward 2nd-order `< 1 Hz` Butterworth SOS filter (`sosfilt`), flagged when low-frequency variance exceeds $2\times$ high-frequency variance.
 
 ---
@@ -1011,34 +1015,35 @@ three replacement modes are available:
 ### 15.1 Voltage-Clamp Series Resistance and Dual Membrane Capacitance
 
 Classical area-under-the-curve (AUC) $C_m$ estimation can deviate under
-uncompensated series resistance or slow leak currents. `calculate_capacitance_vc`
-extracts both exponential-fit and charge-integral estimates from the baseline-
-and steady-state-subtracted transient $\Delta I(t)$:
+uncompensated series resistance or slow leak currents, while rectifying
+$|\Delta I(t)|$ before integration converts zero-mean thermal noise into
+positive capacitance bias (Lindau & Neher, 1988; Marty & Neher, 1995;
+Taylor, 2012). `calculate_capacitance_vc` extracts both exponential-fit and
+signed charge-integral estimates from $\Delta I(t)$:
 
-**Step 1 - Series Resistance (Ohm's law at the transient peak):**
+**Step 1 - Polarity-oriented unrectified decay fit and back-extrapolated $R_s$ (`capacitance_pf`, `series_resistance_mohm`):**
+
+A mono-exponential $s \cdot \Delta I(t) = A \exp(-(t - t_{\text{peak}}) / \tau_{\text{trans}})$
+($s = \operatorname{sign}(\Delta I(t_{\text{peak}}))$) is fitted from the
+transient peak onward (`scipy.optimize.curve_fit`, `maxfev=2000`, using the last
+20% of the transient window for steady-state subtraction $I_{\text{ss}}$). When
+$0 < t_{\text{peak}} - t_0 \le 2\tau_{\text{trans}}$, initial current at step
+onset is back-extrapolated via $I_0 = A \exp((t_{\text{peak}} - t_0)/\tau_{\text{trans}})$:
 
 $$
-R_s \;[\text{M}\Omega] = \frac{|\Delta V \;[\text{mV}]|}{\max_t |\Delta I(t) \;[\text{pA}]|} \times 10^{3}
-$$
-
-**Step 2 - Transient decay fit (`capacitance_pf`):**
-
-A mono-exponential $|\Delta I(t)| = A \exp(-t / \tau_{\text{trans}})$ is fitted
-from the transient peak onward (`scipy.optimize.curve_fit`, `maxfev=2000`, using
-the last 20% of the transient window for steady-state subtraction $I_{\text{ss}}$):
-
-$$
+R_s \;[\text{M}\Omega] = \frac{|\Delta V \;[\text{mV}]|}{I_0 \;[\text{pA}]} \times 10^{3},
+\qquad
 C_m \;[\text{pF}] = \frac{\tau_{\text{trans}} \;[\text{s}]}{R_s \;[\text{M}\Omega] \times 10^{6}} \times 10^{12}
 $$
 
 If the exponential fit fails or fewer than 4 decay samples are available,
-`capacitance_pf` falls back automatically to the trapezoidal charge integral.
+`capacitance_pf` falls back automatically to the signed trapezoidal charge integral.
 
-**Step 3 - Unconditional charge-integral capacitance (`capacitance_charge_pf`):**
+**Step 2 - Unconditional signed charge-integral capacitance (`capacitance_charge_pf`):**
 
 $$
 C_{m,\text{charge}} \;[\text{pF}] =
-\frac{\int_{t_0}^{t_1} |\Delta I(t)| \cdot 10^{-12}\,dt}{|\Delta V| \cdot 10^{-3}} \times 10^{12}
+\frac{\left|\int_{t_0}^{t_1} \Delta I(t) \cdot 10^{-12}\,dt\right|}{|\Delta V| \cdot 10^{-3}} \times 10^{12}
 $$
 
 Both `capacitance_pf` and `capacitance_charge_pf` are always returned alongside
@@ -1077,8 +1082,8 @@ window minima are evaluated on raw voltage:
 
 | Metric | Window | Dominant channel |
 |---|---|---|
-| `fahp_depth` | 1-5 ms post-peak | $\text{Na}^+$ inactivation / $\text{K}_V3$ / BK channels |
-| `mahp_depth` | 10-50 ms post-peak | SK / IK $\text{Ca}^{2+}$-activated $\text{K}^+$ channels |
+| `fahp_depth` | 1-5 ms post-peak | $\text{K}_V3$ and BK $\text{Ca}^{2+}$-activated $\text{K}^+$ channels (Storm, 1987) |
+| `mahp_depth` | 10-50 ms post-peak | SK / IK $\text{Ca}^{2+}$-activated $\text{K}^+$ channels (Sah & Faber, 2002) |
 
 $$
 \text{fAHP depth} = V_{\text{threshold}} - \min_{t \in [t_{\text{peak}}+1\text{ ms},\; t_{\text{peak}}+5\text{ ms})} V(t)
@@ -1525,7 +1530,7 @@ appended after the five core pillars in alphabetical order.
   - **Used in:** Vectorised array computation across all analysis modules.
 
 - **McKinney, W. (2010).** Data structures for statistical computing in Python.
-  *Proceedings of the 9th Python in Science Conference* (SciPy 2010), 51-56.
+  *Proceedings of the 9th Python in Science Conference* (SciPy 2010), 56-61.
   [doi:10.25080/Majora-92bf1922-00a](https://doi.org/10.25080/Majora-92bf1922-00a)
   - **Used in:** `pandas.DataFrame` batch engine tabulation and CSV export.
 
