@@ -154,10 +154,13 @@ def _check_gsettings_color_scheme() -> Optional[bool]:
 
 
 def _check_kde_color_scheme() -> Optional[bool]:
-    """Inspect ~/.config/kdeglobals ColorScheme for KDE Plasma dark themes."""
+    """Inspect XDG/~/.config/kdeglobals ColorScheme for KDE Plasma dark themes."""
+    import os
     from pathlib import Path
 
-    kdeglobals = Path.home() / ".config" / "kdeglobals"
+    xdg_cfg = os.environ.get("XDG_CONFIG_HOME", "").strip()
+    cfg_dir = Path(xdg_cfg) if xdg_cfg else (Path.home() / ".config")
+    kdeglobals = cfg_dir / "kdeglobals"
     if not kdeglobals.is_file():
         return None
     try:

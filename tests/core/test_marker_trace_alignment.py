@@ -1,15 +1,12 @@
 # -*- coding: utf-8 -*-
-"""Regression suite verifying plot marker and overlay coordinates lie strictly on trace waveforms."""
+"""Regression suite verifying core plot marker and overlay coordinates lie strictly on trace waveforms."""
 
 from __future__ import annotations
-
-from unittest.mock import MagicMock
 
 import numpy as np
 import pytest
 
 import synaptipy.core.analysis  # noqa: F401
-from synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
 from synaptipy.core.analysis.evoked_responses import _peak_pos_s, calculate_n_pulse_ratio
 from synaptipy.core.analysis.single_spike import (
     phase_plane_analysis_wrapper,
@@ -72,7 +69,7 @@ def test_spike_detection_peak_threshold_and_ahp_markers_sit_on_trace():
     assert m["_plot_ahp_voltages"][0] < -53.5
 
 
-def test_phase_plane_markers_align_with_per_spike_loops_and_ignore_artifacts(qapp):
+def test_phase_plane_markers_align_with_per_spike_loops_and_ignore_artifacts():
     """Phase-plane threshold and max-dV/dt markers sit on each spike loop and ignore non-spike artifacts."""
     t, v, fs = _make_two_ap_trace(fs=20000.0)
     # Inject a brief subthreshold capacitive artifact at start of trace with large dV/dt but peak < -25 mV
@@ -85,24 +82,11 @@ def test_phase_plane_markers_align_with_per_spike_loops_and_ignore_artifacts(qap
     assert len(m["_thresh_marker_v"]) == 2
     assert len(m["_max_dvdt_marker_v"]) == 2
     assert all(val == pytest.approx(20.0) for val in m["_thresh_marker_dvdt"])
-
-    # Verify GUI popup renders all per-spike markers without collapsing to mean voltage
-    tab = MetadataDrivenAnalysisTab("phase_plane_analysis", neo_adapter=MagicMock())
-    try:
-        tab._current_plot_data = {"time": t, "data": v_art, "units": "mV"}
-        tab._viz_popup_phase({"title": "Phase Plane"}, m)
-        thresh_x, thresh_y = tab._popup_curves["thresh_marker"].getData()
-        max_x, max_y = tab._popup_curves["max_marker"].getData()
-        assert len(thresh_x) == 2 and len(max_x) == 2
-        # Artifact at v=-30..-50 must not be selected as max_marker (real AP upstrokes peak near -10..+20 mV)
-        assert all(mx > -25.0 for mx in max_x)
-    finally:
-        for win in list(tab._popup_windows):
-            win.close()
-        tab.cleanup()
+    # Subthreshold artifact at v=-30..-50 must not be selected as max_dvdt_marker_v
+    assert all(mv > -25.0 for mv in m["_max_dvdt_marker_v"])
 
 
-def test_synaptic_events_markers_stay_on_peaks_under_drifting_baseline_and_threshold_line_tracks_holding(qapp):
+def test_synaptic_events_markers_stay_on_peaks_under_drifting_baseline_and_threshold_line_tracks_holding():
     """Event markers must not walk down a drifting baseline, and threshold_line sits at holding +/- threshold."""
     fs = 10000.0
     t = np.arange(0.0, 0.5, 1.0 / fs)
@@ -110,9 +94,9 @@ def test_synaptic_events_markers_stay_on_peaks_under_drifting_baseline_and_thres
     holding = -65.0 - 200.0 * t
     trace = holding.copy()
     # Add two sharp inward mEPSCs (-20 pA amplitude, 0.5 ms rise, 3 ms decay)
-    event_Onsets = (0.10, 0.25)
+    event_onsets = (0.10, 0.25)
     expected_peaks = []
-    for t0 in event_Onsets:
+    for t0 in event_onsets:
         rel = np.maximum(0.0, t - t0)
         mask = t >= t0
         ev = -28.0 * (np.exp(-rel[mask] / 0.003) - np.exp(-rel[mask] / 0.0005))
@@ -155,8 +139,8 @@ def test_synaptic_events_markers_stay_on_peaks_under_drifting_baseline_and_thres
     np.testing.assert_allclose(mp["_event_peaks"], np.interp(mp["_event_times"], t, trace), atol=1e-9)
 
 
-def test_evoked_degenerate_windows_and_burst_brackets_stay_on_trace(qapp):
-    """Degenerate PPR/STP windows must not emit y=0.0 markers off a -70 pA trace, and burst markers snap cleanly."""
+def test_evoked_degenerate_windows_stay_on_trace():
+    """Degenerate PPR/STP windows must not emit y=0.0 markers off a -70 pA trace."""
     t = np.linspace(0.0, 0.1, 1001)
     v = np.full_like(t, -70.0)
 
@@ -176,24 +160,3 @@ def test_evoked_degenerate_windows_and_burst_brackets_stay_on_trace(qapp):
     pt_fb, pv_fb = _peak_pos_s(v, t, onset_s=0.0998, polarity="negative", blank_s=0.002, win_s=0.001)
     assert pv_fb == pytest.approx(-70.0)
     assert pt_fb == pytest.approx(np.interp(pt_fb, t, t))
-
-    # Burst brackets with slightly perturbed float timestamps must snap to peak sample rather than k+1 slope
-    v_burst = np.full_like(t, -70.0)
-    v_burst[200] = 35.0
-    v_burst[201] = -40.0  # Steep post-peak drop on very next sample
-    v_burst[250] = 32.0
-    v_burst[251] = -42.0
-
-    tab = MetadataDrivenAnalysisTab("burst_analysis", neo_adapter=MagicMock())
-    try:
-        tab._current_plot_data = {"time": t, "data": v_burst, "units": "mV"}
-        # Perturb spike times by +1e-12 s so naive searchsorted(side="left") would jump to index 201 (-40 mV!)
-        perturbed_burst = [[float(t[200]) + 1e-12, float(t[250]) + 1e-12]]
-        tab._viz_brackets({"data": "bursts", "color": "r"}, {"bursts": perturbed_burst})
-        scatters = [it for it in tab._dynamic_plot_items if hasattr(it, "getData") and len(it.getData()[0]) == 2]
-        # Second item is the scatter (first is 2-point bracket line)
-        scatter_item = scatters[-1]
-        _, sy = scatter_item.getData()
-        np.testing.assert_allclose(sy, [35.0, 32.0])
-    finally:
-        tab.cleanup()

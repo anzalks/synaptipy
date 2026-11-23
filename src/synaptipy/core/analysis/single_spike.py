@@ -885,7 +885,7 @@ def _resolve_single_kink_index(
     if kink_slope > 0 and v_slice.size >= 3:
         dv = np.diff(v_slice)
         ddvdt = np.diff(dvdt_slice)
-        phase_slope = np.where(np.abs(dv) > 1e-6, ddvdt / dv, 0.0)
+        phase_slope = np.divide(ddvdt, dv, out=np.zeros_like(ddvdt, dtype=float), where=np.abs(dv) > 1e-6)
         kink_hits = np.where((phase_slope >= kink_slope) & (dvdt_slice[1:] > 0))[0]
         if kink_hits.size > 0:
             return lower_bound + int(kink_hits[0]) + 1

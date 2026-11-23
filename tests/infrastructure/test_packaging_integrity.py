@@ -351,7 +351,8 @@ class TestPackagingConfigurations:
     def test_linux_dark_mode_detection_handles_gtk_gsettings_and_kdeglobals(self, tmp_path, monkeypatch):
         from synaptipy.shared.theme_manager import _detect_linux_dark_mode
 
-        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+        monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
         monkeypatch.setenv("GTK_THEME", "Adwaita:dark")
         assert _detect_linux_dark_mode() is True
 
