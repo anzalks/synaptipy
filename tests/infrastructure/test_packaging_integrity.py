@@ -101,6 +101,11 @@ class TestFrozenEnvironmentAndFileOpen:
 
             QtCore.QCoreApplication.sendEvent(qapp, QtGui.QFileOpenEvent(str(sample)))
             assert received == [sample.resolve()]
+
+            # Non-QObject watched wrapper (e.g. Windows QWidgetItem) must return False cleanly
+            non_qobject = object()
+            noop_event = QtCore.QEvent(QtCore.QEvent.Type.None_)
+            assert flt.eventFilter(non_qobject, noop_event) is False
         finally:
             qapp.removeEventFilter(flt)
 

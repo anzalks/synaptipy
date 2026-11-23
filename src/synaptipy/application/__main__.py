@@ -367,12 +367,13 @@ def _schedule_smoke_test_exit(app: QtWidgets.QApplication, startup_manager) -> N
 
 
 def _ensure_writable_cwd(target_home: Path) -> None:
-    """Relocate working directory to ``target_home`` when launched from ``/`` or read-only cwd."""
+    """Relocate working directory to ``target_home`` when launched from filesystem root or read-only cwd."""
     try:
         cwd = Path.cwd()
     except OSError:
         cwd = Path("/")
-    if cwd == Path("/") or not os.access(cwd, os.W_OK):
+    is_fs_root = bool(cwd.anchor) and cwd == Path(cwd.anchor)
+    if cwd == Path("/") or is_fs_root or not os.access(cwd, os.W_OK):
         try:
             os.chdir(target_home)
         except OSError:
@@ -407,7 +408,7 @@ class _MacFileOpenFilter(QtCore.QObject):
         super().__init__(parent)
         self._on_file_open = on_file_open
 
-    def eventFilter(self, watched: QtCore.QObject, event: QtCore.QEvent) -> bool:
+    def eventFilter(self, watched: object, event: QtCore.QEvent) -> bool:
         if event.type() == QtCore.QEvent.Type.FileOpen and hasattr(event, "file"):
             raw_path = event.file()
             if raw_path:
@@ -415,7 +416,10 @@ class _MacFileOpenFilter(QtCore.QObject):
                 if candidate.is_file():
                     self._on_file_open(candidate.resolve())
                     return True
-        return super().eventFilter(watched, event)
+        # Return False directly rather than calling super().eventFilter(watched, event):
+        # on Windows PySide6, QApplication-level filters can receive layout QWidgetItem
+        # wrappers that are not QObject instances, raising TypeError in Shiboken.
+        return False
 
 
 def _install_file_open_filter(app: QtWidgets.QApplication, startup_manager) -> _MacFileOpenFilter:
@@ -511,7 +515,8 @@ def run_gui():
             pass
         sys.exit(1)
 
-    _install_file_open_filter(app, startup_manager)
+    if sys.platform == "darwin":
+        _install_file_open_filter(app, startup_manager)
     _handle_cli_file_arg(args.file, startup_manager)
 
     if smoke_test:

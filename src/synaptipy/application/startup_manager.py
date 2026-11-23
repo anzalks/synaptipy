@@ -176,11 +176,10 @@ class StartupManager(QtCore.QObject):
         # Step 1: Configure PyQtGraph synchronously (no delay needed for simple config)
         self._configure_pyqtgraph()
 
-        # Step 2: Create main window
+        # Step 2: Create main window; _complete_loading is chained after MainWindow()
+        # finishes constructing so slow Windows/Linux runners never fire the
+        # transition timer while self.main_window is still None.
         QtCore.QTimer.singleShot(50, self._load_gui_components)
-
-        # Step 3: Complete loading
-        QtCore.QTimer.singleShot(100, self._complete_loading)
 
     def _update_progress(self, step: int):
         """Update the progress display."""
@@ -207,6 +206,7 @@ class StartupManager(QtCore.QObject):
 
             log.debug("Main window created successfully")
             self._update_progress(1)
+            QtCore.QTimer.singleShot(10, self._complete_loading)
 
         except Exception as e:
             log.error(f"Main window creation failed: {e}", exc_info=True)
