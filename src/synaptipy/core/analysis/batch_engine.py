@@ -40,6 +40,7 @@ from synaptipy.core.analysis.cross_file_utils import (
     time_bases_compatible,
 )
 from synaptipy.core.analysis.registry import AnalysisRegistry
+from synaptipy.core.averaging import compute_time_aligned_average
 from synaptipy.core.data_model import Channel, Recording
 from synaptipy.core.protocols import ProtocolMap, ResolvedProtocol, resolve_protocols, slice_segment
 from synaptipy.core.trial_qc import summarise_trial_qc
@@ -48,7 +49,7 @@ from synaptipy.infrastructure.file_readers import NeoAdapter
 log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Column ordering constants — metadata first, results middle, debug last
+# Column ordering constants - metadata first, results middle, debug last
 # ---------------------------------------------------------------------------
 _METADATA_COLUMNS_ORDER = [
     "subject_id",
@@ -88,6 +89,91 @@ _HUMAN_READABLE_ALIASES: Dict[str, str] = {
     "fi_r_squared": "fi_fit_r_squared",
     "iv_r_squared": "iv_fit_r_squared",
 }
+
+
+def _channel_matches_filter(channel_key: Any, channel: Any, channel_filter: Optional[List[str]]) -> bool:
+    """Return True if *channel* matches *channel_filter* by dict key, .id, or .name."""
+    if not channel_filter:
+        return True
+    filter_set = {str(item) for item in channel_filter if item is not None}
+    candidates = {
+        str(channel_key),
+        str(getattr(channel, "id", "") or ""),
+        str(getattr(channel, "name", "") or ""),
+    }
+    candidates.discard("")
+    return bool(candidates & filter_set)
+
+
+def _build_read_whitelist(
+    channel_filter: Optional[List[str]], pipeline_config: List[Dict[str, Any]]
+) -> Optional[List[str]]:
+    """Build reader whitelist unioning primary *channel_filter* with secondary channels."""
+    if not channel_filter:
+        return None
+    whitelist: List[str] = []
+    seen = set()
+    for ch in channel_filter:
+        if ch is not None and str(ch) not in seen:
+            whitelist.append(str(ch))
+            seen.add(str(ch))
+    for task in pipeline_config or []:
+        if not isinstance(task, dict):
+            continue
+        sec = task.get("secondary_channel") or (task.get("params") or {}).get("secondary_channel")
+        if sec and str(sec) not in seen:
+            whitelist.append(str(sec))
+            seen.add(str(sec))
+    return whitelist
+
+
+def _resolve_secondary_channel(recording: Optional[Recording], selector: Any):
+    """Resolve a secondary channel from *recording* by key, .id, or .name."""
+    if recording is None or not selector:
+        return None
+    sel = str(selector)
+    direct = recording.channels.get(selector) or recording.channels.get(sel)
+    if direct is not None:
+        return direct
+    for ch_key, candidate in recording.channels.items():
+        if (
+            str(ch_key) == sel
+            or str(getattr(candidate, "id", "") or "") == sel
+            or str(getattr(candidate, "name", "") or "") == sel
+        ):
+            return candidate
+    return None
+
+
+def _is_manual_stimulus_timing_active(meta: Dict[str, Any], params: Dict[str, Any]) -> bool:
+    """Return True when registry *manual_stimulus_timing* mode is active in *params*."""
+    manual_cfg = meta.get("manual_stimulus_timing")
+    if not isinstance(manual_cfg, dict):
+        return False
+    param_name = manual_cfg.get("param")
+    if not param_name:
+        return False
+    manual_val = manual_cfg.get("manual_value")
+    default_val = None
+    for ui_p in meta.get("ui_params", []) or []:
+        if isinstance(ui_p, dict) and ui_p.get("name") == param_name:
+            default_val = ui_p.get("default")
+            break
+    actual_val = params.get(param_name, default_val)
+    return actual_val == manual_val
+
+
+def _is_pure_method_selector(meta: Dict[str, Any]) -> bool:
+    """Return True when an entry is a UI module aggregator rather than a runnable analysis."""
+    return bool(meta.get("method_selector")) and not meta.get("ui_params")
+
+
+def _method_selector_error(analysis_name: Any, meta: Dict[str, Any]) -> str:
+    """Build a descriptive error message when a UI aggregator is invoked in batch."""
+    selector_map = meta.get("method_selector")
+    methods = list(selector_map.values()) if isinstance(selector_map, dict) else []
+    hint = f" Use one of: {', '.join(methods)}." if methods else ""
+    return f"'{analysis_name}' is a UI group aggregator, not a standalone analysis.{hint}"
 
 
 class BatchAnalysisEngine:
@@ -564,7 +650,7 @@ class BatchAnalysisEngine:
         When :attr:`max_workers` > 1 **and** *files* contains at least two items, the
         file-level loop is distributed across worker processes via
         :class:`~concurrent.futures.ProcessPoolExecutor`.  The GUI thread is never
-        blocked in either mode — callers should wrap this in a
+        blocked in either mode - callers should wrap this in a
         :class:`~synaptipy.application.gui.analysis_worker.BatchWorker` QThread.
 
         Args:
@@ -635,200 +721,306 @@ class BatchAnalysisEngine:
         """Plan, validate, and execute one average per compatible protocol group."""
         batch_start_time = datetime.now()
         loaded: List[Tuple[str, str, str, Recording]] = []
+        disk_recordings: List[Recording] = []
         total_files = len(files)
+        read_whitelist = _build_read_whitelist(channel_filter, pipeline_config)
 
-        for index, item in enumerate(files):
-            if self._cancelled:
-                break
-            try:
-                if isinstance(item, (str, Path)):
-                    path = Path(item)
-                    if progress_callback:
-                        progress_callback(index, total_files, f"Loading {path.name}...")
-                    recording = self.neo_adapter.read_recording(path, channel_whitelist=channel_filter)
-                    if recording is None:
-                        continue
-                    loaded.append((path.name, str(path), f"{path}::{index}", recording))
-                else:
-                    source = getattr(item, "source_file", None)
-                    name = source.name if source else f"InMemory_{index}"
-                    loaded.append((name, str(source or name), f"{source or name}::{index}", item))
-            except Exception as exc:  # noqa: BLE001
-                log.warning("Cross-file planner could not load %r: %s", item, exc)
-
-        results: List[Dict[str, Any]] = []
-        active_preprocessors: List[Tuple[Callable, Dict[str, Any]]] = []
-        for task in pipeline_config:
-            if self._cancelled:
-                break
-            analysis_name = task.get("analysis")
-            analysis_func = AnalysisRegistry.get_function(analysis_name)
-            scope = task.get("scope", "average")
-            params = dict(task.get("params", {}))
-            if analysis_func is None:
-                results.append({"analysis": analysis_name, "scope": scope, "error": "Analysis is not registered"})
-                continue
-            if AnalysisRegistry.get_metadata(analysis_name).get("type") == "preprocessing":
-                active_preprocessors.append((analysis_func, params))
-                continue
-
-            # Key: (channel display name, canonical unit, protocol fingerprint).
-            # Value: file path -> file-level technical repeats for that group.
-            groups: Dict[Tuple[str, str, str], Dict[str, Dict[str, Any]]] = {}
-            excluded: Dict[Tuple[str, str, str], List[str]] = {}
-
-            # A named secondary channel is recorded stimulus timing supplied by
-            # the task, the same evidence the analysis tab's TTL dropdown gives.
-            secondary_meta = AnalysisRegistry.get_metadata(analysis_name).get("requires_secondary_channel")
-            secondary_key = (
-                str(secondary_meta.get("param_name", "secondary_data")) if isinstance(secondary_meta, dict) else ""
-            )
-            timing_supplied = bool(secondary_key) and bool(
-                task.get("secondary_channel")
-                or params.get("secondary_channel")
-                or params.get(secondary_key) is not None
-            )
-
-            for file_name, file_path, source_key, recording in loaded:
-                for channel_key, channel in recording.channels.items():
-                    if channel_filter and channel_key not in channel_filter and str(channel_key) not in channel_filter:
-                        continue
-                    channel_name = getattr(channel, "name", None) or str(channel_key)
-                    units, scale = canonical_unit_and_scale(getattr(channel, "units", ""))
-                    if units is None or scale is None:
-                        continue
-                    try:
-                        if scope == "specific_trial":
-                            indices = [int(params.get("trial_index", 0))]
-                        elif scope in ("selected_trials", "selected_trials_average") and params.get("trial_indices"):
-                            from synaptipy.shared.utils import parse_trial_selection_string
-
-                            indices = sorted(
-                                parse_trial_selection_string(params["trial_indices"], channel.num_trials, strict=True)
-                            )
-                        elif scope == "first_trial":
-                            indices = [0]
-                        else:
-                            indices = list(range(channel.num_trials))
-                    except ValueError as exc:
-                        results.append(
-                            {
-                                "file_name": file_name,
-                                "file_path": file_path,
-                                "channel": channel_name,
-                                "analysis": analysis_name,
-                                "scope": scope,
-                                "error": str(exc),
-                            }
-                        )
-                        continue
-
-                    for trial_index in indices:
-                        data = channel.get_data(trial_index)
-                        time = channel.get_relative_time_vector(trial_index)
-                        if data is None or time is None:
+        try:
+            for index, item in enumerate(files):
+                if self._cancelled:
+                    break
+                try:
+                    if isinstance(item, (str, Path)):
+                        path = Path(item)
+                        if progress_callback:
+                            progress_callback(index, total_files, f"Loading {path.name}...")
+                        recording = self.neo_adapter.read_recording(path, channel_whitelist=read_whitelist)
+                        if recording is None:
                             continue
-                        duration = float(time[-1]) if len(time) else None
-                        for protocol in resolve_protocols(
-                            recording,
-                            trial_index,
-                            duration,
-                            analysis_name,
-                            stimulus_timing_supplied=timing_supplied,
-                        ):
-                            key = (channel_name, units, protocol.protocol_fingerprint)
-                            if protocol.status == "incompatible":
-                                excluded.setdefault(key, []).append(
-                                    f"{file_name}: trial {trial_index} ({'; '.join(protocol.missing)})"
-                                )
-                                continue
-                            segment_data, segment_time = slice_segment(data, time, protocol)
-                            if len(segment_data) == 0:
-                                excluded.setdefault(key, []).append(
-                                    f"{file_name}: trial {trial_index} has no segment samples"
-                                )
-                                continue
-                            bucket = groups.setdefault(key, {}).setdefault(
-                                source_key,
+                        disk_recordings.append(recording)
+                        loaded.append((path.name, str(path), f"{path}::{index}", recording))
+                    else:
+                        source = getattr(item, "source_file", None)
+                        name = source.name if source else f"InMemory_{index}"
+                        loaded.append((name, str(source or name), f"{source or name}::{index}", item))
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("Cross-file planner could not load %r: %s", item, exc)
+
+            results: List[Dict[str, Any]] = []
+            active_preprocessors: List[Tuple[Callable, Dict[str, Any]]] = []
+            for task in pipeline_config:
+                if self._cancelled:
+                    break
+                analysis_name = task.get("analysis")
+                analysis_func = AnalysisRegistry.get_function(analysis_name)
+                task_meta = AnalysisRegistry.get_metadata(analysis_name)
+                scope = task.get("scope") or ("all_trials" if task_meta.get("type") == "preprocessing" else "average")
+                params = dict(task.get("params", {}))
+                if analysis_func is None:
+                    results.append({"analysis": analysis_name, "scope": scope, "error": "Analysis is not registered"})
+                    continue
+                if _is_pure_method_selector(task_meta):
+                    results.append(
+                        {
+                            "analysis": analysis_name,
+                            "scope": scope,
+                            "error": _method_selector_error(analysis_name, task_meta),
+                        }
+                    )
+                    continue
+                if task_meta.get("type") == "preprocessing":
+                    active_preprocessors.append((analysis_func, params))
+                    continue
+
+                # Key: (channel display name, canonical unit, protocol fingerprint).
+                # Value: file path -> file-level technical repeats for that group.
+                groups: Dict[Tuple[str, str, str], Dict[str, Dict[str, Any]]] = {}
+                excluded: Dict[Tuple[str, str, str], List[str]] = {}
+
+                # A named secondary channel or active manual timing mode satisfies
+                # stimulus timing requirements.
+                secondary_meta = task_meta.get("requires_secondary_channel")
+                secondary_key = (
+                    str(secondary_meta.get("param_name", "secondary_data")) if isinstance(secondary_meta, dict) else ""
+                )
+                secondary_selector = task.get("secondary_channel") or params.get("secondary_channel")
+                manual_timing_active = _is_manual_stimulus_timing_active(task_meta, params)
+                if (
+                    isinstance(secondary_meta, dict)
+                    and secondary_key not in params
+                    and not secondary_selector
+                    and not manual_timing_active
+                ):
+                    results.append(
+                        {
+                            "analysis": analysis_name,
+                            "scope": scope,
+                            "error": (
+                                "This analysis requires a secondary channel. "
+                                "Set secondary_channel to its ID or name."
+                            ),
+                        }
+                    )
+                    continue
+
+                timing_supplied = manual_timing_active or (
+                    bool(secondary_key) and bool(secondary_selector or params.get(secondary_key) is not None)
+                )
+
+                for file_name, file_path, source_key, recording in loaded:
+                    sec_channel = (
+                        _resolve_secondary_channel(recording, secondary_selector)
+                        if (secondary_selector and secondary_key and secondary_key not in params)
+                        else None
+                    )
+                    for channel_key, channel in recording.channels.items():
+                        if not _channel_matches_filter(channel_key, channel, channel_filter):
+                            continue
+                        if sec_channel is not None and channel is sec_channel and not channel_filter:
+                            continue
+                        channel_name = getattr(channel, "name", None) or str(channel_key)
+                        units, scale = canonical_unit_and_scale(getattr(channel, "units", ""))
+                        if units is None or scale is None:
+                            continue
+                        if secondary_selector and secondary_key and secondary_key not in params and sec_channel is None:
+                            sec_err = f"Secondary channel '{secondary_selector}' was not found in this recording."
+                            results.append(
                                 {
                                     "file_name": file_name,
                                     "file_path": file_path,
-                                    "traces": [],
-                                    "times": [],
-                                    "protocol": protocol,
-                                },
+                                    "channel": channel_name,
+                                    "analysis": analysis_name,
+                                    "scope": scope,
+                                    "error": sec_err,
+                                }
                             )
-                            scaled_seg = np.asarray(segment_data, dtype=float) * scale
-                            seg_t = np.asarray(segment_time, dtype=float)
-                            fs_ch = float(getattr(channel, "sampling_rate", 0.0) or 0.0)
-                            for prep_fn, prep_params in active_preprocessors:
-                                scaled_seg = np.asarray(prep_fn(scaled_seg, seg_t, fs_ch, **prep_params), dtype=float)
-                            bucket["traces"].append(scaled_seg)
-                            bucket["times"].append(seg_t)
+                            continue
+                        try:
+                            if scope == "specific_trial":
+                                indices = [int(params.get("trial_index", 0))]
+                            elif scope in ("selected_trials", "selected_trials_average") and params.get(
+                                "trial_indices"
+                            ):
+                                from synaptipy.shared.utils import parse_trial_selection_string
 
-            for (channel_name, units, fingerprint), contributors in groups.items():
-                per_file_traces: List[np.ndarray] = []
-                per_file_times: List[np.ndarray] = []
-                used_protocol: Optional[ResolvedProtocol] = None
-                contributor_rows: List[Dict[str, Any]] = []
-                for _source_key, bucket in contributors.items():
-                    time, trace = average_time_aligned_trials(bucket["traces"], bucket["times"])
-                    if time is None or trace is None:
-                        continue
-                    if per_file_times and not time_bases_compatible(per_file_times[0], time):
-                        excluded.setdefault((channel_name, units, fingerprint), []).append(
-                            f"{bucket['file_name']}: incompatible segment time base"
+                                indices = sorted(
+                                    parse_trial_selection_string(
+                                        params["trial_indices"], channel.num_trials, strict=True
+                                    )
+                                )
+                            elif scope == "first_trial":
+                                indices = [0]
+                            else:
+                                indices = list(range(channel.num_trials))
+                        except ValueError as exc:
+                            results.append(
+                                {
+                                    "file_name": file_name,
+                                    "file_path": file_path,
+                                    "channel": channel_name,
+                                    "analysis": analysis_name,
+                                    "scope": scope,
+                                    "error": str(exc),
+                                }
+                            )
+                            continue
+
+                        for trial_index in indices:
+                            data = channel.get_data(trial_index)
+                            time = channel.get_relative_time_vector(trial_index)
+                            if data is None or time is None:
+                                continue
+                            sec_raw_data = sec_channel.get_data(trial_index) if sec_channel is not None else None
+                            sec_raw_time = (
+                                sec_channel.get_relative_time_vector(trial_index) if sec_channel is not None else None
+                            )
+                            if sec_channel is not None and (sec_raw_data is None or sec_raw_time is None):
+                                continue
+                            duration = float(time[-1]) if len(time) else None
+                            for protocol in resolve_protocols(
+                                recording,
+                                trial_index,
+                                duration,
+                                analysis_name,
+                                stimulus_timing_supplied=timing_supplied,
+                            ):
+                                key = (channel_name, units, protocol.protocol_fingerprint)
+                                if protocol.status == "incompatible":
+                                    excluded.setdefault(key, []).append(
+                                        f"{file_name}: trial {trial_index} ({'; '.join(protocol.missing)})"
+                                    )
+                                    continue
+                                segment_data, segment_time = slice_segment(data, time, protocol)
+                                if len(segment_data) == 0:
+                                    excluded.setdefault(key, []).append(
+                                        f"{file_name}: trial {trial_index} has no segment samples"
+                                    )
+                                    continue
+                                bucket = groups.setdefault(key, {}).setdefault(
+                                    source_key,
+                                    {
+                                        "file_name": file_name,
+                                        "file_path": file_path,
+                                        "traces": [],
+                                        "times": [],
+                                        "sec_traces": [],
+                                        "sec_times": [],
+                                        "sec_name": getattr(sec_channel, "name", None) if sec_channel else None,
+                                        "protocol": protocol,
+                                    },
+                                )
+                                scaled_seg = np.asarray(segment_data, dtype=float) * scale
+                                seg_t = np.asarray(segment_time, dtype=float)
+                                fs_ch = float(getattr(channel, "sampling_rate", 0.0) or 0.0)
+                                for prep_fn, prep_params in active_preprocessors:
+                                    scaled_seg = np.asarray(
+                                        prep_fn(scaled_seg, seg_t, fs_ch, **prep_params), dtype=float
+                                    )
+                                bucket["traces"].append(scaled_seg)
+                                bucket["times"].append(seg_t)
+                                if sec_channel is not None and sec_raw_data is not None and sec_raw_time is not None:
+                                    sec_seg_d, sec_seg_t = slice_segment(sec_raw_data, sec_raw_time, protocol)
+                                    if len(sec_seg_d) > 0:
+                                        bucket["sec_traces"].append(np.asarray(sec_seg_d, dtype=float))
+                                        bucket["sec_times"].append(np.asarray(sec_seg_t, dtype=float))
+
+                for (channel_name, units, fingerprint), contributors in groups.items():
+                    per_file_traces: List[np.ndarray] = []
+                    per_file_times: List[np.ndarray] = []
+                    per_file_sec_traces: List[np.ndarray] = []
+                    per_file_sec_times: List[np.ndarray] = []
+                    sec_display_name: Optional[str] = None
+                    used_protocol: Optional[ResolvedProtocol] = None
+                    contributor_rows: List[Dict[str, Any]] = []
+                    for _source_key, bucket in contributors.items():
+                        time, trace = average_time_aligned_trials(bucket["traces"], bucket["times"])
+                        if time is None or trace is None:
+                            continue
+                        if per_file_times and not time_bases_compatible(per_file_times[0], time):
+                            excluded.setdefault((channel_name, units, fingerprint), []).append(
+                                f"{bucket['file_name']}: incompatible segment time base"
+                            )
+                            continue
+                        per_file_times.append(time)
+                        per_file_traces.append(trace)
+                        if bucket.get("sec_traces"):
+                            sec_t, sec_tr = average_time_aligned_trials(bucket["sec_traces"], bucket["sec_times"])
+                            if sec_t is not None and sec_tr is not None:
+                                per_file_sec_times.append(sec_t)
+                                per_file_sec_traces.append(sec_tr)
+                                sec_display_name = sec_display_name or bucket.get("sec_name")
+                        used_protocol = bucket["protocol"]
+                        contributor_rows.append(
+                            {
+                                "file_name": bucket["file_name"],
+                                "file_path": bucket["file_path"],
+                                "n_segments": len(bucket["traces"]),
+                            }
                         )
+                    master_time, master_trace = average_time_aligned_trials(per_file_traces, per_file_times)
+                    if master_time is None or master_trace is None or used_protocol is None:
                         continue
-                    per_file_times.append(time)
-                    per_file_traces.append(trace)
-                    used_protocol = bucket["protocol"]
-                    contributor_rows.append(
-                        {
-                            "file_name": bucket["file_name"],
-                            "file_path": bucket["file_path"],
-                            "n_segments": len(bucket["traces"]),
-                        }
-                    )
-                master_time, master_trace = average_time_aligned_trials(per_file_traces, per_file_times)
-                if master_time is None or master_trace is None or used_protocol is None:
-                    continue
-                sampling_rate = sampling_rate_from_timebase(master_time)
-                clean_params = {
-                    key: value for key, value in params.items() if key not in {"trial_index", "trial_indices"}
-                }
-                meta = {
-                    "file_name": "CROSS_FILE_MASTER_AVERAGE",
-                    "file_path": f"CROSS_FILE_PROTOCOL_AVERAGE ({len(per_file_traces)} files)",
-                    "channel": channel_name,
-                    "channel_units": units,
-                    "analysis": analysis_name,
-                    "scope": scope,
-                    "sampling_rate": sampling_rate,
-                    "trial_count": sum(row["n_segments"] for row in contributor_rows),
-                    "contributing_file_count": len(per_file_traces),
-                    "cross_file_weighting": "equal file weight",
-                    "cross_file_contributors": contributor_rows,
-                    "cross_file_exclusions": excluded.get((channel_name, units, fingerprint), []),
-                    **used_protocol.as_result_metadata(),
-                }
-                try:
-                    analysis_result = AnalysisRegistry.execute(
-                        analysis_name, master_trace, master_time, sampling_rate, **clean_params
-                    )
-                    result = analysis_result.export_row(**meta)
-                    self._sanitise_result_for_export(result)
-                    results.append(result)
-                except Exception as exc:  # noqa: BLE001
-                    results.append({**meta, "error": str(exc), "debug_trace": traceback.format_exc()})
+                    master_secondary_trace: Optional[np.ndarray] = None
+                    if per_file_sec_traces:
+                        sec_master_t, sec_master_tr = average_time_aligned_trials(
+                            per_file_sec_traces, per_file_sec_times
+                        )
+                        if sec_master_tr is not None and sec_master_t is not None:
+                            if sec_master_tr.shape == master_trace.shape:
+                                master_secondary_trace = sec_master_tr
+                            elif sec_master_t.size >= 2:
+                                master_secondary_trace = np.interp(master_time, sec_master_t, sec_master_tr)
+                    sampling_rate = sampling_rate_from_timebase(master_time)
+                    clean_params = {
+                        key: value
+                        for key, value in params.items()
+                        if key not in {"trial_index", "trial_indices", "secondary_channel"}
+                    }
+                    if secondary_key and master_secondary_trace is not None and secondary_key not in clean_params:
+                        clean_params[secondary_key] = master_secondary_trace
+                    if analysis_name == "rin_analysis" and units:
+                        clean_params.setdefault("units", units)
+                    meta = {
+                        "file_name": "CROSS_FILE_MASTER_AVERAGE",
+                        "file_path": f"CROSS_FILE_PROTOCOL_AVERAGE ({len(per_file_traces)} files)",
+                        "channel": channel_name,
+                        "channel_units": units,
+                        "analysis": analysis_name,
+                        "scope": scope,
+                        "sampling_rate": sampling_rate,
+                        "trial_count": sum(row["n_segments"] for row in contributor_rows),
+                        "contributing_file_count": len(per_file_traces),
+                        "cross_file_weighting": "equal file weight",
+                        "cross_file_contributors": contributor_rows,
+                        "cross_file_exclusions": excluded.get((channel_name, units, fingerprint), []),
+                        **used_protocol.as_result_metadata(),
+                    }
+                    if master_secondary_trace is not None:
+                        meta["secondary_channel"] = sec_display_name or str(secondary_selector or secondary_key)
+                    try:
+                        analysis_result = AnalysisRegistry.execute(
+                            analysis_name, master_trace, master_time, sampling_rate, **clean_params
+                        )
+                        result = analysis_result.export_row(**meta)
+                        self._sanitise_result_for_export(result)
+                        results.append(result)
+                    except Exception as exc:  # noqa: BLE001
+                        results.append({**meta, "error": str(exc), "debug_trace": traceback.format_exc()})
 
-        if progress_callback:
-            progress_callback(total_files, total_files, "Cross-file average complete.")
-        df = pd.DataFrame(results)
-        if not df.empty:
-            df["batch_timestamp"] = batch_start_time.isoformat()
-            df = self._order_columns(df)
-        return df
+            if progress_callback:
+                progress_callback(total_files, total_files, "Cross-file average complete.")
+            df = pd.DataFrame(results)
+            if not df.empty:
+                df["batch_timestamp"] = batch_start_time.isoformat()
+                df = self._order_columns(df)
+            return df
+        finally:
+            for rec in disk_recordings:
+                if hasattr(rec, "close"):
+                    try:
+                        rec.close()
+                    except Exception as close_exc:  # noqa: BLE001
+                        log.debug("Error closing cross-file recording: %s", close_exc)
 
     def _run_batch_sequential(  # noqa: C901
         self,
@@ -838,12 +1030,13 @@ class BatchAnalysisEngine:
         channel_filter: Optional[List[str]],
         rs_tolerance: float = 0.20,
     ) -> pd.DataFrame:
-        """Sequential (single-process) batch processing — the original implementation."""
+        """Sequential (single-process) batch processing - the original implementation."""
         results_list = []
         total_files = len(files)
 
         # Add batch metadata
         batch_start_time = datetime.now()
+        read_whitelist = _build_read_whitelist(channel_filter, pipeline_config)
 
         for i, item in enumerate(files):
             # Check for cancellation
@@ -856,10 +1049,11 @@ class BatchAnalysisEngine:
             file_name = "Unknown"
             file_path_str = "InMemory"
             file_path = None  # Initialize file_path
+            recording = None
+            loaded_from_disk = False
 
             try:
                 # Determine if item is Path or Recording
-                recording = None
                 if isinstance(item, (str, Path)):
                     file_path = Path(item)
                     file_name = file_path.name
@@ -872,7 +1066,7 @@ class BatchAnalysisEngine:
 
                     t0_io = time.perf_counter()
                     # Load recording from disk with whitelist (Memory Optimization)
-                    recording = self.neo_adapter.read_recording(file_path, channel_whitelist=channel_filter)
+                    recording = self.neo_adapter.read_recording(file_path, channel_whitelist=read_whitelist)
                     file_io_time = time.perf_counter() - t0_io
                     if not recording:
                         log.warning(f"Failed to load {file_path}")
@@ -880,6 +1074,7 @@ class BatchAnalysisEngine:
                             {"file_name": file_name, "file_path": file_path_str, "error": "Failed to load recording"}
                         )
                         continue
+                    loaded_from_disk = True
 
                 else:
                     # Assume it is a Recording object
@@ -905,7 +1100,7 @@ class BatchAnalysisEngine:
                     channels_to_process = [
                         (name, ch)
                         for name, ch in recording.channels.items()
-                        if name in channel_filter or str(name) in channel_filter
+                        if _channel_matches_filter(name, ch, channel_filter)
                     ]
                     if not channels_to_process:
                         log.warning(f"Channel filter {channel_filter} matched no channels in {file_name}.")
@@ -1034,7 +1229,7 @@ class BatchAnalysisEngine:
                                 f"{file_path.name}/{channel_name}: {e}",
                                 exc_info=True,
                             )
-                            # Add error row — include full metadata for filtering
+                            # Add error row - include full metadata for filtering
                             error_row = {
                                 "file_name": file_path.name,
                                 "file_path": str(file_path),
@@ -1077,6 +1272,11 @@ class BatchAnalysisEngine:
                 )
                 continue
             finally:
+                if loaded_from_disk and recording is not None and hasattr(recording, "close"):
+                    try:
+                        recording.close()
+                    except Exception as close_exc:  # noqa: BLE001
+                        log.debug("Error closing recording %s: %s", file_name, close_exc)
                 # Release the Recording object and collected data immediately after
                 # each file to prevent cumulative PySide6 / NumPy OOM in headless batch
                 # runs.  gc.collect() ensures cyclic references are broken even when
@@ -1126,77 +1326,14 @@ class BatchAnalysisEngine:
             Tuple: (List of results, Updated context or None)
         """
         analysis_name = task.get("analysis")
-        scope = task.get("scope", "first_trial")
         params = dict(task.get("params", {}))
 
         # Check metadata for type and batch-dispatch flags
         meta = AnalysisRegistry.get_metadata(analysis_name)
         is_preprocessing = meta.get("type") == "preprocessing"
+        scope = task.get("scope") or ("all_trials" if is_preprocessing else "first_trial")
         batch_cfg = meta.get("batch_config") if isinstance(meta.get("batch_config"), dict) else {}
         expects_list = bool(meta.get("expects_list", False) or batch_cfg.get("expects_list", False))
-        supported_units = tuple(meta.get("supported_channel_units", ()))
-        channel_units = str(getattr(channel, "units", ""))
-        if supported_units and channel_units not in supported_units:
-            return [
-                {
-                    "file_name": file_path.name,
-                    "file_path": str(file_path),
-                    "channel": channel_name,
-                    "analysis": analysis_name,
-                    "scope": scope,
-                    "error": (
-                        f"{meta.get('label', analysis_name)} requires channel units "
-                        f"{', '.join(supported_units)}, not {channel_units or 'unknown units'}."
-                    ),
-                }
-            ], None
-
-        secondary_config = meta.get("requires_secondary_channel")
-        secondary_channel = None
-        secondary_param_name = ""
-        if isinstance(secondary_config, dict):
-            secondary_param_name = str(secondary_config.get("param_name", "secondary_data"))
-            # An explicit payload remains valid for scripted pipelines and
-            # backward-compatible built-ins such as ``optogenetic_sync``.
-            # Otherwise resolve the declared secondary channel from the recording.
-            if secondary_param_name not in params:
-                secondary_selector = task.get("secondary_channel", params.pop("secondary_channel", None))
-                if recording is None or not secondary_selector:
-                    return [
-                        {
-                            "file_name": file_path.name,
-                            "file_path": str(file_path),
-                            "channel": channel_name,
-                            "analysis": analysis_name,
-                            "scope": scope,
-                            "error": (
-                                "This analysis requires a secondary channel. "
-                                "Set secondary_channel to its ID or name."
-                            ),
-                        }
-                    ], None
-                selector = str(secondary_selector)
-                secondary_channel = recording.channels.get(selector)
-                if secondary_channel is None:
-                    secondary_channel = next(
-                        (
-                            candidate
-                            for channel_id, candidate in recording.channels.items()
-                            if str(channel_id) == selector or str(getattr(candidate, "name", "")) == selector
-                        ),
-                        None,
-                    )
-                if secondary_channel is None:
-                    return [
-                        {
-                            "file_name": file_path.name,
-                            "file_path": str(file_path),
-                            "channel": channel_name,
-                            "analysis": analysis_name,
-                            "scope": scope,
-                            "error": f"Secondary channel '{selector}' was not found in this recording.",
-                        }
-                    ], None
 
         # Get the registered analysis function
         analysis_func = AnalysisRegistry.get_function(analysis_name)
@@ -1205,10 +1342,9 @@ class BatchAnalysisEngine:
             available_analyses = AnalysisRegistry.list_analysis()
             error_msg = f"Analysis function '{analysis_name}' not registered"
 
-            # Simple fuzzy matching: find analyses with similar names
             from difflib import get_close_matches
 
-            suggestions = get_close_matches(analysis_name, available_analyses, n=3, cutoff=0.6)
+            suggestions = get_close_matches(str(analysis_name), available_analyses, n=3, cutoff=0.6)
 
             if suggestions:
                 error_msg += f". Did you mean: {', '.join(suggestions)}?"
@@ -1229,15 +1365,93 @@ class BatchAnalysisEngine:
                 }
             ], None
 
+        if _is_pure_method_selector(meta):
+            return [
+                {
+                    "file_name": file_path.name,
+                    "file_path": str(file_path),
+                    "channel": channel_name,
+                    "analysis": analysis_name,
+                    "scope": scope,
+                    "error": _method_selector_error(analysis_name, meta),
+                }
+            ], None
+
+        supported_units = tuple(meta.get("supported_channel_units", ()))
+        channel_units = str(getattr(channel, "units", ""))
+        if supported_units and channel_units not in supported_units:
+            return [
+                {
+                    "file_name": file_path.name,
+                    "file_path": str(file_path),
+                    "channel": channel_name,
+                    "analysis": analysis_name,
+                    "scope": scope,
+                    "error": (
+                        f"{meta.get('label', analysis_name)} requires channel units "
+                        f"{', '.join(supported_units)}, not {channel_units or 'unknown units'}."
+                    ),
+                }
+            ], None
+
+        manual_timing_active = _is_manual_stimulus_timing_active(meta, params)
+        secondary_config = meta.get("requires_secondary_channel")
+        secondary_channel = None
+        secondary_param_name = ""
+        if isinstance(secondary_config, dict):
+            secondary_param_name = str(secondary_config.get("param_name", "secondary_data"))
+            secondary_selector = task.get("secondary_channel", params.pop("secondary_channel", None))
+            if secondary_param_name not in params:
+                if secondary_selector:
+                    if recording is None:
+                        return [
+                            {
+                                "file_name": file_path.name,
+                                "file_path": str(file_path),
+                                "channel": channel_name,
+                                "analysis": analysis_name,
+                                "scope": scope,
+                                "error": (
+                                    "This analysis requires a secondary channel. "
+                                    "Set secondary_channel to its ID or name."
+                                ),
+                            }
+                        ], None
+                    secondary_channel = _resolve_secondary_channel(recording, secondary_selector)
+                    if secondary_channel is None:
+                        return [
+                            {
+                                "file_name": file_path.name,
+                                "file_path": str(file_path),
+                                "channel": channel_name,
+                                "analysis": analysis_name,
+                                "scope": scope,
+                                "error": f"Secondary channel '{secondary_selector}' was not found in this recording.",
+                            }
+                        ], None
+                elif not manual_timing_active:
+                    return [
+                        {
+                            "file_name": file_path.name,
+                            "file_path": str(file_path),
+                            "channel": channel_name,
+                            "analysis": analysis_name,
+                            "scope": scope,
+                            "error": (
+                                "This analysis requires a secondary channel. "
+                                "Set secondary_channel to its ID or name."
+                            ),
+                        }
+                    ], None
+
         results = []
         sampling_rate = channel.sampling_rate
         protocol_enabled = isinstance(getattr(recording, "protocol_map", None), ProtocolMap)
 
-        # A task that names a secondary channel (or passes its payload directly)
-        # has supplied recorded stimulus timing for this run, the batch equivalent
-        # of picking the TTL channel in the analysis tab.
-        stimulus_timing_supplied = bool(secondary_param_name) and (
-            secondary_channel is not None or secondary_param_name in params
+        # A task that names a secondary channel, passes its payload directly, or
+        # activates explicit manual stimulus timing satisfies timing requirements.
+        stimulus_timing_supplied = manual_timing_active or (
+            bool(secondary_param_name) and (secondary_channel is not None or secondary_param_name in params)
         )
 
         def protocols_for_trial(trial_idx: int, trial_time: Any) -> List[ResolvedProtocol]:
@@ -1276,53 +1490,22 @@ class BatchAnalysisEngine:
 
             # Adaptation: If we have 'all_trials' data but need 'average'
             elif context["scope"] == "all_trials" and scope == "average":
-                # Compute average from cached trials.  Guard against mixed-protocol
-                # files where trials can have different sample counts.
                 try:
                     if len(context["data"]) > 0:
-                        trial_lengths = [len(a) for a in context["data"]]
-                        lengths_set = set(trial_lengths)
-                        if len(lengths_set) > 1:
-                            # Build detailed error message showing which trials have which lengths
-                            length_counts = {}
-                            for i, length in enumerate(trial_lengths):
-                                if length not in length_counts:
-                                    length_counts[length] = []
-                                length_counts[length].append(i)
-
-                            length_desc = ", ".join(
-                                f"{length} samples (trials {','.join(map(str, trials))})"
-                                for length, trials in sorted(length_counts.items())
-                            )
-                            raise ValueError(
-                                f"Cannot average trials with mismatched lengths in "
-                                f"{file_path.name}/{channel_name}: {length_desc}. "
-                                "Use 'first_trial' or 'specific_trial' scope instead, or ensure "
-                                "all sweeps use the same protocol duration."
-                            )
-                        data = np.mean(np.array(context["data"]), axis=0)
-                        time = context["time"][0]
+                        average = compute_time_aligned_average(context["data"], context["time"])
+                        if not average.is_empty:
+                            trial_lengths = {len(a) for a in context["data"]}
+                            if len(trial_lengths) == 1 and len(average.included_indices) == len(context["data"]):
+                                data = np.mean(np.asarray(context["data"], dtype=float), axis=0)
+                            else:
+                                data = average.data
+                            time = average.time
+                            average_qc_metadata = summarise_trial_qc(average.decisions)
+                            average_qc_metadata["average_alignment_method"] = average.alignment_method
+                        else:
+                            log.warning("No eligible trials in context for averaging.")
                     else:
                         log.warning("Context data empty, cannot average.")
-                except ValueError as e:
-                    if "Cannot average" in str(e) or "mismatched lengths" in str(e):
-                        return [
-                            {
-                                "file_name": file_path.name,
-                                "file_path": str(file_path),
-                                "channel": channel_name,
-                                "analysis": analysis_name,
-                                "scope": scope,
-                                "error": "Cannot average mixed-length trials",
-                                "error_type": "TRIAL_LENGTH_MISMATCH",
-                            }
-                        ], None
-                    log.warning(
-                        "Could not average trials from context (%s/%s): %s. Reloading from source.",
-                        file_path.name,
-                        channel_name,
-                        e,
-                    )
                 except Exception as e:
                     log.warning(
                         "Could not average trials from context (%s/%s): %s. Reloading from source.",
@@ -1346,7 +1529,6 @@ class BatchAnalysisEngine:
                             selected_indices = sorted(list(parsed_indices))
                         except ValueError as e:
                             log.error(f"Invalid trial selection string in {file_path.name}/{channel_name}: {e}")
-                            # Return early with error
                             return [
                                 {
                                     "file_name": file_path.name,
@@ -1363,37 +1545,16 @@ class BatchAnalysisEngine:
                     if selected_indices:
                         selected_trial_indices = selected_indices
                         selected_data = [context["data"][i] for i in selected_indices if i < len(context["data"])]
-                        lengths = {len(a) for a in selected_data}
-                        if len(lengths) > 1:
-                            raise ValueError(
-                                f"Cannot average selected trials with mismatched lengths "
-                                f"{sorted(lengths)} in {file_path.name}/{channel_name}. "
-                                "Ensure all selected sweeps use the same protocol duration."
-                            )
-                        data = np.mean(np.array(selected_data), axis=0)
-                        time = context["time"][0]
+                        selected_time = [context["time"][i] for i in selected_indices if i < len(context["time"])]
+                        average = compute_time_aligned_average(selected_data, selected_time, selected_indices)
+                        if not average.is_empty:
+                            data = average.data
+                            time = average.time
+                            average_qc_metadata = summarise_trial_qc(average.decisions)
+                            average_qc_metadata["average_alignment_method"] = average.alignment_method
                     else:
                         log.warning("No valid trials selected for averaging from context.")
-                except ValueError as e:
-                    if "Cannot average" in str(e) or "mismatched lengths" in str(e):
-                        return [
-                            {
-                                "file_name": file_path.name,
-                                "file_path": str(file_path),
-                                "channel": channel_name,
-                                "analysis": analysis_name,
-                                "scope": scope,
-                                "error": "Cannot average mixed-length trials",
-                                "error_type": "TRIAL_LENGTH_MISMATCH",
-                            }
-                        ], None
-                    log.warning(
-                        "Could not average selected trials from context (%s/%s): %s. Reloading from source.",
-                        file_path.name,
-                        channel_name,
-                        e,
-                    )
-                except (IndexError, KeyError, TypeError) as exc:
+                except Exception as exc:
                     log.warning(
                         "Could not average selected trials from context (%s/%s): %s. Reloading from source.",
                         file_path.name,
@@ -1597,15 +1758,18 @@ class BatchAnalysisEngine:
         # Averages and list-based analyses cannot be scientifically interpreted
         # when they combine explicit, incompatible protocol assignments.
         # Recordings without a protocol map remain ``needs_review``.
-        if protocol_enabled and scope in ("average", "selected_trials_average", "channel_set"):
-            if scope == "selected_trials_average" and params.get("trial_indices"):
+        if protocol_enabled and (
+            scope in ("average", "selected_trials_average", "channel_set")
+            or (expects_list and scope in ("all_trials", "selected_trials"))
+        ):
+            if scope in ("selected_trials", "selected_trials_average") and selected_trial_indices is not None:
+                selected_for_check = selected_trial_indices
+            elif scope in ("selected_trials", "selected_trials_average") and params.get("trial_indices"):
                 from synaptipy.shared.utils import parse_trial_selection_string
 
                 selected_for_check = sorted(
                     parse_trial_selection_string(params["trial_indices"], channel.num_trials, strict=True)
                 )
-            elif scope == "channel_set":
-                selected_for_check = list(range(channel.num_trials))
             else:
                 selected_for_check = list(range(channel.num_trials))
             contexts = []
@@ -1728,9 +1892,12 @@ class BatchAnalysisEngine:
                     return traces
 
                 def run_single(d, t, trial_idx=None, protocol: Optional[ResolvedProtocol] = None):
-                    # Remove trial_index from params if present
+                    # Remove trial_index / trial_indices from params if present
                     p = params.copy()
                     p.pop("trial_index", None)
+                    p.pop("trial_indices", None)
+                    if analysis_name == "rin_analysis" and channel_units and channel_units != "unknown":
+                        p.setdefault("units", channel_units)
                     if secondary_channel is not None:
                         trace = secondary_trace(trial_idx)
                         if trace is None:
@@ -1809,9 +1976,13 @@ class BatchAnalysisEngine:
                     # NOTE: Original code treated 'channel_set' as passing the list to func.
                     # 'all_trials' iterated.
 
-                    if scope == "channel_set" or (scope == "all_trials" and expects_list):
-                        # Pass full list (channel_set always, all_trials when expects_list=True)
+                    if scope == "channel_set" or (scope in ("all_trials", "selected_trials") and expects_list):
+                        # Pass full list (channel_set always, all_trials/selected_trials when expects_list=True)
                         list_params = params.copy()
+                        list_params.pop("trial_indices", None)
+                        list_params.pop("trial_index", None)
+                        if analysis_name == "rin_analysis" and channel_units and channel_units != "unknown":
+                            list_params.setdefault("units", channel_units)
                         if secondary_channel is not None:
                             list_params[secondary_param_name] = secondary_trial_list()
                         analysis_result = AnalysisRegistry.execute(
@@ -1826,6 +1997,9 @@ class BatchAnalysisEngine:
                             sampling_rate=sampling_rate,
                             trial_count=len(data) if isinstance(data, list) else 1,
                         )
+                        if selected_trial_indices is not None:
+                            res["selected_trial_indices"] = ",".join(str(index) for index in selected_trial_indices)
+                            res["selected_trial_count"] = len(selected_trial_indices)
                         if secondary_channel is not None:
                             res["secondary_channel"] = getattr(secondary_channel, "name", None) or secondary_param_name
                         results.append(res)

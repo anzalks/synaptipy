@@ -479,122 +479,140 @@ def calculate_spike_features(  # noqa: C901
 
     decay_times[valid_decay] = (x_d10[valid_decay] - x_d90[valid_decay]) * dt * 1000.0
 
-    # --- AHP ---
-    ahp_max_samples_per_spike = np.full(n_spikes, ahp_max_samples)
-    if n_spikes > 1:
-        dist_to_next = spike_indices[1:] - spike_indices[:-1]
-        ahp_max_samples_per_spike[:-1] = np.minimum(ahp_max_samples, dist_to_next)
-
-    ahp_range = np.arange(0, ahp_max_samples)
-    ahp_indices = spike_indices[:, None] + ahp_range
-    np.clip(ahp_indices, 0, n_data - 1, out=ahp_indices)
-    ahp_waveforms = data[ahp_indices]
-
-    col_idxs_ahp = np.tile(np.arange(ahp_max_samples), (n_spikes, 1))
-    valid_ahp_mask = col_idxs_ahp < ahp_max_samples_per_spike[:, None]
-
-    window_length = int(0.005 / dt)
-    if window_length % 2 == 0:
-        window_length += 1
-    window_length = max(5, window_length)
-    # Cap to trace width; if cap makes it even, step down to next odd so the
-    # Savitzky-Golay constraint (window > polyorder=3) is preserved.
-    n_cols = ahp_waveforms.shape[1]
-    max_win = n_cols if n_cols % 2 == 1 else max(1, n_cols - 1)
-    window_length = min(window_length, max_win)
-    if window_length % 2 == 0:
-        window_length = max(1, window_length - 1)
-
-    if ahp_waveforms.shape[1] >= window_length and window_length >= 5:
-        smoothed_ahp = savgol_filter(ahp_waveforms, window_length, 3, axis=1)
-    else:
-        smoothed_ahp = ahp_waveforms
-
-    temp_ahp = smoothed_ahp.copy()
-    temp_ahp[~valid_ahp_mask] = np.inf
-
-    # DYNAMIC AHP BOUNDING:
-    # Require V < ap_threshold at the upward dV/dt zero-crossing so suprathreshold
-    # repolarisation shoulders/ADPs above threshold are not mistaken for the AHP trough.
-    ahp_dvdt = dvdt[ahp_indices]
-    ahp_dvdt[~valid_ahp_mask] = -1.0  # Ignore invalid regions
-    if ahp_dvdt.shape[1] > 1:
-        below_ap_thr = np.isnan(ap_thresholds[:, None]) | (ahp_waveforms[:, :-1] < ap_thresholds[:, None])
-        crossing_mask = (ahp_dvdt[:, :-1] < 0) & (ahp_dvdt[:, 1:] >= 0) & below_ap_thr
-        has_crossing = np.any(crossing_mask, axis=1)
-        first_crossing_idx = np.argmax(crossing_mask, axis=1) + 1
-    else:
-        has_crossing = np.zeros(n_spikes, dtype=bool)
-        first_crossing_idx = np.zeros(n_spikes, dtype=int)
-
-    # Fallback to argmin if no clean zero-crossing is found
-    ahp_min_rel_indices = np.where(has_crossing, first_crossing_idx, np.argmin(temp_ahp, axis=1))
-
-    mean_window = int(0.001 / dt)
-    ahp_min_vals = np.zeros(n_spikes)
-    for i in range(n_spikes):
-        idx = ahp_min_rel_indices[i]
-        start = max(0, idx - mean_window)
-        end = min(ahp_max_samples_per_spike[i], idx + mean_window + 1)
-        ahp_min_vals[i] = np.mean(ahp_waveforms[i, start:end])
-
-    rec_targets = ap_thresholds - 0.1 * amplitudes
-    rec_target_bcast = rec_targets[:, None]
-    is_after_min = col_idxs_ahp > ahp_min_rel_indices[:, None]
-    is_recovered = ahp_waveforms >= rec_target_bcast
-    valid_recovery = is_after_min & is_recovered & valid_ahp_mask
-    has_recovery = np.any(valid_recovery, axis=1)
-    rec_rel_indices = np.where(has_recovery, np.argmax(valid_recovery, axis=1), ahp_max_samples)
-
-    thresh_bcast = ap_thresholds[:, None]
-    is_below_thresh_ahp = ahp_waveforms < thresh_bcast
-    has_ap_end = np.any(is_below_thresh_ahp, axis=1)
-    ap_end_rel_indices = np.where(has_ap_end, np.argmax(is_below_thresh_ahp, axis=1), 0)
-
-    ahp_durations = np.full(n_spikes, np.nan)
-    valid_ahp_dur = has_recovery & has_ap_end & (rec_rel_indices > ap_end_rel_indices)
-    ahp_durations[valid_ahp_dur] = (rec_rel_indices[valid_ahp_dur] - ap_end_rel_indices[valid_ahp_dur]) * dt * 1000.0
-
-    # --- ADP (variation-diminishing Gaussian-smoothed waveform, bounded before next AP onset) ---
+    # --- AHP & ADP ---
     adp_amplitudes = np.full(n_spikes, np.nan)
-    if ahp_max_samples > 3:
-        from scipy.ndimage import gaussian_filter1d
-
-        adp_sigma = max(1.0, 0.0002 / dt)
-        adp_smooth = gaussian_filter1d(ahp_waveforms.astype(np.float64), sigma=adp_sigma, axis=1, mode="nearest")
-
-        adp_bound_per_spike = ahp_max_samples_per_spike.copy()
+    if ahp_max_samples <= 0:
+        ahp_min_vals = np.full(n_spikes, np.nan)
+        ahp_durations = np.full(n_spikes, np.nan)
+        ahp_times = np.full(n_spikes, np.nan)
+        if post_peak_samples > 0:
+            post_wf = waveforms[:, rel_peak:]
+            is_below_post = post_wf < ap_thresholds[:, None]
+            ap_end_rel_indices = np.where(np.any(is_below_post, axis=1), np.argmax(is_below_post, axis=1), 0)
+        else:
+            ap_end_rel_indices = np.zeros(n_spikes, dtype=int)
+    else:
+        ahp_max_samples_per_spike = np.full(n_spikes, ahp_max_samples)
         if n_spikes > 1:
-            dist_to_next_onset = np.maximum(1, thresh_indices[1:] - spike_indices[:-1])
-            adp_bound_per_spike[:-1] = np.minimum(adp_bound_per_spike[:-1], dist_to_next_onset)
+            dist_to_next = spike_indices[1:] - spike_indices[:-1]
+            ahp_max_samples_per_spike[:-1] = np.minimum(ahp_max_samples, dist_to_next)
 
+        ahp_range = np.arange(0, ahp_max_samples)
+        ahp_indices = spike_indices[:, None] + ahp_range
+        np.clip(ahp_indices, 0, n_data - 1, out=ahp_indices)
+        ahp_waveforms = data[ahp_indices]
+
+        col_idxs_ahp = np.tile(np.arange(ahp_max_samples), (n_spikes, 1))
+        valid_ahp_mask = col_idxs_ahp < ahp_max_samples_per_spike[:, None]
+
+        window_length = int(0.005 / dt)
+        if window_length % 2 == 0:
+            window_length += 1
+        window_length = max(5, window_length)
+        # Cap to trace width; if cap makes it even, step down to next odd so the
+        # Savitzky-Golay constraint (window > polyorder=3) is preserved.
+        n_cols = ahp_waveforms.shape[1]
+        max_win = n_cols if n_cols % 2 == 1 else max(1, n_cols - 1)
+        window_length = min(window_length, max_win)
+        if window_length % 2 == 0:
+            window_length = max(1, window_length - 1)
+
+        if ahp_waveforms.shape[1] >= window_length and window_length >= 5:
+            smoothed_ahp = savgol_filter(ahp_waveforms, window_length, 3, axis=1)
+        else:
+            smoothed_ahp = ahp_waveforms
+
+        temp_ahp = smoothed_ahp.copy()
+        temp_ahp[~valid_ahp_mask] = np.inf
+
+        # DYNAMIC AHP BOUNDING:
+        # Require V < ap_threshold at the upward dV/dt zero-crossing so suprathreshold
+        # repolarisation shoulders/ADPs above threshold are not mistaken for the AHP trough.
+        ahp_dvdt = dvdt[ahp_indices]
+        ahp_dvdt[~valid_ahp_mask] = -1.0  # Ignore invalid regions
+        if ahp_dvdt.shape[1] > 1:
+            below_ap_thr = np.isnan(ap_thresholds[:, None]) | (ahp_waveforms[:, :-1] < ap_thresholds[:, None])
+            crossing_mask = (ahp_dvdt[:, :-1] < 0) & (ahp_dvdt[:, 1:] >= 0) & below_ap_thr
+            has_crossing = np.any(crossing_mask, axis=1)
+            first_crossing_idx = np.argmax(crossing_mask, axis=1) + 1
+        else:
+            has_crossing = np.zeros(n_spikes, dtype=bool)
+            first_crossing_idx = np.zeros(n_spikes, dtype=int)
+
+        # Fallback to argmin if no clean zero-crossing is found
+        ahp_min_rel_indices = np.where(has_crossing, first_crossing_idx, np.argmin(temp_ahp, axis=1))
+
+        mean_window = int(0.001 / dt)
+        ahp_min_vals = np.full(n_spikes, np.nan)
         for i in range(n_spikes):
-            bound = int(min(adp_bound_per_spike[i], ahp_max_samples))
-            if bound < 4:
-                continue
-            seg = adp_smooth[i, :bound]
-            mid = seg[1:-1]
-            # Fast trough: first genuine local minimum below AP threshold
-            min_locs = np.where((mid <= seg[:-2]) & (mid < seg[2:]) & (mid < ap_thresholds[i]))[0] + 1
-            if min_locs.size == 0:
-                continue
-            trough_idx = int(min_locs[0])
-            # Candidate local maxima after the fast trough
-            post = seg[trough_idx:]
-            if post.size < 3:
-                continue
-            post_mid = post[1:-1]
-            max_rel = np.where((post_mid > post[:-2]) & (post_mid >= post[2:]))[0] + 1
-            for m_rel in max_rel:
-                m_idx = trough_idx + int(m_rel)
-                if m_idx + 1 >= bound:
-                    break
-                rise_amp = float(seg[m_idx] - seg[trough_idx])
-                post_drop = float(seg[m_idx] - np.min(seg[m_idx + 1 : bound]))
-                # Require genuine depolarizing hump (>0.25 mV rise AND >=0.20 mV subsequent repolarization)
-                if rise_amp > 0.25 and post_drop >= 0.20:
-                    adp_amplitudes[i] = rise_amp
-                    break
+            idx = ahp_min_rel_indices[i]
+            start = max(0, idx - mean_window)
+            end = min(ahp_max_samples_per_spike[i], idx + mean_window + 1)
+            if end > start:
+                ahp_min_vals[i] = np.mean(ahp_waveforms[i, start:end])
+
+        rec_targets = ap_thresholds - 0.1 * amplitudes
+        rec_target_bcast = rec_targets[:, None]
+        is_after_min = col_idxs_ahp > ahp_min_rel_indices[:, None]
+        is_recovered = ahp_waveforms >= rec_target_bcast
+        valid_recovery = is_after_min & is_recovered & valid_ahp_mask
+        has_recovery = np.any(valid_recovery, axis=1)
+        rec_rel_indices = np.where(has_recovery, np.argmax(valid_recovery, axis=1), ahp_max_samples)
+
+        thresh_bcast = ap_thresholds[:, None]
+        is_below_thresh_ahp = ahp_waveforms < thresh_bcast
+        has_ap_end = np.any(is_below_thresh_ahp, axis=1)
+        ap_end_rel_indices = np.where(has_ap_end, np.argmax(is_below_thresh_ahp, axis=1), 0)
+
+        ahp_durations = np.full(n_spikes, np.nan)
+        valid_ahp_dur = has_recovery & has_ap_end & (rec_rel_indices > ap_end_rel_indices)
+        ahp_durations[valid_ahp_dur] = (
+            (rec_rel_indices[valid_ahp_dur] - ap_end_rel_indices[valid_ahp_dur]) * dt * 1000.0
+        )
+
+        # --- ADP (variation-diminishing Gaussian-smoothed waveform, bounded before next AP onset) ---
+        if ahp_max_samples > 3:
+            from scipy.ndimage import gaussian_filter1d
+
+            adp_sigma = max(1.0, 0.0002 / dt)
+            adp_smooth = gaussian_filter1d(ahp_waveforms.astype(np.float64), sigma=adp_sigma, axis=1, mode="nearest")
+
+            adp_bound_per_spike = ahp_max_samples_per_spike.copy()
+            if n_spikes > 1:
+                dist_to_next_onset = np.maximum(1, thresh_indices[1:] - spike_indices[:-1])
+                adp_bound_per_spike[:-1] = np.minimum(adp_bound_per_spike[:-1], dist_to_next_onset)
+
+            for i in range(n_spikes):
+                bound = int(min(adp_bound_per_spike[i], ahp_max_samples))
+                if bound < 4:
+                    continue
+                seg = adp_smooth[i, :bound]
+                mid = seg[1:-1]
+                # Fast trough: first genuine local minimum below AP threshold
+                min_locs = np.where((mid <= seg[:-2]) & (mid < seg[2:]) & (mid < ap_thresholds[i]))[0] + 1
+                if min_locs.size == 0:
+                    continue
+                trough_idx = int(min_locs[0])
+                # Candidate local maxima after the fast trough
+                post = seg[trough_idx:]
+                if post.size < 3:
+                    continue
+                post_mid = post[1:-1]
+                max_rel = np.where((post_mid > post[:-2]) & (post_mid >= post[2:]))[0] + 1
+                for m_rel in max_rel:
+                    m_idx = trough_idx + int(m_rel)
+                    if m_idx + 1 >= bound:
+                        break
+                    rise_amp = float(seg[m_idx] - seg[trough_idx])
+                    post_drop = float(seg[m_idx] - np.min(seg[m_idx + 1 : bound]))
+                    # Require genuine depolarizing hump (>0.25 mV rise AND >=0.20 mV subsequent repolarization)
+                    if rise_amp > 0.25 and post_drop >= 0.20:
+                        adp_amplitudes[i] = rise_amp
+                        break
+
+        ahp_times = np.zeros(n_spikes)
+        for i in range(n_spikes):
+            ahp_times[i] = time[ahp_indices[i, ahp_min_rel_indices[i]]]
 
     # --- fAHP and mAHP (separate physiological windows) ---
     # fAHP: fast AHP (default 1-5 ms post-peak): BK and Kv3 K+ channel-mediated fast repolarisation (Storm, 1987)
@@ -657,10 +675,6 @@ def calculate_spike_features(  # noqa: C901
 
     # --- New Active Features ---
     ap_delays = time[thresh_indices]
-
-    ahp_times = np.zeros(n_spikes)
-    for i in range(n_spikes):
-        ahp_times[i] = time[ahp_indices[i, ahp_min_rel_indices[i]]]
 
     trough_vs = ahp_min_vals
 
@@ -782,6 +796,9 @@ def calculate_dvdt(voltage: np.ndarray, sampling_rate: float, sigma_ms: float = 
     Returns:
         1D array of dV/dt in V/s.
     """
+    if voltage is None or len(voltage) < 2 or sampling_rate <= 0:
+        return np.zeros(len(voltage), dtype=float) if voltage is not None else np.array([], dtype=float)
+
     dt = 1.0 / sampling_rate
     dvdt = np.gradient(voltage, dt) / 1000.0  # mV/s -> V/s
 
@@ -884,6 +901,16 @@ def detect_threshold_kink(
 # ---------------------------------------------------------------------------
 # Registry Wrappers
 # ---------------------------------------------------------------------------
+
+
+def _extract_ahp_window_kwargs(kwargs: Dict[str, Any]) -> Dict[str, Tuple[float, float]]:
+    """Extract validated (start_ms, end_ms) tuples for fAHP and mAHP windows."""
+    extra: Dict[str, Tuple[float, float]] = {}
+    for key in ("fahp_window_ms", "mahp_window_ms"):
+        raw = kwargs.get(key)
+        if isinstance(raw, (tuple, list)) and len(raw) == 2:
+            extra[key] = (float(raw[0]), float(raw[1]))
+    return extra
 
 
 @AnalysisRegistry.register(
@@ -1016,6 +1043,7 @@ def run_spike_detection_wrapper(
                 dvdt_threshold=dvdt_threshold,
                 ahp_window_sec=ahp_window,
                 onset_lookback=onset_lookback,
+                **_extract_ahp_window_kwargs(kwargs),
             )
             stats: Dict[str, Any] = {}
             if features_list:
@@ -1075,20 +1103,36 @@ def run_spike_detection_wrapper(
                 win_freq_hz = (n_spk / trace_dur) if trace_dur > 0 else 0.0
             first_lat_s = float(result.spike_times[0] - stim_onset_s) if n_spk > 0 else np.nan
             thresh_times = [
-                float(f.ap_delay) for f in features_list if f.ap_delay is not None and np.isfinite(f.ap_delay)
+                float(f.ap_delay)
+                for f in features_list
+                if f.ap_delay is not None
+                and np.isfinite(f.ap_delay)
+                and f.ap_threshold is not None
+                and np.isfinite(f.ap_threshold)
             ]
             thresh_volts = [
                 float(f.ap_threshold) + ljp_mv
                 for f in features_list
-                if f.ap_delay is not None and np.isfinite(f.ap_delay) and f.ap_threshold is not None
+                if f.ap_delay is not None
+                and np.isfinite(f.ap_delay)
+                and f.ap_threshold is not None
+                and np.isfinite(f.ap_threshold)
             ]
             ahp_t_list = [
-                float(f.ahp_time) for f in features_list if f.ahp_time is not None and np.isfinite(f.ahp_time)
+                float(f.ahp_time)
+                for f in features_list
+                if f.ahp_time is not None
+                and np.isfinite(f.ahp_time)
+                and f.trough_v is not None
+                and np.isfinite(f.trough_v)
             ]
             ahp_v_list = [
                 float(f.trough_v) + ljp_mv
                 for f in features_list
-                if f.ahp_time is not None and np.isfinite(f.ahp_time) and f.trough_v is not None
+                if f.ahp_time is not None
+                and np.isfinite(f.ahp_time)
+                and f.trough_v is not None
+                and np.isfinite(f.trough_v)
             ]
             metrics: Dict[str, Any] = {
                 "spike_count": n_spk,
@@ -1194,12 +1238,32 @@ def phase_plane_analysis_wrapper(
     **kwargs,
 ) -> Dict[str, Any]:
     """Wrapper for Phase Plane analysis. Returns namespaced schema."""
+    if voltage is None or len(voltage) < 2 or sampling_rate <= 0:
+        return {
+            "module_used": "single_spike",
+            "metrics": {
+                "voltage": np.asarray(voltage, dtype=float) if voltage is not None else np.array([], dtype=float),
+                "dvdt": np.array([], dtype=float),
+                "threshold_indices": np.array([], dtype=int),
+                "threshold_vals": [],
+                "threshold_v": np.nan,
+                "_plot_threshold_v": np.nan,
+                "threshold_dvdt": float(dvdt_threshold),
+                "max_dvdt": np.nan,
+                "trace_max_dvdt": np.nan,
+                "threshold_mean": np.nan,
+                "phase_plane_error": "Insufficient samples or invalid sampling rate for phase-plane analysis",
+            },
+        }
+
     spike_threshold = kwargs.get("spike_threshold", -20.0)
     search_window_ms = kwargs.get("search_window_ms", 5.0)
     kink_slope = kwargs.get("kink_slope", 10.0)
 
     ljp_mv = float(kwargs.get("ljp_correction_mv", 0.0))
     voltage = apply_ljp_correction(voltage, ljp_mv)
+    if time is None or len(time) != len(voltage):
+        time = np.arange(len(voltage), dtype=float) / float(sampling_rate)
 
     v, dvdt = get_phase_plane_trajectory(voltage, sampling_rate, sigma_ms)
 
@@ -1254,6 +1318,6 @@ phase_plane_analysis = phase_plane_analysis_wrapper
     ui_params=[],
     plots=[],
 )
-def single_spike_module(**kwargs):
+def single_spike_module(*_args, **_kwargs):
     """Module-level aggregator tab for single-spike analyses."""
     return {}

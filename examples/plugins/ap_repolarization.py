@@ -125,18 +125,24 @@ def calculate_ap_repolarization(
 
     log.info("AP repolarization: max dV/dt = %.2f V/s", max_dvdt)
 
+    repol_rate_rounded = round(max_dvdt, 2)
+    repol_time_rounded = round(repol_time, 6)
+    repol_val_rounded = round(repol_val, 4)
+
     return {
         "module_used": "ap_repolarization",
         "metrics": {
-            "Max_Repol_V_s": round(max_dvdt, 2),
+            "Max_Repol_V_s": repol_rate_rounded,
+            "Repol_Time_s": repol_time_rounded,
+            "Repol_Voltage_mV": repol_val_rounded,
         },
-        # Flat scalar keys shown in the results table
-        "Max_Repol_V_s": round(max_dvdt, 2),
-        "Repol_Time_s": round(repol_time, 6),
-        "Repol_Voltage_mV": round(repol_val, 4),
-        # Private scalars for the markers plot overlay (hidden from table)
-        "_repol_time": repol_time,
-        "_repol_val": repol_val,
+        # Flat scalar keys kept for direct-call backward compatibility
+        "Max_Repol_V_s": repol_rate_rounded,
+        "Repol_Time_s": repol_time_rounded,
+        "Repol_Voltage_mV": repol_val_rounded,
+        # Private 1-element lists for the markers plot overlay (hidden from table)
+        "_repol_time": [repol_time],
+        "_repol_val": [repol_val],
     }
 
 

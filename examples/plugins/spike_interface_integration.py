@@ -30,7 +30,7 @@ License v3.0.  See the LICENSE file at the repository root for full details.
 """
 
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
@@ -51,6 +51,7 @@ def detect_spikes_spikeinterface(
     freq_max: float,
     threshold_mad: float,
     peak_sign: str,
+    time: Optional[np.ndarray] = None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
     """Detect spikes in a 1-D extracellular trace using SpikeInterface.
@@ -144,8 +145,11 @@ def detect_spikes_spikeinterface(
         noise_levels=np.array([noise_estimate]),
     )
 
-    spike_times_s: List[float] = (peaks["sample_index"] / float(sampling_rate)).tolist()
-    spike_amplitudes: List[float] = [float(filt_traces[int(i)]) for i in peaks["sample_index"]]
+    t0 = float(time[0]) if time is not None and len(time) > 0 else 0.0
+    sample_indices = [int(i) for i in peaks["sample_index"] if 0 <= int(i) < len(data)]
+    spike_times_s: List[float] = [float(i) / float(sampling_rate) + t0 for i in sample_indices]
+    spike_trace_y: List[float] = [float(data[i]) for i in sample_indices]
+    spike_filtered_amplitudes: List[float] = [float(filt_traces[i]) for i in sample_indices if i < len(filt_traces)]
     spike_count = len(spike_times_s)
     duration_s = float(data.size) / float(sampling_rate)
     firing_rate_hz = float(spike_count) / duration_s if duration_s > 0 else 0.0
@@ -161,9 +165,12 @@ def detect_spikes_spikeinterface(
             "Mean_Firing_Rate_Hz": round(firing_rate_hz, 4),
         },
         # Private: used for vline overlay and scatter markers on the Synaptipy trace view.
-        # Hidden from the results table (keys start with "_").
+        # _spike_amplitudes uses raw trace y-values so markers sit on DC-offset traces;
+        # _spike_filtered_amplitudes preserves bandpass-filtered peak values.
         "_spike_times": spike_times_s,
-        "_spike_amplitudes": spike_amplitudes,
+        "_spike_amplitudes": spike_trace_y,
+        "_spike_trace_y": spike_trace_y,
+        "_spike_filtered_amplitudes": spike_filtered_amplitudes,
     }
 
 
@@ -288,5 +295,6 @@ def run_spike_interface_wrapper(
         freq_max=float(kwargs.get("freq_max", 6000.0)),
         threshold_mad=float(kwargs.get("threshold_mad", 5.0)),
         peak_sign=str(kwargs.get("peak_sign", "neg")),
+        time=time,
         exclude_sweep_ms=float(kwargs.get("exclude_sweep_ms", 5.0)),
     )

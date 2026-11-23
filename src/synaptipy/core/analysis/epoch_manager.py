@@ -216,7 +216,7 @@ class EpochManager:
         created: List[Epoch] = []
 
         # Baseline (only if there is meaningful pre-stim time)
-        if stim_start - t_start >= min_inter_epoch_s:
+        if stim_start - t_start >= min_inter_epoch_s and stim_start > t_start:
             created.append(
                 self.add_manual_epoch(
                     baseline_name, t_start, stim_start, trial_indices=trial_indices, source="ttl_auto"
@@ -225,15 +225,27 @@ class EpochManager:
             # Override epoch_type to reflect TTL origin
             created[-1].epoch_type = "ttl"
 
-        # Stim
-        stim_epoch = self.add_manual_epoch(
-            stim_name, stim_start, stim_end, trial_indices=trial_indices, n_pulses=int(onsets.size), source="ttl_auto"
-        )
-        stim_epoch.epoch_type = "ttl"
-        created.append(stim_epoch)
+        # Stim (guard zero/negative duration when a 1-sample TTL edge lands at trace boundary)
+        if stim_end > stim_start:
+            stim_epoch = self.add_manual_epoch(
+                stim_name,
+                stim_start,
+                stim_end,
+                trial_indices=trial_indices,
+                n_pulses=int(onsets.size),
+                source="ttl_auto",
+            )
+            stim_epoch.epoch_type = "ttl"
+            created.append(stim_epoch)
+        else:
+            log.warning(
+                "from_ttl: skipping zero-duration Stim epoch (start=%.4f, end=%.4f).",
+                stim_start,
+                stim_end,
+            )
 
         # Washout (only if there is meaningful post-stim time)
-        if t_end - stim_end >= min_inter_epoch_s:
+        if t_end - stim_end >= min_inter_epoch_s and t_end > stim_end:
             washout_epoch = self.add_manual_epoch(
                 washout_name, stim_end, t_end, trial_indices=trial_indices, source="ttl_auto"
             )

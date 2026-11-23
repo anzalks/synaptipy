@@ -28,6 +28,16 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
+def _is_dask_array(obj: Any) -> bool:
+    """Return True when *obj* is a Dask array (without importing dask eagerly)."""
+    return hasattr(obj, "__dask_graph__") and hasattr(obj, "shape") and hasattr(obj, "ndim")
+
+
+def _is_valid_trial_array(obj: Any) -> bool:
+    """Return True when *obj* is a >=1D NumPy ndarray or Dask array."""
+    return (isinstance(obj, np.ndarray) or _is_dask_array(obj)) and int(getattr(obj, "ndim", 0)) > 0
+
+
 class UndoStack:
     """Lightweight state-history stack for non-destructive editing (Command pattern).
 
@@ -125,28 +135,36 @@ class Channel:
         self.t_start: float = 0.0  # Absolute start time relative to recording start (set by adapter)
 
         # --- Data Trials Validation and Assignment ---
-        # For lazy loading, data_trials may be empty initially
+        # For lazy loading, data_trials may be empty, contain None placeholders, or contain Dask arrays.
         if not isinstance(data_trials, list):
             log.warning(f"Channel '{name}' received non-list data. Attempting conversion.")
-            try:
-                # Ensure data is numpy array and handle potential conversion errors
-                self.data_trials: List[np.ndarray] = (
-                    [np.asarray(data_trials, dtype=float)] if data_trials is not None else []
-                )
-            except (TypeError, ValueError) as e:
-                log.error(f"Could not convert data_trials for channel '{name}' to list of arrays: {e}")
-                self.data_trials = []  # Assign empty list on failure
-        else:
-            # For lazy loading, data_trials may be empty or contain actual data
-            if data_trials and all(isinstance(t, np.ndarray) for t in data_trials):
-                # Normal case: data is already loaded
-                self.data_trials: List[np.ndarray] = [np.asarray(t) for t in data_trials]
+            if data_trials is None:
+                self.data_trials: List[Optional[Any]] = []
+            elif _is_dask_array(data_trials):
+                self.data_trials = [data_trials]
             else:
-                # Lazy loading case: empty data_trials
-                # Ensure it's a list so we can append later.
-                # Crucially, we might want to pre-allocate None slots if we know num_trials (from metadata?)
-                # But for now, empty list is safer than [[]] which implies 1 empty trial.
-                self.data_trials: List[Optional[np.ndarray]] = []
+                try:
+                    self.data_trials = [np.asarray(data_trials, dtype=float)]
+                except (TypeError, ValueError) as e:
+                    log.error(f"Could not convert data_trials for channel '{name}' to list of arrays: {e}")
+                    self.data_trials = []
+        else:
+            normalized_trials: List[Optional[Any]] = []
+            for trial_item in data_trials:
+                if trial_item is None:
+                    normalized_trials.append(None)
+                elif isinstance(trial_item, np.ndarray) or _is_dask_array(trial_item):
+                    normalized_trials.append(trial_item)
+                elif isinstance(trial_item, (list, tuple)) or hasattr(trial_item, "__array__"):
+                    try:
+                        normalized_trials.append(np.asarray(trial_item, dtype=float))
+                    except (TypeError, ValueError):
+                        log.warning(f"Channel '{name}': could not convert trial element of type {type(trial_item)}.")
+                        normalized_trials.append(None)
+                else:
+                    log.warning(f"Channel '{name}': unsupported trial element type {type(trial_item)}.")
+                    normalized_trials.append(None)
+            self.data_trials = normalized_trials
 
         # --- ADDED: Attributes for Associated Current Data ---
         self.current_data_trials: List[np.ndarray] = []  # Populated by adapter if current signal found
@@ -196,18 +214,17 @@ class Channel:
         """
         if not self.data_trials:
             return 0
-        # Ensure the first trial is valid before accessing shape
-        if not isinstance(self.data_trials[0], np.ndarray) or self.data_trials[0].ndim == 0:
-            log.warning(f"Channel '{self.name}': First trial is not a valid NumPy array.")
-            return 0
 
-        first_trial_len = self.data_trials[0].shape[0]
-        # Check other trials more carefully
+        first_trial_len = 0
         lengths = set()
         valid_trial_found = False
         for arr in self.data_trials:
-            if isinstance(arr, np.ndarray) and arr.ndim > 0:
-                lengths.add(arr.shape[0])
+            if arr is None:
+                continue
+            if _is_valid_trial_array(arr):
+                if not valid_trial_found:
+                    first_trial_len = int(arr.shape[0])
+                lengths.add(int(arr.shape[0]))
                 valid_trial_found = True
             else:
                 log.warning(f"Channel '{self.name}' contains invalid trial data type: {type(arr)}")
@@ -221,7 +238,6 @@ class Channel:
                 f"Channel '{self.name}' has trials with varying lengths: {lengths}. "
                 f"`num_samples` returning length of first trial ({first_trial_len})."
             )
-        # Return length of first valid trial if lengths are consistent or vary
         return first_trial_len if lengths else 0
 
     def get_consistent_samples(self) -> int:
@@ -235,8 +251,8 @@ class Channel:
 
         lengths = set()
         for arr in self.data_trials:
-            if isinstance(arr, np.ndarray) and arr.ndim > 0:
-                lengths.add(arr.shape[0])
+            if arr is not None and _is_valid_trial_array(arr):
+                lengths.add(int(arr.shape[0]))
 
         if len(lengths) == 0:
             return 0
@@ -276,7 +292,7 @@ class Channel:
         if self.data_trials and 0 <= trial_index < len(self.data_trials):
             data = self.data_trials[trial_index]
             if data is not None:
-                return data
+                return np.asarray(data) if _is_dask_array(data) else data
 
         # For lazy loading, try to load data using the loader (thread-safe)
         if self.loader:
@@ -335,12 +351,12 @@ class Channel:
 
     def get_averaged_data(self, trial_indices: Optional[List[int]] = None) -> Optional[np.ndarray]:
         """Return the canonical time-aware average for selected trials."""
-        average = self.get_time_aligned_average(trial_indices)
+        average = self.get_time_aligned_average(trial_indices if trial_indices else None)
         return average.data
 
     def get_time_aligned_average(self, trial_indices: Optional[List[int]] = None) -> TimeAlignedAverage:
         """Return an average with QC decisions and per-sample contributor counts."""
-        requested = trial_indices if trial_indices else list(range(self.num_trials))
+        requested = list(trial_indices) if trial_indices is not None else list(range(self.num_trials))
         valid_indices = [index for index in requested if 0 <= index < self.num_trials]
         invalid_indices = [index for index in requested if index not in valid_indices]
         if invalid_indices:
@@ -397,11 +413,16 @@ class Channel:
 
     def get_data_bounds(self) -> Optional[Tuple[float, float]]:
         """Returns the min and max values across all trials for this channel."""
-        if not self.data_trials or not any(trial.size > 0 for trial in self.data_trials):
+        valid_trials = [
+            np.asarray(trial)
+            for trial in self.data_trials
+            if trial is not None and _is_valid_trial_array(trial) and trial.size > 0
+        ]
+        if not valid_trials:
             return None
 
-        min_val = np.min([np.min(trial) for trial in self.data_trials if trial.size > 0])
-        max_val = np.max([np.max(trial) for trial in self.data_trials if trial.size > 0])
+        min_val = min(float(np.min(trial)) for trial in valid_trials)
+        max_val = max(float(np.max(trial)) for trial in valid_trials)
 
         return float(min_val), float(max_val)
 
@@ -410,20 +431,24 @@ class Channel:
         Returns the min and max values across all trials, ensuring they are finite.
         Returns None if no finite data is found.
         """
-        if not self.data_trials or not any(trial.size > 0 for trial in self.data_trials):
+        if not self.data_trials:
             return None
 
         try:
-            # Concatenate all finite data from all trials
-            all_finite_data = np.concatenate(
-                [trial[np.isfinite(trial)] for trial in self.data_trials if trial.size > 0]
-            )
+            finite_chunks = []
+            for trial in self.data_trials:
+                if trial is None or not hasattr(trial, "size") or trial.size == 0:
+                    continue
+                arr = np.asarray(trial)
+                fin = arr[np.isfinite(arr)]
+                if fin.size > 0:
+                    finite_chunks.append(fin)
 
-            if all_finite_data.size == 0:
+            if not finite_chunks:
                 return None
 
-            min_val = np.min(all_finite_data)
-            max_val = np.max(all_finite_data)
+            min_val = min(float(np.min(chunk)) for chunk in finite_chunks)
+            max_val = max(float(np.max(chunk)) for chunk in finite_chunks)
 
             return float(min_val), float(max_val)
         except (ValueError, TypeError):

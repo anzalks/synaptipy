@@ -61,7 +61,10 @@ class PreferencesDialog(QtWidgets.QDialog):
         self._original_scroll_direction = get_scroll_direction()
         self._original_theme_mode = get_theme_mode()
         self._original_enable_plugins = self._settings.value("enable_plugins", True, type=bool)
-        self._original_opengl = SessionManager().global_settings.get("enable_opengl_experimental", False)
+        fallback_opengl = self._settings.value("performance/enable_opengl_experimental", False, type=bool)
+        self._original_opengl = bool(
+            SessionManager().global_settings.get("enable_opengl_experimental", fallback_opengl)
+        )
         self._cpu_count = multiprocessing.cpu_count()
 
         self._setup_ui()
@@ -300,9 +303,10 @@ class PreferencesDialog(QtWidgets.QDialog):
         saved_ram = self._settings.value("performance/max_ram_allocation_gb", 4.0, type=float)
         self.ram_spinbox.setValue(max(0.5, saved_ram))
 
-        # OpenGL toggle
+        # OpenGL toggle (read from SessionManager with QSettings fallback)
+        fallback_opengl = self._settings.value("performance/enable_opengl_experimental", False, type=bool)
         global_settings = SessionManager().global_settings
-        self.enable_opengl_checkbox.setChecked(global_settings.get("enable_opengl_experimental", False))
+        self.enable_opengl_checkbox.setChecked(bool(global_settings.get("enable_opengl_experimental", fallback_opengl)))
 
     def _get_selected_scroll_direction(self) -> ScrollDirection:
         """Get the currently selected scroll direction."""
@@ -365,6 +369,8 @@ class PreferencesDialog(QtWidgets.QDialog):
 
         # Save OpenGL setting
         opengl_enabled = self.enable_opengl_checkbox.isChecked()
+        self._settings.setValue("performance/enable_opengl_experimental", opengl_enabled)
+        self._settings.sync()
         SessionManager().update_global_setting("enable_opengl_experimental", opengl_enabled)
 
         # Update original values (so cancel won't revert)

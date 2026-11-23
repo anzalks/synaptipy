@@ -10,6 +10,7 @@ from pathlib import Path
 from synaptipy import __version__
 from synaptipy.application.plugin_manager import PluginManager
 from synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
+from synaptipy.core.analysis.registry import AnalysisRegistry
 
 
 def _load_pipeline(path: Path) -> list:
@@ -41,7 +42,12 @@ def _write_provenance(output_path: Path, args: argparse.Namespace, pipeline: lis
 
 
 def _run_batch(args: argparse.Namespace) -> int:
-    pipeline = _load_pipeline(args.pipeline)
+    try:
+        pipeline = _load_pipeline(args.pipeline)
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        print(f"Invalid pipeline file '{args.pipeline}': {exc}", file=sys.stderr)
+        return 2
+
     files = [Path(p) for p in args.files]
     missing = [path for path in files if not path.exists()]
     if missing:
@@ -57,15 +63,21 @@ def _run_batch(args: argparse.Namespace) -> int:
         cross_file_average=args.cross_file_average,
     )
 
+    private_cols = [col for col in df.columns if str(col).startswith("_")]
+    export_df = df.drop(columns=private_cols) if private_cols else df
+
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(args.output, index=False)
+    export_df.to_csv(args.output, index=False)
     _write_provenance(args.output, args, pipeline)
-    print(f"Wrote {len(df)} rows to {args.output}")
+    print(f"Wrote {len(export_df)} rows to {args.output}")
     return 0
 
 
 def _list_analyses() -> int:
     for name in sorted(BatchAnalysisEngine.list_available_analyses()):
+        meta = AnalysisRegistry.get_metadata(name)
+        if bool(meta.get("method_selector")) and not meta.get("ui_params"):
+            continue
         print(name)
     return 0
 

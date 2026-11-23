@@ -49,6 +49,7 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
         self.channel_checkboxes: Dict[str, QtWidgets.QCheckBox] = {}
 
         self._setup_ui()
+        self._update_visibility(self.PlotMode.OVERLAY_AVG)
 
     def _setup_ui(self):
         layout = QtWidgets.QVBoxLayout(self)
@@ -370,14 +371,17 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
 
         self.trial_selection_requested.emit(text)
 
-    def _update_visibility(self):
-        # Toggle buttons based on mode if needed
-        # e.g. Select Trial button is only for Cycle mode
-        pass  # Implemented in Controller if needed, but UI can do it too
-        is_cycle = self.plot_mode_combo.currentIndex() == self.PlotMode.CYCLE_SINGLE
+    def _update_visibility(self, mode: Optional[int] = None):
+        if mode is None:
+            mode = self.plot_mode_combo.currentIndex()
+        is_cycle = mode == self.PlotMode.CYCLE_SINGLE
         self.select_trial_btn.setEnabled(is_cycle)
         self.show_avg_btn.setEnabled(is_cycle)
         self.clear_sel_btn.setEnabled(is_cycle)
+        if not is_cycle and self.show_avg_btn.isChecked():
+            was_blocked = self.show_avg_btn.blockSignals(True)
+            self.show_avg_btn.setChecked(False)
+            self.show_avg_btn.blockSignals(was_blocked)
 
     def update_selection_label(self, selected_indices):
         if not selected_indices:

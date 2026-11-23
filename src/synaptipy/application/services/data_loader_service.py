@@ -11,13 +11,38 @@ directly.
 """
 
 import logging
-from typing import Any, Optional
+from typing import Any, Optional, Set
 
 from PySide6 import QtCore
 
 from synaptipy.application.gui.analysis_worker import AnalysisWorker
 
 log = logging.getLogger(__name__)
+
+
+class _LoadRelay(QtCore.QObject):
+    """Main-thread QObject slot relay ensuring worker signals marshal onto DataLoaderService's thread."""
+
+    def __init__(self, service: "DataLoaderService", token: int) -> None:
+        super().__init__(service)
+        self._service = service
+        self._token = token
+
+    @QtCore.Slot(object)
+    def on_result(self, result: Any) -> None:
+        self._service._handle_worker_result(self._token, result)
+
+    @QtCore.Slot(tuple)
+    def on_error(self, err: tuple) -> None:
+        self._service._handle_worker_error(self._token, err)
+
+    @QtCore.Slot()
+    def on_finished(self) -> None:
+        try:
+            self._service._handle_worker_finished(self._token)
+        finally:
+            self._service._relays.discard(self)
+            self.deleteLater()
 
 
 class DataLoaderService(QtCore.QObject):
@@ -56,6 +81,10 @@ class DataLoaderService(QtCore.QObject):
         super().__init__(parent)
         self._neo_adapter = neo_adapter
         self._thread_pool = QtCore.QThreadPool()
+        self._request_seq: int = 0
+        self._active_token: int = 0
+        self._current_emit_token: Optional[int] = None
+        self._relays: Set[_LoadRelay] = set()
         log.debug(
             "DataLoaderService initialised (max threads: %d)",
             self._thread_pool.maxThreadCount(),
@@ -70,7 +99,34 @@ class DataLoaderService(QtCore.QObject):
         """Expose the internal thread pool for external introspection or testing."""
         return self._thread_pool
 
-    def load_recording(self, path: Optional[Any]) -> None:
+    def _emit_with_token(self, token: int, emit_fn: Any, *args: Any) -> None:
+        """Emit a signal while exposing *token* on ``_current_emit_token``."""
+        prev = self._current_emit_token
+        self._current_emit_token = token
+        try:
+            emit_fn(*args)
+        finally:
+            self._current_emit_token = prev
+
+    def _handle_worker_result(self, token: int, result: Any) -> None:
+        if token != self._active_token:
+            log.debug("DataLoaderService: ignoring stale load result (token=%d, active=%d)", token, self._active_token)
+            return
+        self._emit_with_token(token, self.recording_loaded.emit, result)
+
+    def _handle_worker_error(self, token: int, err: tuple) -> None:
+        if token != self._active_token:
+            log.debug("DataLoaderService: ignoring stale load error (token=%d, active=%d)", token, self._active_token)
+            return
+        self._emit_with_token(token, self.load_failed.emit, err)
+
+    def _handle_worker_finished(self, token: int) -> None:
+        if token != self._active_token:
+            log.debug("DataLoaderService: ignoring stale load finish (token=%d, active=%d)", token, self._active_token)
+            return
+        self._emit_with_token(token, self.load_finished.emit)
+
+    def load_recording(self, path: Optional[Any], token: Optional[int] = None) -> int:
         """Submit an asynchronous load of the recording at *path*.
 
         Results are delivered through the :attr:`recording_loaded` /
@@ -81,25 +137,34 @@ class DataLoaderService(QtCore.QObject):
             path: File-system path understood by *neo_adapter*.  ``None`` or a
                   falsy value causes :attr:`recording_loaded` to be emitted with
                   ``None`` (no error, no thread spawned).
+            token: Optional monotonic request identifier from the caller.
         """
+        self._request_seq += 1
+        req_token = token if token is not None else self._request_seq
+        self._active_token = req_token
+
         if not path:
             # Emit immediately on the calling thread - no worker needed.
-            self.recording_loaded.emit(None)
-            self.load_finished.emit()
-            return
+            self._emit_with_token(req_token, self.recording_loaded.emit, None)
+            self._emit_with_token(req_token, self.load_finished.emit)
+            return req_token
 
         def _load(p: Any):
             return self._neo_adapter.read_recording(p)
 
+        relay = _LoadRelay(self, req_token)
+        self._relays.add(relay)
+
         worker = AnalysisWorker(_load, path)
-        worker.signals.result.connect(self.recording_loaded)
-        worker.signals.error.connect(self.load_failed)
-        worker.signals.finished.connect(self.load_finished)
+        worker.signals.result.connect(relay.on_result)
+        worker.signals.error.connect(relay.on_error)
+        worker.signals.finished.connect(relay.on_finished)
 
-        log.debug("DataLoaderService: starting async load for %s", path)
+        log.debug("DataLoaderService: starting async load for %s (token=%d)", path, req_token)
         self._thread_pool.start(worker)
+        return req_token
 
-    def load_recording_direct(self, recording: Any) -> None:
+    def load_recording_direct(self, recording: Any, token: Optional[int] = None) -> int:
         """Emit a pre-loaded recording directly without spawning a background thread.
 
         Use this for in-memory recordings (e.g. synthetic multi-file averages)
@@ -108,10 +173,15 @@ class DataLoaderService(QtCore.QObject):
         Args:
             recording: A :class:`~synaptipy.core.data_model.Recording` instance
                        (or ``None``) to deliver to connected slots immediately.
+            token: Optional monotonic request identifier from the caller.
         """
-        log.debug("DataLoaderService: emitting in-memory recording directly.")
-        self.recording_loaded.emit(recording)
-        self.load_finished.emit()
+        self._request_seq += 1
+        req_token = token if token is not None else self._request_seq
+        self._active_token = req_token
+        log.debug("DataLoaderService: emitting in-memory recording directly (token=%d).", req_token)
+        self._emit_with_token(req_token, self.recording_loaded.emit, recording)
+        self._emit_with_token(req_token, self.load_finished.emit)
+        return req_token
 
     def wait_for_done(self) -> None:
         """Block until all pending load operations have completed.

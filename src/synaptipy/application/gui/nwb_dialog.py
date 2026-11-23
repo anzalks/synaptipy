@@ -44,6 +44,7 @@ class NwbMetadataDialog(QtWidgets.QDialog):
         self.setModal(True)
 
         self.recording = recording
+        self._validated_metadata: Optional[Dict[str, Any]] = None
         self._setup_ui()
         self._prefill_data()
 
@@ -69,7 +70,7 @@ class NwbMetadataDialog(QtWidgets.QDialog):
         self.button_box = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.StandardButton.Ok | QtWidgets.QDialogButtonBox.StandardButton.Cancel
         )
-        self.button_box.accepted.connect(self.accept)
+        self.button_box.accepted.connect(self._on_accept)
         self.button_box.rejected.connect(self.reject)
         main_layout.addWidget(self.button_box)
 
@@ -203,11 +204,15 @@ class NwbMetadataDialog(QtWidgets.QDialog):
         # Protocol name as description
         desc = getattr(rec, "imported_protocol_label", "")
         if not desc:
-            desc = f"Recording from {rec.source_file.name}"
+            if rec.source_file is not None:
+                desc = f"Recording from {rec.source_file.name}"
+            else:
+                desc = "In-memory Recording"
         self.session_description.setText(desc)
 
         # Session ID from filename
-        self.session_id.setText(rec.source_file.stem)
+        if rec.source_file is not None:
+            self.session_id.setText(rec.source_file.stem)
 
         # Start Time
         start_dt = getattr(rec, "session_start_time_dt", None)
@@ -252,7 +257,22 @@ class NwbMetadataDialog(QtWidgets.QDialog):
 
         self.genotype.setText(rec.metadata.get("genotype", ""))
 
+    def _on_accept(self) -> None:
+        """Validate required fields before closing the dialog."""
+        self._validated_metadata = None
+        metadata = self._collect_and_validate_metadata()
+        if metadata is None:
+            return
+        self._validated_metadata = metadata
+        self.accept()
+
     def get_metadata(self) -> Optional[Dict[str, Any]]:
+        """Return validated metadata stored on accept, or validate current fields."""
+        if self._validated_metadata is not None:
+            return dict(self._validated_metadata)
+        return self._collect_and_validate_metadata()
+
+    def _collect_and_validate_metadata(self) -> Optional[Dict[str, Any]]:
         """Validate and return all metadata as a nested dictionary."""
 
         # --- Validation ---

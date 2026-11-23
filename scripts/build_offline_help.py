@@ -248,7 +248,11 @@ def step_copy_artefacts() -> None:
     if HTML_BUILD.exists() and (HTML_BUILD / "index.html").exists():
         if HTML_DEST_DIR.exists():
             shutil.rmtree(HTML_DEST_DIR)
-        shutil.copytree(HTML_BUILD, HTML_DEST_DIR)
+        shutil.copytree(
+            HTML_BUILD,
+            HTML_DEST_DIR,
+            ignore=shutil.ignore_patterns(".doctrees", "_sources", ".buildinfo"),
+        )
         print(f"[build_offline_help] Copied HTML tree -> {HTML_DEST_DIR}")
     else:
         print("[build_offline_help] WARNING: HTML build not found; HTML fallback will be unavailable.")

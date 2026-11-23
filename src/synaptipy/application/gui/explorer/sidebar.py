@@ -6,6 +6,7 @@ Handles file system navigation (tree view) and file list management.
 """
 
 import logging
+import os
 from pathlib import Path
 from typing import Dict, Optional  # Added Dict
 
@@ -103,29 +104,83 @@ class ExplorerSidebar(QtWidgets.QGroupBox):
 
         layout.addWidget(self.tabs)
 
-    def _refresh_project_tree(self):
+    def _refresh_project_tree(self):  # noqa: C901
         """Scans the current root directory and builds the Animal/Slice/Cell hierarchy."""
-        root_path = Path(self.file_model.rootPath())
         self.project_tree.clear()
 
+        idx_path = ""
+        if self.file_tree is not None and self.file_model is not None:
+            root_idx = self.file_tree.rootIndex()
+            if root_idx is not None and root_idx.isValid():
+                fp = self.file_model.filePath(root_idx)
+                if isinstance(fp, str):
+                    idx_path = fp.strip()
+
+        if idx_path:
+            candidate = Path(idx_path).expanduser()
+        else:
+            saved_dir = QtCore.QSettings(APP_NAME, SETTINGS_SECTION).value("lastDirectory", str(Path.home()), type=str)
+            candidate = (
+                Path(saved_dir.strip()).expanduser()
+                if isinstance(saved_dir, str) and saved_dir.strip()
+                else Path.home()
+            )
+
+        if not str(candidate) or str(candidate) == ".":
+            resolved = Path.home()
+        else:
+            resolved = Path(os.path.abspath(str(candidate)))
+
+        if resolved == Path(resolved.anchor):
+            resolved = Path.home()
+
+        root_path = resolved
         if not root_path.exists() or not root_path.is_dir():
             return
 
         supported_exts = self.neo_adapter.get_supported_extensions()
+        supported_exts_set = {ext.lower().lstrip(".") for ext in supported_exts if ext}
 
-        # Simple heuristic: scan up to 5 levels deep
-        # Assuming structure: Root / Animal / Slice / Cell / Protocol / Sweep.abf
-        # We'll group by relative path parts.
+        # Bounded recursive walk (max depth <= 5), skipping hidden '.' dirs
+        max_depth = 5
+        matched_files = []
+
+        def _scan_bounded(current_dir: Path, depth: int = 0) -> None:
+            if depth > max_depth:
+                return
+            try:
+                with os.scandir(current_dir) as it:
+                    entries = list(it)
+            except (PermissionError, OSError):
+                return
+
+            for entry in entries:
+                try:
+                    name = entry.name
+                    if name.startswith("."):
+                        continue
+                    if entry.is_dir(follow_symlinks=False):
+                        if depth < max_depth:
+                            _scan_bounded(Path(entry.path), depth + 1)
+                    elif entry.is_file():
+                        if "." in name and name.lower().rsplit(".", 1)[-1] in supported_exts_set:
+                            matched_files.append(Path(entry.path))
+                except (PermissionError, OSError):
+                    continue
+
+        _scan_bounded(root_path, 0)
 
         tree_dict = {}
-        for ext in supported_exts:
-            for filepath in root_path.rglob(f"*.{ext}"):
+        for filepath in matched_files:
+            try:
                 rel_parts = filepath.relative_to(root_path).parts
-                current_level = tree_dict
-                for part in rel_parts:
-                    if part not in current_level:
-                        current_level[part] = {}
-                    current_level = current_level[part]
+            except ValueError:
+                continue
+            current_level = tree_dict
+            for part in rel_parts:
+                if part not in current_level:
+                    current_level[part] = {}
+                current_level = current_level[part]
 
         def dict_to_tree(d, parent_item, current_path):
             for key, val in sorted(d.items()):
@@ -136,8 +191,10 @@ class ExplorerSidebar(QtWidgets.QGroupBox):
                     item.setData(0, QtCore.Qt.ItemDataRole.UserRole, (str(full_path), None))
                     dict_to_tree(val, item, full_path)
                 else:  # is file
-                    # Fetch protocols
-                    protocols = self.neo_adapter.get_file_protocols(full_path)
+                    try:
+                        protocols = self.neo_adapter.get_file_protocols(full_path)
+                    except Exception:
+                        protocols = []
                     if protocols and len(protocols) > 1:
                         # Parent file item doesn't load a specific protocol (or loads first by default)
                         item.setData(0, QtCore.Qt.ItemDataRole.UserRole, (str(full_path), protocols[0]))

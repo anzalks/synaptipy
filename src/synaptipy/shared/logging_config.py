@@ -93,6 +93,37 @@ DEV_CONSOLE_LEVEL = logging.DEBUG  # Dev mode - show DEBUG+ in console
 DEV_FILE_LEVEL = logging.DEBUG  # Dev mode - log DEBUG+ to file
 
 
+def _attach_file_handlers(
+    root_logger: logging.Logger,
+    log_dir: Path,
+    log_filename: str,
+    file_level: int,
+    formatter: logging.Formatter,
+) -> Path | None:
+    """Attach UTF-8 file handlers, degrading gracefully to console-only on OSError."""
+    log_file_path = log_dir / log_filename
+    try:
+        os.makedirs(log_dir, exist_ok=True)
+        file_handler = logging.FileHandler(log_file_path, encoding="utf-8")
+        file_handler.setLevel(file_level)
+        file_handler.setFormatter(formatter)
+        root_logger.addHandler(file_handler)
+    except OSError as exc:
+        root_logger.warning(f"File logging disabled (cannot open {log_file_path}): {exc}")
+        return None
+
+    app_log_path = log_dir / "app.log"
+    try:
+        app_file_handler = logging.FileHandler(app_log_path, mode="w", encoding="utf-8")
+        app_file_handler.setLevel(file_level)
+        app_file_handler.setFormatter(formatter)
+        root_logger.addHandler(app_file_handler)
+    except OSError as exc:
+        root_logger.warning(f"Could not overwrite latest app log ({app_log_path}): {exc}")
+
+    return log_file_path
+
+
 def setup_logging(dev_mode=False, log_dir=None, log_filename=None):
     """
     Configure the logging system for synaptipy.
@@ -114,9 +145,13 @@ def setup_logging(dev_mode=False, log_dir=None, log_filename=None):
     # Create the root logger and set its level
     root_logger = logging.getLogger("synaptipy")
 
-    # Remove existing handlers if any
+    # Remove existing handlers if any, closing file descriptors cleanly
     for handler in list(root_logger.handlers):
         root_logger.removeHandler(handler)
+        try:
+            handler.close()
+        except Exception:
+            pass
 
     # Set the root logger level to the most verbose level needed
     root_logger.setLevel(logging.DEBUG)  # Always use DEBUG to catch all messages
@@ -127,10 +162,8 @@ def setup_logging(dev_mode=False, log_dir=None, log_filename=None):
 
     # Define common formatter with more detail for dev mode
     if dev_mode:
-        # Include filename and line number in development mode
         formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s")
     else:
-        # Standard format for production use
         formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
     # Add console handler for terminal output
@@ -140,36 +173,18 @@ def setup_logging(dev_mode=False, log_dir=None, log_filename=None):
     root_logger.addHandler(console_handler)
 
     # Setup file logging
-    log_dir = Path(log_dir) if log_dir else DEFAULT_LOG_DIR
-
-    # Create log directory if it doesn't exist
-    os.makedirs(log_dir, exist_ok=True)
-
-    # Generate log filename if not provided
+    target_log_dir = Path(log_dir) if log_dir else DEFAULT_LOG_DIR
     if not log_filename:
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         log_filename = f"synaptipy_{timestamp}.log"
 
-    log_file_path = log_dir / log_filename
-
-    # Add file handler for saving logs to file
-    file_handler = logging.FileHandler(log_file_path)
-    file_handler.setLevel(file_level)
-    file_handler.setFormatter(formatter)
-    root_logger.addHandler(file_handler)
-
-    # Create a separate app.log for the most recent run
-    # This overwrites the previous app.log to provide easy access to latest logs
-    app_log_path = log_dir / "app.log"
-    app_file_handler = logging.FileHandler(app_log_path, mode="w")  # Overwrite existing file
-    app_file_handler.setLevel(file_level)
-    app_file_handler.setFormatter(formatter)
-    root_logger.addHandler(app_file_handler)
+    attached_path = _attach_file_handlers(root_logger, target_log_dir, log_filename, file_level, formatter)
 
     # Log the initialization
     mode_str = "DEVELOPMENT" if dev_mode else "PRODUCTION"
     root_logger.info(f"Synaptipy logging initialized in {mode_str} mode")
-    root_logger.info(f"Log file: {log_file_path}")
+    if attached_path is not None:
+        root_logger.info(f"Log file: {attached_path}")
 
     return root_logger
 

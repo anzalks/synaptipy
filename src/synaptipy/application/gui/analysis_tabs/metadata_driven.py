@@ -68,10 +68,16 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
         # --- Interactive region spinbox tracking: start_key -> end_key ---
         self._region_spinbox_keys: Dict[str, str] = {}
+        self._custom_interactive_region: Optional[pg.LinearRegionItem] = None
+        self._custom_interactive_regions: List[pg.LinearRegionItem] = []
+        self._interactive_region_created: bool = False
 
         # --- Interactive event-marker state ---
         self._current_event_indices: List[int] = []
         self._event_markers_item: Optional[pg.ScatterPlotItem] = None
+        self._event_count_text_item: Optional[pg.TextItem] = None
+        self._detected_event_amplitudes: Dict[int, float] = {}
+        self._detector_uses_signed_amplitudes: bool = False
         self._artifact_curve_item: Optional[pg.PlotCurveItem] = None
 
         # --- Draggable threshold line ---
@@ -113,6 +119,8 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 return region
         if interactive:
             return next(iter(interactive.values()))
+        if getattr(self, "_custom_interactive_region", None) is not None:
+            return self._custom_interactive_region
         return getattr(self, "analysis_region", None)
 
     def _trace_package_ready(self, data: Any) -> bool:
@@ -297,6 +305,16 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
     def reset_parameters(self):
         """Reset generated parameters to defaults defined in metadata."""
         self._method_param_cache.pop(self.analysis_name, None)
+        if self.plot_widget:
+            for reg in list(self._custom_interactive_regions):
+                try:
+                    if reg in self.plot_widget.items:
+                        self.plot_widget.removeItem(reg)
+                except RuntimeError:
+                    pass
+        self._custom_interactive_regions.clear()
+        self._custom_interactive_region = None
+        self._interactive_region_created = False
         if hasattr(self, "param_generator") and self.metadata:
             ui_params = self.metadata.get("ui_params", [])
             # Re-generating widgets will reset them to defaults
@@ -510,13 +528,25 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
     def _teardown_custom_plot_items(self):
         """Remove persistent plot items and result h-lines when switching methods."""
         if self.plot_widget:
-            for item in (self._event_markers_item, self._threshold_line, self._artifact_curve_item):
+            for item in (
+                self._event_markers_item,
+                self._event_count_text_item,
+                self._threshold_line,
+                self._artifact_curve_item,
+                self._custom_interactive_region,
+            ):
                 if item is not None:
                     try:
                         if item in self.plot_widget.items:
                             self.plot_widget.removeItem(item)
                     except RuntimeError:
                         pass
+            for reg in list(self._custom_interactive_regions):
+                try:
+                    if reg in self.plot_widget.items:
+                        self.plot_widget.removeItem(reg)
+                except RuntimeError:
+                    pass
             for line in list(self._result_hlines.values()):
                 try:
                     if line in self.plot_widget.items:
@@ -524,8 +554,14 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 except RuntimeError:
                     pass
         self._event_markers_item = None
+        self._event_count_text_item = None
+        self._detected_event_amplitudes.clear()
+        self._detector_uses_signed_amplitudes = False
         self._threshold_line = None
         self._artifact_curve_item = None
+        self._custom_interactive_region = None
+        self._custom_interactive_regions.clear()
+        self._interactive_region_created = False
         self._result_hlines.clear()
 
     def _setup_custom_plot_items(self):
@@ -707,15 +743,27 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         """Re-add persistent plot items after ``plot_widget.clear()``."""
         if not self.plot_widget:
             return
+        if self.analysis_region and self.restrict_analysis_checkbox and self.restrict_analysis_checkbox.isChecked():
+            if self.analysis_region not in self.plot_widget.items:
+                self.plot_widget.addItem(self.analysis_region)
+            self.analysis_region.setVisible(True)
         if self._event_markers_item and self._event_markers_item not in self.plot_widget.items:
             self.plot_widget.addItem(self._event_markers_item)
             self._event_markers_item.setZValue(100)
+        if self._event_count_text_item and self._event_count_text_item not in self.plot_widget.items:
+            self.plot_widget.addItem(self._event_count_text_item)
+            self._event_count_text_item.setZValue(105)
         if self._threshold_line and self._threshold_line not in self.plot_widget.items:
             self.plot_widget.addItem(self._threshold_line)
             self._threshold_line.setZValue(90)
         if self._artifact_curve_item and self._artifact_curve_item not in self.plot_widget.items:
             self.plot_widget.addItem(self._artifact_curve_item)
             self._artifact_curve_item.setZValue(80)
+        if self._custom_interactive_region and self._custom_interactive_region not in self.plot_widget.items:
+            self.plot_widget.addItem(self._custom_interactive_region)
+        for reg in self._custom_interactive_regions:
+            if reg not in self.plot_widget.items:
+                self.plot_widget.addItem(reg)
         # Re-add any result h-lines
         for line in self._result_hlines.values():
             if line not in self.plot_widget.items:
@@ -775,20 +823,33 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             self._refresh_event_markers()
 
     def _refresh_event_markers(self):
-        """Redraw markers based on ``_current_event_indices``."""
-        if not self._current_plot_data or self._event_markers_item is None:
+        """Redraw markers and count label based on ``_current_event_indices``."""
+        if not self._current_plot_data:
             return
-        indices = np.array(self._current_event_indices, dtype=int)
-        if len(indices) > 0:
-            times = self._current_plot_data["time"][indices]
-            volts = self._current_plot_data["data"][indices]
-            self._event_markers_item.setData(x=times, y=volts)
-            self._event_markers_item.setVisible(True)
-        else:
-            self._event_markers_item.setData(x=[], y=[])
-            self._event_markers_item.setVisible(False)
+        data_arr = np.asarray(self._current_plot_data["data"], dtype=float)
+        time_arr = np.asarray(self._current_plot_data["time"], dtype=float)
+        valid_indices = [int(i) for i in self._current_event_indices if 0 <= int(i) < len(data_arr)]
+        self._current_event_indices = valid_indices
+        indices = np.array(valid_indices, dtype=int)
+        count = len(indices)
 
-        # Update results table with curated stats
+        if self._event_markers_item is not None:
+            if count > 0:
+                times = time_arr[indices]
+                volts = data_arr[indices]
+                self._event_markers_item.setData(x=times, y=volts)
+                self._event_markers_item.setVisible(True)
+            else:
+                self._event_markers_item.setData(x=[], y=[])
+                self._event_markers_item.setVisible(False)
+
+        if self._event_count_text_item is not None:
+            self._event_count_text_item.setText(f"Events: {count}")
+            if len(time_arr) > 0 and len(data_arr) > 0:
+                self._event_count_text_item.setPos(float(np.nanmax(time_arr)), float(np.nanmax(data_arr)))
+            self._event_count_text_item.setVisible(count > 0)
+
+        # Update results table and _last_analysis_result with curated stats
         self._update_curated_event_table()
 
     def _get_specific_result_data(self) -> Optional[Dict[str, Any]]:
@@ -832,6 +893,13 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         """Update UI when a new item is selected."""
         # Base class handles population of channel/source combos now
         # We just need to ensure plot is cleared if nothing selected
+        self._current_event_indices = []
+        self._detected_event_amplitudes.clear()
+        self._detector_uses_signed_amplitudes = False
+        if self._event_markers_item:
+            self._event_markers_item.setVisible(False)
+        if self._event_count_text_item:
+            self._event_count_text_item.setVisible(False)
         if not self._selected_item_recording:
             if self.plot_widget:
                 self.plot_widget.clear()
@@ -1003,6 +1071,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         Uses the debounce timer so the visibility gate in ``_trigger_analysis``
         recognises this as an automatic trigger and defers when the tab is hidden.
         """
+        super()._on_data_plotted()
         self._ensure_custom_items_on_plot()
         if self._analysis_debounce_timer:
             self._analysis_debounce_timer.start(self._debounce_delay_ms)
@@ -1040,29 +1109,171 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
         return params
 
+    def _compute_curated_event_amplitudes(self, indices: np.ndarray) -> np.ndarray:
+        """Compute baseline-relative event amplitudes for curated indices."""
+        if len(indices) == 0 or not self._current_plot_data:
+            return np.array([], dtype=float)
+
+        data_arr = np.asarray(self._current_plot_data["data"], dtype=float)
+        fs = float(self._current_plot_data.get("sampling_rate", 10000.0) or 10000.0)
+        pre_win_samples = max(2, int(0.01 * fs))
+        guard_samples = int(0.001 * fs)
+
+        amps: List[float] = []
+        for idx in indices:
+            idx_i = int(idx)
+            if idx_i in self._detected_event_amplitudes:
+                amps.append(float(self._detected_event_amplitudes[idx_i]))
+                continue
+
+            if idx_i > 0:
+                pre_start = max(0, idx_i - pre_win_samples)
+                pre_end = min(idx_i, max(pre_start + 1, idx_i - guard_samples))
+                seg = data_arr[pre_start:pre_end]
+            else:
+                seg = data_arr[: min(len(data_arr), pre_win_samples)]
+
+            local_bl = float(np.median(seg)) if seg.size > 0 else 0.0
+            diff = float(data_arr[idx_i]) - local_bl
+            amps.append(diff if self._detector_uses_signed_amplitudes else abs(diff))
+
+        return np.asarray(amps, dtype=float)
+
+    def _sync_curated_events_to_result(
+        self,
+        indices: np.ndarray,
+        event_times: np.ndarray,
+        amplitudes: np.ndarray,
+        freq: float,
+        mean_amp: float,
+        amp_sd: float,
+    ) -> None:
+        """Write curated event metrics and arrays back into ``_last_analysis_result``."""
+        if self._last_analysis_result is None:
+            return
+
+        count = int(len(indices))
+
+        def _update_dict(target: Dict[str, Any], is_top: bool = False) -> None:
+            target["event_count"] = count
+            target["frequency_hz"] = float(freq)
+            target["mean_amplitude"] = float(mean_amp)
+            target["amplitude_sd"] = float(amp_sd)
+            target["event_indices"] = (
+                indices.tolist() if isinstance(target.get("event_indices"), list) else indices.copy()
+            )
+            target["event_times"] = (
+                event_times.tolist() if isinstance(target.get("event_times"), list) else event_times.copy()
+            )
+            target["event_amplitudes"] = (
+                amplitudes.tolist() if isinstance(target.get("event_amplitudes"), list) else amplitudes.copy()
+            )
+            if "mean_amplitude_pa" in target:
+                target["mean_amplitude_pa"] = float(mean_amp)
+            if "mean_amplitude_mv" in target:
+                target["mean_amplitude_mv"] = float(mean_amp)
+            if "mean_local_amplitude" in target:
+                target["mean_local_amplitude"] = float(np.mean(np.abs(amplitudes))) if count > 0 else float("nan")
+            if "_event_times" in target:
+                target["_event_times"] = event_times.tolist()
+            if "_event_peaks" in target and self._current_plot_data is not None:
+                data_arr = np.asarray(self._current_plot_data["data"], dtype=float)
+                target["_event_peaks"] = data_arr[indices].tolist() if count > 0 else []
+            if is_top and "value" in target:
+                if target.get("unit") == "Hz":
+                    target["value"] = float(freq)
+                elif target.get("unit") == "counts":
+                    target["value"] = count
+
+        def _update_obj(obj: Any) -> None:
+            for attr, val in (
+                ("event_count", count),
+                ("frequency_hz", float(freq)),
+                ("mean_amplitude", float(mean_amp)),
+                ("amplitude_sd", float(amp_sd)),
+                ("event_indices", indices.copy()),
+                ("event_times", event_times.copy()),
+                ("event_amplitudes", amplitudes.copy()),
+            ):
+                if hasattr(obj, attr):
+                    setattr(obj, attr, val)
+            if hasattr(obj, "value") and hasattr(obj, "unit"):
+                if getattr(obj, "unit", None) == "Hz":
+                    obj.value = float(freq)
+                elif getattr(obj, "unit", None) == "counts":
+                    obj.value = count
+
+        if isinstance(self._last_analysis_result, dict):
+            _update_dict(self._last_analysis_result, is_top=True)
+            metrics = self._last_analysis_result.get("metrics")
+            if isinstance(metrics, dict):
+                _update_dict(metrics, is_top=False)
+                if metrics.get("_result_obj") is not None:
+                    _update_obj(metrics["_result_obj"])
+        elif hasattr(self._last_analysis_result, "event_count"):
+            _update_obj(self._last_analysis_result)
+
     def _update_curated_event_table(self):
-        """Update the results table with curated event stats (used by event markers)."""
-        if not self.results_table:
-            return
-        count = len(self._current_event_indices)
-        if count == 0:
-            self.results_table.setRowCount(1)
-            self.results_table.setItem(0, 0, QtWidgets.QTableWidgetItem("Status"))
-            self.results_table.setItem(0, 1, QtWidgets.QTableWidgetItem("No Events"))
-            return
+        """Update the results table and result payload with curated event stats."""
         if not self._current_plot_data:
+            if self.results_table and len(self._current_event_indices) == 0:
+                self.results_table.setRowCount(1)
+                self.results_table.setItem(0, 0, QtWidgets.QTableWidgetItem("Status"))
+                self.results_table.setItem(0, 1, QtWidgets.QTableWidgetItem("No Events"))
             return
 
-        indices = np.array(self._current_event_indices, dtype=int)
-        try:
-            amplitudes = self._current_plot_data["data"][indices]
-        except IndexError:
+        data_arr = np.asarray(self._current_plot_data["data"], dtype=float)
+        time_arr = np.asarray(self._current_plot_data["time"], dtype=float)
+        valid_indices = [int(i) for i in self._current_event_indices if 0 <= int(i) < len(data_arr)]
+        indices = np.array(valid_indices, dtype=int)
+        count = len(indices)
+
+        duration = float(time_arr[-1] - time_arr[0]) if len(time_arr) > 1 else 0.0
+        if (
+            getattr(self, "restrict_analysis_checkbox", None)
+            and self.restrict_analysis_checkbox.isChecked()
+            and getattr(self, "analysis_region", None)
+            and len(time_arr) > 1
+        ):
+            r0, r1 = self.analysis_region.getRegion()
+            c0 = max(float(time_arr[0]), float(r0))
+            c1 = min(float(time_arr[-1]), float(r1))
+            if c1 > c0:
+                duration = c1 - c0
+
+        if count == 0:
+            empty_f = np.array([], dtype=float)
+            self._sync_curated_events_to_result(
+                indices=indices,
+                event_times=empty_f,
+                amplitudes=empty_f,
+                freq=0.0,
+                mean_amp=float("nan"),
+                amp_sd=float("nan"),
+            )
+            if self.results_table:
+                self.results_table.setRowCount(1)
+                self.results_table.setItem(0, 0, QtWidgets.QTableWidgetItem("Status"))
+                self.results_table.setItem(0, 1, QtWidgets.QTableWidgetItem("No Events"))
             return
 
-        duration = self._current_plot_data["time"][-1] - self._current_plot_data["time"][0]
+        event_times = time_arr[indices]
+        amplitudes = self._compute_curated_event_amplitudes(indices)
         freq = count / duration if duration > 0 else 0.0
         mean_amp = float(np.mean(amplitudes))
         amp_sd = float(np.std(amplitudes))
+
+        self._sync_curated_events_to_result(
+            indices=indices,
+            event_times=event_times,
+            amplitudes=amplitudes,
+            freq=freq,
+            mean_amp=mean_amp,
+            amp_sd=amp_sd,
+        )
+
+        if not self.results_table:
+            return
 
         method_label = ""
         if self.method_combobox:
@@ -1074,7 +1285,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         display_items += [
             ("Count", str(count)),
             ("Frequency", f"{freq:.2f} Hz"),
-            ("Mean Amplitude", f"{mean_amp:.2f} ± {amp_sd:.2f}"),
+            ("Mean Amplitude", f"{mean_amp:.2f} +/- {amp_sd:.2f}"),
         ]
         if self._threshold_line and self._threshold_line.isVisible():
             display_items.append(("Threshold", f"{self._threshold_line.value():.2f}"))
@@ -1161,6 +1372,13 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
                 data_list = []
                 time_list = []
+                sec_data_list = []
+                sec_channel = None
+                if self._secondary_channel_combobox and self._secondary_channel_param_name:
+                    sec_chan_id = self._secondary_channel_combobox.currentData()
+                    if sec_chan_id is not None:
+                        sec_channel = self._selected_item_recording.channels.get(sec_chan_id)
+
                 fs = data.get("sampling_rate", 10000.0)
                 trial_iter = (
                     sorted(i for i in self._filtered_indices if 0 <= i < num_trials)
@@ -1182,17 +1400,33 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                                 processed = self.pipeline.process(trial_data, fs, trial_time)
                                 if processed is not None:
                                     trial_data = processed
+                        applied_mask = None
                         if has_win:
                             w_mask = (trial_time >= float(win_start)) & (trial_time <= float(win_end))
                             if np.sum(w_mask) >= 2:
+                                applied_mask = w_mask
                                 trial_data = trial_data[w_mask]
                                 trial_time = trial_time[w_mask]
 
                         data_list.append(trial_data)
                         time_list.append(trial_time)
 
+                        if sec_channel is not None:
+                            sec_trial = sec_channel.get_data(i)
+                            if sec_trial is not None:
+                                if applied_mask is not None and len(sec_trial) == len(applied_mask):
+                                    sec_trial = sec_trial[applied_mask]
+                                sec_data_list.append(sec_trial)
+
                 if not data_list:
                     raise ValueError("Failed to load trial data.")
+
+                if (
+                    sec_channel is not None
+                    and self._secondary_channel_param_name
+                    and len(sec_data_list) == len(data_list)
+                ):
+                    params[self._secondary_channel_param_name] = sec_data_list
 
                 # Call the function with lists
                 results = AnalysisRegistry.execute(self.analysis_name, data_list, time_list, fs, **params)
@@ -1713,6 +1947,14 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         y_data = self._val(result, y_key)
         if y_data is None and isinstance(result, dict) and "metrics" in result:
             y_data = result["metrics"].get(y_key)
+        if isinstance(x_data, (int, float, np.number)) and not isinstance(x_data, bool):
+            x_data = [float(x_data)]
+        elif isinstance(x_data, np.ndarray) and x_data.ndim == 0:
+            x_data = [float(x_data)]
+        if isinstance(y_data, (int, float, np.number)) and not isinstance(y_data, bool):
+            y_data = [float(y_data)]
+        elif isinstance(y_data, np.ndarray) and y_data.ndim == 0:
+            y_data = [float(y_data)]
         if x_data is None:
             x_data = []
         if y_data is None:
@@ -1828,43 +2070,100 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             self._dynamic_plot_items.append(line)
 
     def _viz_interactive_region(self, cfg):
-        if getattr(self, "_interactive_region_created", False):
-            return
         param_keys = cfg.get("data", ["baseline_start", "baseline_end"])
-        # Read initial values from param widgets if available
         start_val = 0.0
         end_val = 0.1
-        if hasattr(self, "param_generator") and len(param_keys) >= 2:
-            widgets = self.param_generator.widgets
+        widgets = self.param_generator.widgets if hasattr(self, "param_generator") else {}
+        if len(param_keys) >= 2:
             if param_keys[0] in widgets:
                 start_val = float(widgets[param_keys[0]].value())
             if param_keys[1] in widgets:
                 end_val = float(widgets[param_keys[1]].value())
+
+        if getattr(self, "_interactive_region_created", False) and self._custom_interactive_region is not None:
+            if self.plot_widget and self._custom_interactive_region not in self.plot_widget.items:
+                self.plot_widget.addItem(self._custom_interactive_region)
+            if not self._syncing_regions:
+                self._syncing_regions = True
+                try:
+                    self._custom_interactive_region.setRegion([start_val, end_val])
+                finally:
+                    self._syncing_regions = False
+            return
+
+        color_spec = cfg.get("color")
+        if color_spec is not None:
+            c_obj = pg.mkColor(color_spec)
+            brush = pg.mkBrush(c_obj.red(), c_obj.green(), c_obj.blue(), 50)
+            pen = pg.mkPen(c_obj.red(), c_obj.green(), c_obj.blue(), 150)
+        else:
+            brush = pg.mkBrush(50, 50, 200, 50)
+            pen = pg.mkPen(50, 50, 200, 150)
+
         region = pg.LinearRegionItem(
             values=[start_val, end_val],
             orientation="vertical",
-            brush=pg.mkBrush(50, 50, 200, 50),
-            pen=pg.mkPen(50, 50, 200, 150),
+            brush=brush,
+            pen=pen,
             movable=True,
         )
-        self.plot_widget.addItem(region)
-        self._dynamic_plot_items.append(region)
+        if self.plot_widget:
+            self.plot_widget.addItem(region)
+        self._custom_interactive_region = region
+        self._custom_interactive_regions.append(region)
         self._interactive_region_created = True
 
         def on_region_changed():
-            mn, mx = region.getRegion()
-            if hasattr(self, "param_generator") and len(param_keys) >= 2:
-                widgets = self.param_generator.widgets
-                if param_keys[0] in widgets:
-                    widgets[param_keys[0]].setValue(mn)
-                if param_keys[1] in widgets:
-                    widgets[param_keys[1]].setValue(mx)
-                self._on_param_changed()
+            if self._syncing_regions:
+                return
+            self._syncing_regions = True
+            try:
+                mn, mx = region.getRegion()
+                if hasattr(self, "param_generator") and len(param_keys) >= 2:
+                    w_map = self.param_generator.widgets
+                    if param_keys[0] in w_map:
+                        b0 = w_map[param_keys[0]].blockSignals(True)
+                        w_map[param_keys[0]].setValue(mn)
+                        w_map[param_keys[0]].blockSignals(b0)
+                    if param_keys[1] in w_map:
+                        b1 = w_map[param_keys[1]].blockSignals(True)
+                        w_map[param_keys[1]].setValue(mx)
+                        w_map[param_keys[1]].blockSignals(b1)
+            finally:
+                self._syncing_regions = False
+            self._on_param_changed()
 
         region.sigRegionChangeFinished.connect(on_region_changed)
 
+        if len(param_keys) >= 2:
+            s_w = widgets.get(param_keys[0])
+            e_w = widgets.get(param_keys[1])
+            if s_w is not None and e_w is not None:
+
+                def on_spinboxes_changed():
+                    if self._syncing_regions:
+                        return
+                    self._syncing_regions = True
+                    try:
+                        region.setRegion([float(s_w.value()), float(e_w.value())])
+                    finally:
+                        self._syncing_regions = False
+
+                if hasattr(s_w, "valueChanged"):
+                    s_w.valueChanged.connect(on_spinboxes_changed)
+                if hasattr(e_w, "valueChanged"):
+                    e_w.valueChanged.connect(on_spinboxes_changed)
+
     def _viz_event_markers(self, cfg, result):
         """Update interactive event markers from result."""
+        if (
+            isinstance(result, dict)
+            and "metrics" in result
+            and "event_indices" not in result
+            and "_result_obj" not in result
+        ):
+            result = result["metrics"]
+        raw_metrics = result if isinstance(result, dict) else {}
         # Unwrap _result_obj stored inside a metrics dict
         if isinstance(result, dict) and "_result_obj" in result:
             result = result["_result_obj"]
@@ -1872,29 +2171,47 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         event_indices = (
             result.event_indices if is_obj else (result.get("event_indices") if isinstance(result, dict) else None)
         )
+        orig_amps = (
+            getattr(result, "event_amplitudes", None)
+            if is_obj
+            else (
+                result.get("event_amplitudes")
+                if isinstance(result, dict) and result.get("event_amplitudes") is not None
+                else raw_metrics.get("event_amplitudes")
+            )
+        )
+
+        self._detected_event_amplitudes.clear()
+        self._detector_uses_signed_amplitudes = False
 
         if event_indices is not None:
-            self._current_event_indices = list(np.array(event_indices, dtype=int))
-            self._refresh_event_markers()
+            idx_arr = np.asarray(event_indices, dtype=int)
+            if orig_amps is not None and len(orig_amps) == len(idx_arr):
+                amp_arr = np.asarray(orig_amps, dtype=float)
+                for e_idx, e_amp in zip(idx_arr, amp_arr):
+                    if np.isfinite(e_amp):
+                        self._detected_event_amplitudes[int(e_idx)] = float(e_amp)
+                if any(v < 0 for v in self._detected_event_amplitudes.values()):
+                    self._detector_uses_signed_amplitudes = True
 
-            if len(event_indices) > 0:
-                text_item = pg.TextItem(
-                    text=f"Events: {len(event_indices)}",
+            if self._event_count_text_item is None and self.plot_widget is not None:
+                self._event_count_text_item = pg.TextItem(
+                    text=f"Events: {len(idx_arr)}",
                     anchor=(1, 1),
                     color=(255, 255, 255),
                     fill=(0, 0, 0, 170),
                 )
-                self.plot_widget.addItem(text_item)
-                self._dynamic_plot_items.append(text_item)
-                if self._current_plot_data:
-                    time = self._current_plot_data.get("time", [])
-                    data = self._current_plot_data.get("data", [])
-                    if len(time) > 0 and len(data) > 0:
-                        text_item.setPos(float(np.nanmax(time)), float(np.nanmax(data)))
+                self._event_count_text_item.setZValue(105)
+                self.plot_widget.addItem(self._event_count_text_item)
+
+            self._current_event_indices = list(idx_arr)
+            self._refresh_event_markers()
         else:
             self._current_event_indices = []
             if self._event_markers_item:
                 self._event_markers_item.setVisible(False)
+            if self._event_count_text_item:
+                self._event_count_text_item.setVisible(False)
 
     def _viz_threshold_line(self, cfg, result):
         """Update threshold line position from result."""

@@ -39,11 +39,14 @@ def run_baseline_subtraction_processor(
     data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs: Any
 ) -> np.ndarray:
     """Subtract baseline offset using mode, mean, median, linear, constant, or region mode."""
-    method = str(kwargs.get("method", kwargs.get("mode", "mean"))).strip().lower()
+    raw_method = kwargs.get("method", kwargs.get("mode", "mean"))
+    method = str(raw_method if raw_method is not None else "none").strip().lower()
     start_t = kwargs.get("start_t", kwargs.get("start_time", kwargs.get("window_start")))
     end_t = kwargs.get("end_t", kwargs.get("end_time", kwargs.get("window_end")))
     use_region = start_t is not None and end_t is not None and time is not None and float(end_t) > float(start_t)
 
+    if method in ("none", "off", "") and "offset_value" not in kwargs and not use_region:
+        return data
     if method == "constant" or "offset_value" in kwargs:
         return data - float(kwargs.get("offset_value", 0.0))
     if method in ("detrend", "linear"):

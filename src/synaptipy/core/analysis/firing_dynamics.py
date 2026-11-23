@@ -308,13 +308,17 @@ def run_excitability_analysis_wrapper(  # noqa: C901
             clipped_time: List[np.ndarray] = []
             for d, t in zip(data_list, time_list):
                 mask = (t >= analysis_start_s) & (t <= analysis_end_s)
-                clipped_data.append(d[mask] if mask.any() else d)
-                clipped_time.append(t[mask] if mask.any() else t)
+                clipped_data.append(d[mask])
+                clipped_time.append(t[mask])
             data_list = clipped_data
             time_list = clipped_time
 
         num_sweeps = len(data_list)
-        current_steps = [start_current + i * step_current for i in range(num_sweeps)]
+        provided_steps = kwargs.get("current_steps")
+        if provided_steps is not None and len(provided_steps) == num_sweeps:
+            current_steps = [float(c) for c in provided_steps]
+        else:
+            current_steps = [start_current + i * step_current for i in range(num_sweeps)]
 
         results = calculate_fi_curve(
             sweeps=data_list,
@@ -491,6 +495,7 @@ def analyze_spikes_and_bursts(
     dynamic_burst: bool = False,
     burst_isi_fraction: float = 0.3,
     parameters: Optional[Dict[str, Any]] = None,
+    min_spikes: int = 2,
 ) -> BurstResult:
     """Detect spikes then detect bursts."""
     refractory_samples = int((refractory_ms / 1000.0) * sampling_rate)
@@ -503,6 +508,7 @@ def analyze_spikes_and_bursts(
         spike_result.spike_times,
         max_isi_start=max_isi_start,
         max_isi_end=max_isi_end,
+        min_spikes=min_spikes,
         dynamic_burst=dynamic_burst,
         burst_isi_fraction=burst_isi_fraction,
         parameters=parameters,
@@ -583,6 +589,7 @@ def run_burst_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate
     threshold = kwargs.get("threshold", -20.0)
     max_isi_start = kwargs.get("max_isi_start", 0.01)
     max_isi_end = kwargs.get("max_isi_end", 0.1)
+    min_spikes = int(kwargs.get("min_spikes", 2))
     dynamic_burst = kwargs.get("dynamic_burst", False)
     burst_isi_fraction = float(kwargs.get("burst_isi_fraction", 0.3))
     analysis_start_s = float(kwargs.get("analysis_start_s", 0.0))
@@ -591,9 +598,8 @@ def run_burst_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate
     # Clip to analysis window when a valid window is specified.
     if analysis_end_s > analysis_start_s:
         mask = (time >= analysis_start_s) & (time <= analysis_end_s)
-        if mask.any():
-            data = data[mask]
-            time = time[mask]
+        data = data[mask]
+        time = time[mask]
 
     result = analyze_spikes_and_bursts(
         data=data,
@@ -605,10 +611,14 @@ def run_burst_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate
         dynamic_burst=dynamic_burst,
         burst_isi_fraction=burst_isi_fraction,
         parameters=kwargs,
+        min_spikes=min_spikes,
     )
 
     if not result.is_valid:
-        return {"module_used": "firing_dynamics", "metrics": {"burst_error": result.error_message}}
+        return {
+            "module_used": "firing_dynamics",
+            "metrics": {"burst_count": 0, "bursts": [], "burst_error": result.error_message},
+        }
 
     return {
         "module_used": "firing_dynamics",
@@ -797,7 +807,8 @@ def run_train_dynamics_wrapper(  # noqa: C901
 
     ap_threshold = kwargs.get("spike_threshold", -20.0)
     ap_times = kwargs.get("action_potential_times", None)
-    analysis_start_s = float(kwargs.get("analysis_start_s", 0.0))
+    raw_start_s = kwargs.get("analysis_start_s")
+    analysis_start_s = float(raw_start_s if raw_start_s is not None else 0.0)
     analysis_end_s = float(kwargs.get("analysis_end_s", 0.0))
     spike_indices = None
     # start_idx tracks the offset of the clipped window within the original
@@ -809,10 +820,16 @@ def run_train_dynamics_wrapper(  # noqa: C901
     # Clip to analysis window when a valid window is specified.
     if analysis_end_s > analysis_start_s:
         mask = (time >= analysis_start_s) & (time <= analysis_end_s)
-        if mask.any():
-            start_idx = int(np.searchsorted(time, analysis_start_s))
-            data = data[mask]
-            time = time[mask]
+        start_idx = int(np.searchsorted(time, analysis_start_s)) if mask.any() else 0
+        data = data[mask]
+        time = time[mask]
+        delay_ref_s = analysis_start_s
+    else:
+        delay_ref_s = (
+            analysis_start_s
+            if (raw_start_s is not None and analysis_start_s > 0.0)
+            else (float(time[0]) if time is not None and len(time) > 0 else 0.0)
+        )
 
     if ap_times is None:
         refractory_samples = max(1, int(0.002 * sampling_rate))
@@ -826,7 +843,7 @@ def run_train_dynamics_wrapper(  # noqa: C901
             spike_indices = np.array([], dtype=int)
             ap_times = np.array([])
 
-    result = calculate_train_dynamics(ap_times, analysis_start_s=analysis_start_s)
+    result = calculate_train_dynamics(ap_times, analysis_start_s=delay_ref_s)
     if not result.is_valid:
         delay_ms = (
             float(result.first_spike_delay_s * 1000.0)
@@ -898,6 +915,6 @@ def run_train_dynamics_wrapper(  # noqa: C901
     ui_params=[],
     plots=[],
 )
-def firing_dynamics_module(**kwargs):
+def firing_dynamics_module(*_args, **_kwargs):
     """Module-level aggregator tab for firing-dynamics analyses."""
     return {}

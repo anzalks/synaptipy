@@ -9,6 +9,7 @@ lab members for standardised analysis workflows.
 
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -23,6 +24,28 @@ class ParameterTemplateManager:
     def __init__(self, template_dir: Optional[Path] = None):
         self.template_dir = template_dir or DEFAULT_TEMPLATE_DIR
         self.template_dir.mkdir(parents=True, exist_ok=True)
+
+    def _path_for(self, name: str) -> Path:
+        """Return a safe JSON file path inside template_dir for template *name*."""
+        sanitized = re.sub(r'[/\\:*?"<>|\x00]', "_", str(name))
+        sanitized = sanitized.strip(" .")
+        if not sanitized or sanitized in (".", ".."):
+            sanitized = "template"
+        return self.template_dir / f"{sanitized}.json"
+
+    def _find_stored_path(self, name: str) -> Optional[Path]:
+        """Locate the template file for *name* by sanitized filename or stored JSON name."""
+        direct = self._path_for(name)
+        if direct.exists():
+            return direct
+        for candidate in sorted(self.template_dir.glob("*.json")):
+            try:
+                data = json.loads(candidate.read_text(encoding="utf-8"))
+                if isinstance(data, dict) and data.get("name") == name:
+                    return candidate
+            except (OSError, json.JSONDecodeError):
+                continue
+        return None
 
     def save_template(
         self,
@@ -39,18 +62,18 @@ class ParameterTemplateManager:
             "parameters": parameters,
             "version": "1.0",
         }
-        path = self.template_dir / f"{name}.json"
-        path.write_text(json.dumps(template, indent=2, default=str))
+        path = self._path_for(name)
+        path.write_text(json.dumps(template, indent=2, default=str), encoding="utf-8")
         log.info(f"Saved parameter template: {path}")
         return path
 
     def load_template(self, name: str) -> Optional[Dict[str, Any]]:
         """Load a named template. Returns None if not found."""
-        path = self.template_dir / f"{name}.json"
-        if not path.exists():
-            log.warning(f"Template not found: {path}")
+        path = self._find_stored_path(name)
+        if path is None or not path.exists():
+            log.warning(f"Template not found: {self._path_for(name)}")
             return None
-        data = json.loads(path.read_text())
+        data = json.loads(path.read_text(encoding="utf-8"))
         return data.get("parameters", {})
 
     def list_templates(self, analysis_type: str = "") -> List[Dict[str, str]]:
@@ -58,7 +81,7 @@ class ParameterTemplateManager:
         templates = []
         for p in sorted(self.template_dir.glob("*.json")):
             try:
-                data = json.loads(p.read_text())
+                data = json.loads(p.read_text(encoding="utf-8"))
                 if analysis_type and data.get("analysis_type") != analysis_type:
                     continue
                 templates.append(
@@ -69,14 +92,14 @@ class ParameterTemplateManager:
                         "path": str(p),
                     }
                 )
-            except (json.JSONDecodeError, KeyError):
+            except (OSError, json.JSONDecodeError, KeyError, AttributeError):
                 continue
         return templates
 
     def delete_template(self, name: str) -> bool:
         """Delete a template by name."""
-        path = self.template_dir / f"{name}.json"
-        if path.exists():
+        path = self._find_stored_path(name)
+        if path is not None and path.exists():
             path.unlink()
             return True
         return False
@@ -87,45 +110,50 @@ class ParameterTemplateManager:
             {
                 "name": "Standard IV Protocol",
                 "description": "Hyperpolarising current steps for passive properties",
-                "analysis_type": "passive_properties",
+                "analysis_type": "iv_curve_analysis",
                 "parameters": {
-                    "baseline_start_s": 0.0,
-                    "baseline_end_s": 0.1,
-                    "response_start_s": 0.1,
-                    "response_end_s": 0.6,
-                    "rs_artifact_blanking_ms": 0.5,
+                    "start_current": -50.0,
+                    "step_current": 10.0,
+                    "baseline_start": 0.0,
+                    "baseline_end": 0.1,
+                    "response_start": 0.3,
+                    "response_end": 0.4,
                 },
             },
             {
                 "name": "Synaptic Event Screening",
                 "description": "Adaptive threshold for spontaneous mEPSC/mIPSC detection",
-                "analysis_type": "synaptic_events",
+                "analysis_type": "event_detection_threshold",
                 "parameters": {
-                    "detection_method": "adaptive_threshold",
-                    "threshold_factor": 3.5,
-                    "min_amplitude_mv": 0.2,
+                    "threshold": 5.0,
                     "direction": "negative",
-                    "filter_freq_hz": 1000,
+                    "refractory_period": 0.005,
+                    "rolling_baseline_window_ms": 100.0,
+                    "use_quiescent_noise_floor": True,
                 },
             },
             {
                 "name": "Plasticity Experiment",
-                "description": "Evoked response monitoring for LTP/LTD protocols",
-                "analysis_type": "evoked_responses",
+                "description": "Evoked response monitoring for paired-pulse / LTP/LTD protocols",
+                "analysis_type": "paired_pulse_ratio",
                 "parameters": {
-                    "stimulus_artifact_ms": 1.0,
-                    "response_window_ms": 50.0,
-                    "baseline_window_ms": 10.0,
+                    "use_ttl": True,
+                    "n_pulses": 2,
+                    "polarity": "negative",
+                    "response_window_ms": 20.0,
+                    "baseline_window_ms": 5.0,
+                    "artifact_blanking_ms": 1.0,
                 },
             },
             {
                 "name": "Fast-Spiking Interneurons",
                 "description": "Parameters adjusted for PV+ fast-spiking interneurons",
-                "analysis_type": "spike_analysis",
+                "analysis_type": "spike_detection",
                 "parameters": {
+                    "threshold": -25.0,
+                    "refractory_period": 0.001,
                     "dvdt_threshold": 30.0,
-                    "refractory_ms": 1.0,
-                    "threshold_mv": -25.0,
+                    "ahp_window": 0.03,
                     "fahp_window_ms": [0.5, 3.0],
                     "mahp_window_ms": [5.0, 30.0],
                 },

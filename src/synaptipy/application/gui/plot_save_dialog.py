@@ -185,7 +185,10 @@ class PlotSaveDialog(QtWidgets.QDialog):
         """Update the full path preview."""
         path = self.path_edit.text()
         filename = self.filename_edit.text()
-        format_text = self.format_combo.currentText().lower()
+        fmt = self.format_combo.currentText()
+        format_text = fmt.lower()
+        if hasattr(self, "extension_label") and self.extension_label is not None:
+            self.extension_label.setText(".pdf" if fmt.upper() == "PDF" else ".png")
 
         if path and filename:
             full_path = str(Path(path) / f"{filename}.{format_text}")

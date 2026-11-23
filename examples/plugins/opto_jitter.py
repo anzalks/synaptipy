@@ -97,7 +97,46 @@ def _collect_sweep_latencies(
     return latencies_ms, sweep_numbers, n_ttl_sweeps
 
 
-def calculate_opto_jitter(
+def _coerce_sweep_matrix(raw: Any, label: str) -> tuple:
+    """Convert a 1-D/2-D ndarray or list of 1-D sweeps into a 2-D float array without ValueError on ragged sweeps."""
+    if raw is None:
+        return None, f"Empty {label}", False
+    if isinstance(raw, (list, tuple)):
+        if len(raw) == 0:
+            return np.array([], dtype=float), None, True
+        sweeps = [np.asarray(sw, dtype=float).ravel() for sw in raw if sw is not None]
+        if not sweeps:
+            return np.array([], dtype=float), None, True
+        lengths = [sw.size for sw in sweeps]
+        min_len = min(lengths)
+        max_len = max(lengths)
+        if min_len == 0:
+            return np.array([], dtype=float), None, True
+        if min_len != max_len:
+            if min_len < 2:
+                return (
+                    None,
+                    f"Ragged sweep lengths in {label} have fewer than 2 common samples (min={min_len}, max={max_len})",
+                    True,
+                )
+            log.warning(
+                "Opto jitter: ragged sweep lengths in %s (min=%d, max=%d); truncating to %d samples.",
+                label,
+                min_len,
+                max_len,
+                min_len,
+            )
+            sweeps = [sw[:min_len] for sw in sweeps]
+        return np.vstack(sweeps), None, True
+
+    try:
+        arr = np.asarray(raw, dtype=float)
+    except ValueError as exc:
+        return None, f"Invalid {label}: {exc}", False
+    return arr, None, False
+
+
+def calculate_opto_jitter(  # noqa: C901
     data: np.ndarray,
     time: np.ndarray,
     sampling_rate: float,
@@ -115,10 +154,12 @@ def calculate_opto_jitter(
     a ``List[np.ndarray]`` of sweeps (from ``BatchAnalysisEngine`` when
     ``expects_list=True``), or a 1-D array for a single sweep.
     """
-    if isinstance(data, list):
-        data = np.asarray(data, dtype=float)
-    if isinstance(secondary_data, list):
-        secondary_data = np.asarray(secondary_data, dtype=float)
+    data, data_err, data_was_list = _coerce_sweep_matrix(data, "data array")
+    if data_err:
+        return {"error": data_err}
+    secondary_data, sec_err, sec_was_list = _coerce_sweep_matrix(secondary_data, "secondary (TTL) channel")
+    if sec_err:
+        return {"error": sec_err}
 
     if data is None or data.size == 0:
         return {"error": "Empty data array"}
@@ -129,6 +170,17 @@ def calculate_opto_jitter(
         data = data[np.newaxis, :]
     if secondary_data.ndim == 1:
         secondary_data = secondary_data[np.newaxis, :]
+
+    if (
+        (data_was_list or sec_was_list)
+        and data.shape[0] == secondary_data.shape[0]
+        and data.shape[1] != secondary_data.shape[1]
+    ):
+        common_samples = min(data.shape[1], secondary_data.shape[1])
+        if common_samples < 2:
+            return {"error": f"Shape mismatch: data {data.shape} vs TTL {secondary_data.shape}"}
+        data = data[:, :common_samples]
+        secondary_data = secondary_data[:, :common_samples]
 
     n_sweeps, _ = data.shape
     if secondary_data.shape != data.shape:
@@ -301,11 +353,7 @@ def run_opto_jitter_wrapper(
     ``kwargs["secondary_data"]`` when provided by the batch engine or the
     metadata-driven tab.
     """
-    if isinstance(data, list):
-        data = np.asarray(data, dtype=float)
     secondary_data = kwargs.get("secondary_data", np.array([]))
-    if isinstance(secondary_data, list):
-        secondary_data = np.asarray(secondary_data, dtype=float)
 
     return calculate_opto_jitter(
         data=data,

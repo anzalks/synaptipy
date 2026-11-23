@@ -28,6 +28,11 @@ log = logging.getLogger(__name__)
 _LARGE_FILE_THRESHOLD_BYTES: int = 500 * 1024 * 1024  # 500 MB
 
 
+def _physical_path(p: Path) -> Path:
+    """Strip virtual '::protocol' suffix to obtain the physical filesystem path."""
+    return Path(str(p).split("::", 1)[0])
+
+
 class DataLoader(QtCore.QObject):
     """
     Qt-based worker for loading electrophysiology files in background threads.
@@ -71,13 +76,14 @@ class DataLoader(QtCore.QObject):
         if lazy_load:
             return True
         try:
-            file_size = Path(file_path).stat().st_size
+            phys_path = _physical_path(Path(file_path))
+            file_size = phys_path.stat().st_size
             if file_size >= _LARGE_FILE_THRESHOLD_BYTES:
                 log.warning(
                     "LargeFileGuard: file '%s' is %.1f MB (threshold %.0f MB). "
                     "Automatically switching to lazy (out-of-core) loading to "
                     "prevent OOM crash.",
-                    Path(file_path).name,
+                    phys_path.name,
                     file_size / (1024 * 1024),
                     _LARGE_FILE_THRESHOLD_BYTES / (1024 * 1024),
                 )
@@ -114,17 +120,18 @@ class DataLoader(QtCore.QObject):
             self.loading_started.emit(str(file_path))
             self.loading_progress.emit(10)
 
-            # Validate file path
+            # Validate file path (use physical path for filesystem checks on '::protocol' URIs)
             if not isinstance(file_path, Path):
                 file_path = Path(file_path)
+            phys_path = _physical_path(file_path)
 
-            if not file_path.exists():
+            if not phys_path.exists():
                 error_msg = f"File not found: {file_path}"
                 log.error(error_msg)
                 self._emit_error(file_path, error_msg)
                 return
 
-            if not file_path.is_file():
+            if not phys_path.is_file():
                 error_msg = f"Path is not a file: {file_path}"
                 log.error(error_msg)
                 self._emit_error(file_path, error_msg)

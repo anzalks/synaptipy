@@ -2,12 +2,15 @@
 
 import math
 import re
+import sys
 import zipfile
 from datetime import date, datetime
-from numbers import Number
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 from xml.sax.saxutils import escape
+
+import numpy as np
 
 _INVALID_XML_CHARS = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F]")
 
@@ -21,6 +24,7 @@ def write_dataframe_to_xlsx(dataframe: Any, output_path: str | Path, sheet_name:
     treating user-provided strings as Excel formulas.
     """
     output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
     headers = [str(column) for column in dataframe.columns]
     rows = dataframe.itertuples(index=False, name=None)
     worksheet_xml = _worksheet_xml(headers, rows)
@@ -56,28 +60,60 @@ def _row_xml(row_number: int, values: Any) -> str:
     return f'<row r="{row_number}">{"".join(cells)}</row>'
 
 
+def _is_scalar_missing(value: Any) -> bool:
+    """Return True if *value* is None, pd.NA, pd.NaT, or a NumPy NaT scalar."""
+    if value is None:
+        return True
+    cls_name = type(value).__name__
+    if cls_name in ("NAType", "NaTType"):
+        return True
+    if isinstance(value, Decimal) and value.is_nan():
+        return True
+    if isinstance(value, (np.datetime64, np.timedelta64)) and np.isnat(value):
+        return True
+    pd_mod = sys.modules.get("pandas")
+    if pd_mod is not None and not isinstance(value, (str, bytes, list, tuple, dict, set, np.ndarray)):
+        try:
+            na_flag = pd_mod.isna(value)
+            if isinstance(na_flag, (bool, np.bool_)) and bool(na_flag):
+                return True
+        except Exception:
+            pass
+    return False
+
+
 def _cell_xml(reference: str, value: Any) -> str:
     """Serialise a single cell while preserving data as safely as possible."""
     value = _normalise_value(value)
     if value is None:
         return f'<c r="{reference}"/>'
-    if isinstance(value, bool):
-        return f'<c r="{reference}" t="b"><v>{int(value)}</v></c>'
-    if isinstance(value, Number):
-        return f'<c r="{reference}"><v>{value}</v></c>'
+    if isinstance(value, (bool, np.bool_)):
+        return f'<c r="{reference}" t="b"><v>{int(bool(value))}</v></c>'
+    if isinstance(value, (int, float, np.integer, np.floating)):
+        try:
+            f_val = float(value)
+        except OverflowError:
+            f_val = math.inf
+        if math.isfinite(f_val):
+            num_val = int(value) if isinstance(value, (int, np.integer)) else f_val
+            return f'<c r="{reference}"><v>{num_val}</v></c>'
 
     text = escape(_INVALID_XML_CHARS.sub("", str(value)))
     return f'<c r="{reference}" t="inlineStr"><is><t xml:space="preserve">{text}</t></is></c>'
 
 
 def _normalise_value(value: Any) -> Any:
-    """Convert NumPy and date-like values to XML-safe scalar representations."""
+    """Convert NumPy, pandas missing sentinels, and date-like values to XML-safe scalars."""
+    if _is_scalar_missing(value):
+        return None
     if hasattr(value, "item") and not isinstance(value, (str, bytes)):
         try:
             value = value.item()
         except ValueError:
             pass
-    if value is None or (isinstance(value, float) and (math.isnan(value) or math.isinf(value))):
+    if _is_scalar_missing(value):
+        return None
+    if isinstance(value, (float, np.floating)) and not math.isfinite(float(value)):
         return None
     if isinstance(value, (date, datetime)):
         return value.isoformat()
@@ -95,7 +131,10 @@ def _column_name(index: int) -> str:
 
 def _normalise_sheet_name(sheet_name: str) -> str:
     """Apply Excel's sheet-name constraints without rejecting an export."""
-    return re.sub(r"[\\/*?:\[\]]", "_", sheet_name)[:31] or "Results"
+    cleaned = _INVALID_XML_CHARS.sub("", str(sheet_name or ""))
+    cleaned = re.sub(r"[\\/*?:\[\]]", "_", cleaned).strip().strip("'")
+    cleaned = cleaned[:31].strip("'")
+    return cleaned or "Results"
 
 
 _CONTENT_TYPES = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>

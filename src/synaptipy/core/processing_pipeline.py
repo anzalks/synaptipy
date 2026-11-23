@@ -214,14 +214,32 @@ class SignalProcessingPipeline:
 
 def _apply_ljp_offset(result: np.ndarray, ljp_mv: float, units: str) -> np.ndarray:
     """Step A: unit-aware liquid junction potential subtraction (voltage channels only)."""
-    u_norm = str(units or "mV").strip().lower()
-    if u_norm in ("pa", "picoampere", "picoamperes", "na", "nanoampere", "a", "ampere", "amperes"):
+    u_norm = str(units or "mV").strip().lower().replace("\u00b5", "u").replace("\u03bc", "u")
+    if u_norm in (
+        "pa",
+        "picoampere",
+        "picoamperes",
+        "na",
+        "nanoampere",
+        "nanoamperes",
+        "ua",
+        "microampere",
+        "microamperes",
+        "ma",
+        "milliampere",
+        "milliamperes",
+        "a",
+        "amp",
+        "amps",
+        "ampere",
+        "amperes",
+    ):
         log.warning("apply_trace_corrections: skipping LJP subtraction on current trace (%s).", units)
         return result
     if u_norm in ("v", "volt", "volts"):
         return result - float(ljp_mv) * 1e-3
     if u_norm in ("uv", "microvolt", "microvolts"):
-        return result - float(ljp_mv) * 1e3
+        return result - float(ljp_mv) * 1000.0
     log.debug("apply_trace_corrections: Step A - LJP %.4f mV subtracted.", ljp_mv)
     return result - float(ljp_mv)
 
@@ -275,14 +293,14 @@ def _apply_noise_floor_zeroing(result: np.ndarray, time: np.ndarray, pre_event_w
         floor_offset = float(np.median(result[mask]))
         result = result - floor_offset
         log.debug(
-            "apply_trace_corrections: Step C — noise floor zeroed (%.4f mV, window %.3f-%.3f s).",
+            "apply_trace_corrections: Step C - noise floor zeroed (%.4f mV, window %.3f-%.3f s).",
             floor_offset,
             t0,
             t1,
         )
     else:
         log.warning(
-            "apply_trace_corrections: Step C skipped — no samples in window %.3f-%.3f s.",
+            "apply_trace_corrections: Step C skipped - no samples in window %.3f-%.3f s.",
             t0,
             t1,
         )
@@ -359,7 +377,7 @@ def apply_trace_corrections(
                              is skipped when the list is empty or ``None``.
 
     Returns:
-        Corrected signal array (always a copy — the input is never mutated).
+        Corrected signal array (always a copy - the input is never mutated).
     """
     if data is None or data.size == 0:
         return data
@@ -381,37 +399,38 @@ def apply_trace_corrections(
         )
 
     # ------------------------------------------------------------------
-    # Step C — Pre-event Scalar Zeroing (median of pre-event window)
+    # Step C - Pre-event Scalar Zeroing (median of pre-event window)
     # ------------------------------------------------------------------
     if pre_event_window_s is not None and time is not None and time.size == result.size:
         result = _apply_noise_floor_zeroing(result, time, pre_event_window_s)
 
     # ------------------------------------------------------------------
-    # Step D — Pre-filter Artifact Interpolation
+    # Step D - Pre-filter Artifact Interpolation
     # Linear interpolation across stimulus artifacts must occur AFTER
     # baseline zeroing (Step C) and BEFORE filtering (Step E).  This
     # ordering prevents Gibbs ringing: the filter operates on an already
     # flat waveform without the sharp transient edges of the artifact.
     # ------------------------------------------------------------------
-    if artifact_interp_steps:
+    if artifact_interp_steps and time is not None:
         for art in artifact_interp_steps:
             onset = float(art.get("onset_time", 0.0))
             duration_ms = float(art.get("duration_ms", 0.5))
-            from synaptipy.core import signal_processor as _sp
-
-            result = _sp.blank_artifact(result, time, onset, duration_ms, method="linear")
+            method = str(art.get("method", "linear"))
+            result = signal_processor.blank_artifact(result, time, onset, duration_ms, method=method)
         log.debug(
-            "apply_trace_corrections: Step D — %d artifact interpolation step(s) applied.",
+            "apply_trace_corrections: Step D - %d artifact interpolation step(s) applied.",
             len(artifact_interp_steps),
         )
+    elif artifact_interp_steps:
+        log.warning("apply_trace_corrections: Step D skipped - no time vector provided.")
 
     # ------------------------------------------------------------------
-    # Step E — Signal Filtering
+    # Step E - Signal Filtering
     # ------------------------------------------------------------------
     if filter_steps:
         pipeline = SignalProcessingPipeline()
         pipeline.set_steps(filter_steps)
         result = pipeline.process(result, fs, time_vector=time)
-        log.debug("apply_trace_corrections: Step E — %d filter step(s) applied.", len(filter_steps))
+        log.debug("apply_trace_corrections: Step E - %d filter step(s) applied.", len(filter_steps))
 
     return result

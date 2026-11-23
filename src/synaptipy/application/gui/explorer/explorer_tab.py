@@ -122,6 +122,8 @@ class ExplorerTab(QtWidgets.QWidget):
 
         # Global Manual Trial Cache (Cross-File)
         self.global_manual_trials: List[dict] = []
+        self.active_scatter_items: Dict[str, Any] = {}
+        self._live_analysis_enabled: bool = False
 
         # Initial State
         self._update_all_ui_state()
@@ -139,7 +141,7 @@ class ExplorerTab(QtWidgets.QWidget):
         # access-violations on Windows.
         self._file_nav_timer: QtCore.QTimer = QtCore.QTimer(self)
         self._file_nav_timer.setSingleShot(True)
-        self._file_nav_timer.setInterval(50)  # 50 ms — imperceptible to user
+        self._file_nav_timer.setInterval(50)  # 50 ms - imperceptible to user
         self._file_nav_timer.timeout.connect(self._execute_pending_file_nav)
         # Pending navigation target: (filepath, file_list, index)
         self._pending_nav_target: Optional[tuple] = None
@@ -507,35 +509,87 @@ class ExplorerTab(QtWidgets.QWidget):
                 "trial_index": self.current_trial_index,
             }
 
+            self._live_analysis_enabled = True
             self.live_controller.request_analysis(params)
 
         except Exception as e:
             log.error(f"Failed to prepare live analysis request: {e}")
 
-    def _resolve_peak_y_values(
+    def _clear_active_scatter_items(self) -> None:
+        """Remove all active live-analysis scatter items from plots and clear tracking."""
+        if not hasattr(self, "active_scatter_items") or not self.active_scatter_items:
+            return
+        for key, scatter in list(self.active_scatter_items.items()):
+            cid = key[len("spikes_") :] if str(key).startswith("spikes_") else str(key)
+            plot_item = self.plot_canvas.channel_plots.get(cid)
+            if plot_item is not None:
+                try:
+                    plot_item.removeItem(scatter)
+                except Exception:
+                    pass
+            else:
+                for pl in self.plot_canvas.channel_plots.values():
+                    try:
+                        pl.removeItem(scatter)
+                    except Exception:
+                        pass
+        self.active_scatter_items.clear()
+
+    def _resolve_peak_y_values(  # noqa: C901
         self,
         cid: str,
-        trial_idx: int,
-        spike_times: np.ndarray,
-        spike_indices: Optional[np.ndarray],
-        threshold: float,
+        trial_idx: Any,
+        spike_times: Any = None,
+        spike_indices: Optional[np.ndarray] = None,
+        threshold: float = 0.0,
     ) -> tuple:
         """Return (x_vals, y_vals) for scatter dots at true biological peaks.
 
-        Looks up the actual trace amplitude at each detected spike index.
+        Looks up the actual trace amplitude at each detected spike index or time.
         Falls back to the threshold level when trace data is unavailable.
         """
-        x_vals = spike_times
-        if spike_indices is not None and len(spike_indices) > 0:
-            trace_data: Optional[np.ndarray] = None
-            if cid in self._processed_cache and trial_idx in self._processed_cache.get(cid, {}):
-                _, trace_data = self._processed_cache[cid][trial_idx]
-            elif cid in self._data_cache and trial_idx in self._data_cache.get(cid, {}):
-                _, trace_data = self._data_cache[cid][trial_idx]
-            if trace_data is not None:
-                valid_mask = spike_indices < len(trace_data)
-                y_vals = trace_data[spike_indices[valid_mask].astype(int)]
-                return spike_times[valid_mask], y_vals
+        if not isinstance(trial_idx, (int, np.integer)):
+            threshold = float(spike_times) if spike_times is not None else 0.0
+            x_vals = np.asarray(trial_idx, dtype=float)
+            idx_to_use = self.current_trial_index
+            spike_indices = None
+        else:
+            x_vals = np.asarray(spike_times, dtype=float) if spike_times is not None else np.array([], dtype=float)
+            idx_to_use = int(trial_idx)
+
+        if len(x_vals) == 0:
+            return x_vals, np.array([], dtype=float)
+
+        t_vec: Optional[np.ndarray] = None
+        trace_data: Optional[np.ndarray] = None
+        if cid in self._processed_cache and idx_to_use in self._processed_cache.get(cid, {}):
+            t_vec, trace_data = self._processed_cache[cid][idx_to_use]
+        elif cid in self._data_cache and idx_to_use in self._data_cache.get(cid, {}):
+            t_vec, trace_data = self._data_cache[cid][idx_to_use]
+        elif self.current_recording and cid in self.current_recording.channels:
+            ch = self.current_recording.channels.get(cid)
+            if ch is not None:
+                try:
+                    raw_data = ch.get_data(idx_to_use)
+                    t_vec = ch.get_relative_time_vector(idx_to_use)
+                    if raw_data is not None:
+                        if hasattr(self, "pipeline") and self.pipeline and self.pipeline.get_steps():
+                            trace_data = self.pipeline.process(raw_data, ch.sampling_rate, time_vector=t_vec)
+                        else:
+                            trace_data = raw_data
+                except Exception as exc:
+                    log.debug(f"Could not resolve trace data for live spike peaks on {cid}: {exc}")
+
+        if trace_data is not None and len(trace_data) > 0:
+            if spike_indices is not None and len(spike_indices) > 0:
+                idx_arr = np.asarray(spike_indices, dtype=int)
+                valid_mask = (idx_arr >= 0) & (idx_arr < len(trace_data))
+                y_vals = np.asarray(trace_data, dtype=float)[idx_arr[valid_mask]]
+                return x_vals[valid_mask], y_vals
+            if t_vec is not None and len(t_vec) == len(trace_data):
+                y_vals = np.interp(x_vals, np.asarray(t_vec, dtype=float), np.asarray(trace_data, dtype=float))
+                return x_vals, y_vals
+
         return x_vals, np.full(len(x_vals), float(threshold))
 
     def _on_live_analysis_finished(self, result: SpikeTrainResult):
@@ -556,8 +610,9 @@ class ExplorerTab(QtWidgets.QWidget):
         if not hasattr(self, "active_scatter_items"):
             self.active_scatter_items = {}
 
-        if item_key in self.active_scatter_items:
-            plot_item.removeItem(self.active_scatter_items[item_key])
+        old_scatter = self.active_scatter_items.pop(item_key, None)
+        if old_scatter is not None:
+            plot_item.removeItem(old_scatter)
 
         if result.spike_times is not None and len(result.spike_times) > 0:
             from synaptipy.shared.plot_customization import (
@@ -664,7 +719,7 @@ class ExplorerTab(QtWidgets.QWidget):
 
         # Start Worker
         # We wrap the loading function to also include quality check
-        worker = AnalysisWorker(self._load_and_check_quality, self.neo_adapter, filepath)
+        worker = AnalysisWorker(self._load_and_check_quality, self.neo_adapter, filepath, lazy, force_units)
         worker.signals.result.connect(self._on_file_load_success)
         worker.signals.error.connect(lambda err: self._on_file_load_error(err, filepath))
         worker.signals.finished.connect(self._finalize_loading_state)
@@ -673,10 +728,10 @@ class ExplorerTab(QtWidgets.QWidget):
         self.thread_pool.start(worker)
 
     @staticmethod
-    def _load_and_check_quality(adapter, filepath):
+    def _load_and_check_quality(adapter, filepath, lazy: bool = False, force_units: bool = False):
         """Background task: Load file AND run quality check."""
         # 1. Load
-        rec = adapter.read_recording(filepath)
+        rec = adapter.read_recording(filepath, lazy=lazy, force_kHz_to_Hz=force_units)
 
         # 2. Quality Check (on first channel or all?)
         # For 'Traffic Light', checking the first channel is usually enough for a quick indicator
@@ -691,7 +746,7 @@ class ExplorerTab(QtWidgets.QWidget):
             try:
                 data = first_ch.get_data(0)
                 if data is not None:
-                    # Ensure C-contiguous float64 — strided views from
+                    # Ensure C-contiguous float64 - strided views from
                     # memory-mapped files (ABF etc.) cause SIGBUS in
                     # scipy LAPACK on macOS if memory is not aligned.
                     import numpy as _np
@@ -726,34 +781,82 @@ class ExplorerTab(QtWidgets.QWidget):
         if recording and recording.source_file:
             self.sidebar.update_file_quality(recording.source_file, metrics)
 
-            # Check for batch-to-explorer context (HIGH-8)
-            batch_ctx = self.session_manager.batch_load_context
-            if batch_ctx and batch_ctx.get("file_path") == recording.source_file:
-                # Auto-select channel and trial from batch results
-                channel_id = batch_ctx.get("channel_id")
-                trial_idx = batch_ctx.get("trial_index", 0)
+        self.apply_batch_load_context()
 
-                if channel_id and channel_id in recording.channels:
-                    # Hide other channels
-                    for cid in recording.channels:
-                        if cid in self.config_panel.channel_checkboxes:
-                            cb = self.config_panel.channel_checkboxes[cid]
-                            cb.setChecked(cid == channel_id)
+    def apply_batch_load_context(self) -> None:  # noqa: C901
+        """Consume SessionManager.batch_load_context to isolate target channel and trial."""
+        if not self.current_recording:
+            return
+        ctx = self.session_manager.batch_load_context
+        if not ctx:
+            return
 
-                # Set trial in cycle mode
-                if trial_idx is not None and 0 <= trial_idx < self.max_trials_current_recording:
-                    self.current_plot_mode = self.PlotMode.CYCLE_SINGLE
-                    self.config_panel.plot_mode_combo.setCurrentIndex(self.PlotMode.CYCLE_SINGLE)
-                    self.current_trial_index = trial_idx
-                    self._update_plot()
-                    self._update_all_ui_state()
+        ctx_path = ctx.get("file_path")
+        rec_source = getattr(self.current_recording, "source_file", None)
+        if ctx_path is not None and rec_source is not None and ctx_path != rec_source:
+            ctx_phys = Path(str(ctx_path).split("::", 1)[0])
+            rec_phys = Path(str(rec_source).split("::", 1)[0])
+            if ctx_phys != rec_phys and ctx_phys.resolve(strict=False) != rec_phys.resolve(strict=False):
+                return
 
-                # Clear context after use
-                self.session_manager.batch_load_context = None
-                log.debug(f"Applied batch context: Ch={channel_id}, Trial={trial_idx}")
+        self.session_manager.batch_load_context = None
 
-            # Also Auto-Trigger Live Analysis on load?
-            # self._request_live_analysis() # Maybe too aggressive/slow
+        target_channel = ctx.get("channel_id")
+        if target_channel is None:
+            target_channel = ctx.get("channel")
+
+        matched_cid = None
+        if target_channel is not None and self.current_recording.channels:
+            target_str = str(target_channel)
+            if target_channel in self.current_recording.channels:
+                matched_cid = target_channel
+            elif target_str in self.current_recording.channels:
+                matched_cid = target_str
+            else:
+                for cid, ch in self.current_recording.channels.items():
+                    ch_id = getattr(ch, "id", None)
+                    ch_name = getattr(ch, "name", None)
+                    if (ch_id is not None and str(ch_id) == target_str) or (
+                        ch_name is not None and str(ch_name) == target_str
+                    ):
+                        matched_cid = cid
+                        break
+
+        if matched_cid is not None:
+            for cid in self.current_recording.channels:
+                visible = cid == matched_cid
+                cb = self.config_panel.channel_checkboxes.get(cid)
+                if cb is not None:
+                    was_blocked = cb.blockSignals(True)
+                    cb.setChecked(visible)
+                    cb.blockSignals(was_blocked)
+                self._on_channel_visibility_changed(cid, visible)
+
+        trial_idx = ctx.get("trial_index")
+        if trial_idx is not None:
+            try:
+                trial_idx = int(trial_idx)
+            except (TypeError, ValueError):
+                trial_idx = None
+
+        if trial_idx is not None:
+            if self.max_trials_current_recording > 0:
+                trial_idx = max(0, min(trial_idx, self.max_trials_current_recording - 1))
+            else:
+                trial_idx = max(0, trial_idx)
+
+            self._clear_active_scatter_items()
+            self.current_trial_index = trial_idx
+            self.current_plot_mode = self.PlotMode.CYCLE_SINGLE
+            was_blocked = self.config_panel.plot_mode_combo.blockSignals(True)
+            self.config_panel.plot_mode_combo.setCurrentIndex(self.PlotMode.CYCLE_SINGLE)
+            self.config_panel.plot_mode_combo.blockSignals(was_blocked)
+            self.config_panel._update_visibility(self.PlotMode.CYCLE_SINGLE)
+            self._update_plot()
+            self._update_all_ui_state()
+            self._update_trial_quality_metrics()
+
+        log.debug(f"Applied batch context: Ch={matched_cid}, Trial={trial_idx}")
 
     def _display_recording(self, recording: Recording):  # noqa: C901
         if not recording:
@@ -771,12 +874,28 @@ class ExplorerTab(QtWidgets.QWidget):
         self.current_recording = recording
         self.max_trials_current_recording = getattr(recording, "max_trials", 0)
 
+        rec_source = getattr(recording, "source_file", None)
+        existing_loaded = getattr(self, "current_loaded_path", None)
+        if existing_loaded is None or (
+            isinstance(rec_source, Path)
+            and isinstance(existing_loaded, Path)
+            and Path(str(existing_loaded).split("::", 1)[0]) != Path(str(rec_source).split("::", 1)[0])
+        ):
+            protocol = getattr(recording, "imported_protocol_label", None)
+            if isinstance(protocol, str) and protocol and rec_source is not None and "::" not in str(rec_source):
+                self.current_loaded_path = Path(f"{rec_source}::{protocol}")
+            else:
+                self.current_loaded_path = rec_source
+
         # Reset Logic
         self._data_cache.clear()
         self._average_cache.clear()
         self._processed_cache.clear()
         self._reusable_single_items.clear()
         self._reusable_avg_items.clear()
+        if hasattr(self, "active_scatter_items"):
+            self.active_scatter_items.clear()
+        self._live_analysis_enabled = False
         self._cache_dirty: bool = False
         self.current_trial_index = 0
         self.selected_trial_indices.clear()
@@ -795,7 +914,7 @@ class ExplorerTab(QtWidgets.QWidget):
         # If it is populated, we use only those.
         self.selected_trial_indices = set()
 
-        # Rebuild Components — block intermediate _update_plot() calls.
+        # Rebuild Components - block intermediate _update_plot() calls.
         # config_panel.rebuild() creates channel checkboxes with setChecked(True)
         # which emits toggled → _on_channel_visibility_changed → _update_plot().
         # These premature calls capture degenerate view state from empty plots
@@ -881,6 +1000,8 @@ class ExplorerTab(QtWidgets.QWidget):
         self.sidebar.sync_to_file(getattr(self, "current_loaded_path", recording.source_file))
         self.status_bar.showMessage(f"Displayed '{recording.source_file.name}'", 5000)
 
+        self.apply_batch_load_context()
+
         # Final scene update: FullViewportUpdate mode (set in rebuild_plots)
         # ensures the viewport repaints on scene changes.  A single deferred
         # update() catches any late geometry recalculations from Qt's layout.
@@ -916,8 +1037,8 @@ class ExplorerTab(QtWidgets.QWidget):
         ``linkedViewChanged`` which recalculates the X range from
         screen-geometry pixel offsets (the *line them up* branch).  Even a
         1-pixel difference in ViewBox width between stacked rows shifts the
-        X origin away from 0.  Re-applying the base ranges here — after all
-        deferred layout events have been processed — guarantees the X axis
+        X origin away from 0.  Re-applying the base ranges here - after all
+        deferred layout events have been processed - guarantees the X axis
         starts at 0 for every channel.
         """
         if generation != self._display_generation:
@@ -1243,9 +1364,13 @@ class ExplorerTab(QtWidgets.QWidget):
                 channel_items_used[cid] = item_index
 
             # -------------------------------------------------------------
-            # Plot Global Manual Average (If Checked)
+            # Plot Global Manual Average (If Checked in Cycle Mode)
             # -------------------------------------------------------------
-            if self.config_panel.show_avg_btn.isChecked() and self.global_manual_trials:
+            if (
+                self.current_plot_mode == self.PlotMode.CYCLE_SINGLE
+                and self.config_panel.show_avg_btn.isChecked()
+                and self.global_manual_trials
+            ):
                 for cid, channel in self.current_recording.channels.items():
                     plot_item = self.plot_canvas.channel_plots.get(cid)
                     if not plot_item or not plot_item.isVisible():
@@ -1322,7 +1447,7 @@ class ExplorerTab(QtWidgets.QWidget):
                     _items[_j].hide()
                     _j += 1
 
-            # Restore View State — guard against XLink cascade on multi-channel.
+            # Restore View State - guard against XLink cascade on multi-channel.
             # Skip when 'fresh' to let auto-range show all data.
             if view_state and not fresh:
                 _vboxes = []
@@ -1478,10 +1603,14 @@ class ExplorerTab(QtWidgets.QWidget):
 
     # --- Event Handlers ---
     def _on_recording_changed_from_session(self, recording):
-        if recording and recording != self.current_recording:
+        if recording is None:
+            self.current_recording = None
+            self._update_all_ui_state()
+            return
+        if recording != self.current_recording:
             # Reconstruct the virtual path for the loaded recording to fix analysis set additions on startup
             protocol = getattr(recording, "imported_protocol_label", None)
-            if protocol:
+            if isinstance(protocol, str) and protocol and "::" not in str(recording.source_file):
                 self.current_loaded_path = Path(f"{recording.source_file}::{protocol}")
             else:
                 self.current_loaded_path = recording.source_file
@@ -1532,9 +1661,19 @@ class ExplorerTab(QtWidgets.QWidget):
 
             if reply == QtWidgets.QMessageBox.StandardButton.Yes:
                 log.info(f"User requested Unit Correction for {filepath.name}")
-                # Re-trigger load with force_units=True
-                # We use QTimer to allow current stack to unwind/cleanup
-                QtCore.QTimer.singleShot(100, lambda: self.load_recording_data(filepath, force_units=True))
+                if hasattr(self, "_loading_dialog") and self._loading_dialog:
+                    self._loading_dialog.close()
+                    self._loading_dialog = None
+                # Re-trigger load with force_units=True while preserving sibling navigation
+                QtCore.QTimer.singleShot(
+                    100,
+                    lambda: self.load_recording_data(
+                        filepath,
+                        file_list=self.file_list,
+                        selected_index=self.current_file_index,
+                        force_units=True,
+                    ),
+                )
                 return
 
         QtWidgets.QMessageBox.critical(
@@ -1548,9 +1687,9 @@ class ExplorerTab(QtWidgets.QWidget):
             self._loading_dialog = None
 
     def _update_all_ui_state(self):
-        # Delegate to subcomponents or handle locally?
         # Update Config Panel - show global analysis marks, not display-only selection
         self._update_global_avg_label()
+        self._update_manual_selection_button_state()
 
         # Update Toolbar
         self.toolbar.update_file_nav(self.current_file_index, len(self.file_list))
@@ -1942,17 +2081,25 @@ class ExplorerTab(QtWidgets.QWidget):
 
     def _prev_trial(self):
         if self.current_trial_index > 0:
+            was_live = self._live_analysis_enabled or bool(self.active_scatter_items)
+            self._clear_active_scatter_items()
             self.current_trial_index -= 1
             self._update_plot()
             self._update_all_ui_state()
             self._update_trial_quality_metrics()
+            if was_live:
+                self._request_live_analysis()
 
     def _next_trial(self):
         if self.current_trial_index < self.max_trials_current_recording - 1:
+            was_live = self._live_analysis_enabled or bool(self.active_scatter_items)
+            self._clear_active_scatter_items()
             self.current_trial_index += 1
             self._update_plot()
             self._update_all_ui_state()
             self._update_trial_quality_metrics()
+            if was_live:
+                self._request_live_analysis()
 
     def _reset_view(self):
         """Reset plot ranges to base ranges and reset UI controls."""
@@ -2655,8 +2802,13 @@ class ExplorerTab(QtWidgets.QWidget):
         """Reset trial selection to show all (raw data)."""
         self.selected_trial_indices.clear()  # Empty means all
         self._current_trial_selection_params = None  # Clear params
+        if hasattr(self, "config_panel") and hasattr(self.config_panel, "trial_selection_input"):
+            was_blocked = self.config_panel.trial_selection_input.blockSignals(True)
+            self.config_panel.trial_selection_input.clear()
+            self.config_panel.trial_selection_input.blockSignals(was_blocked)
         log.info("Reset trial filtering: All trials selected.")
         self._update_plot()
+        self._update_all_ui_state()
 
     def _on_interleaved_selection_requested(self, gap: int, start_index: int):
         """Select every Nth trial (step = gap + 1) starting at start_index.
@@ -2695,13 +2847,13 @@ class ExplorerTab(QtWidgets.QWidget):
         if not self.current_recording:
             return
 
-        current_path = self.current_recording.source_file
+        rec_path = getattr(self, "current_loaded_path", None) or self.current_recording.source_file
         idx = self.current_trial_index
 
         # Check if already in global set
         existing_idx = None
         for i, item in enumerate(self.global_manual_trials):
-            if item["path"] == current_path and item["trial_index"] == idx:
+            if item["path"] == rec_path and item["trial_index"] == idx:
                 existing_idx = i
                 break
 
@@ -2721,7 +2873,7 @@ class ExplorerTab(QtWidgets.QWidget):
 
             if raw_traces:
                 self.global_manual_trials.append(
-                    {"path": current_path, "trial_index": idx, "raw_traces": raw_traces, "time_vectors": time_vectors}
+                    {"path": rec_path, "trial_index": idx, "raw_traces": raw_traces, "time_vectors": time_vectors}
                 )
 
         self._update_global_avg_label()
@@ -2731,9 +2883,24 @@ class ExplorerTab(QtWidgets.QWidget):
         if self.config_panel.show_avg_btn.isChecked():
             self._update_plot()
 
+    def _update_manual_selection_button_state(self):
+        """Sync manual trial button visual state using virtual-protocol-aware path."""
+        if not hasattr(self, "config_panel") or not hasattr(self.config_panel, "select_trial_btn"):
+            return
+        if not self.current_recording:
+            self.config_panel.select_trial_btn.setProperty("trialMarked", False)
+            return
+        rec_path = getattr(self, "current_loaded_path", None) or self.current_recording.source_file
+        idx = self.current_trial_index
+        is_marked = any(
+            item.get("path") == rec_path and item.get("trial_index") == idx for item in self.global_manual_trials
+        )
+        self.config_panel.select_trial_btn.setProperty("trialMarked", is_marked)
+
     def _clear_avg_selection(self):
         self.global_manual_trials.clear()
         self._update_global_avg_label()
+        self._update_all_ui_state()
 
         if self.config_panel.show_avg_btn.isChecked():
             self.config_panel.show_avg_btn.setChecked(False)  # Triggers update_plot
@@ -2749,7 +2916,14 @@ class ExplorerTab(QtWidgets.QWidget):
 
         file_map = defaultdict(list)
         for item in self.global_manual_trials:
-            file_map[item["path"].stem].append(item["trial_index"])
+            item_path = item["path"]
+            path_str = str(item_path)
+            if "::" in path_str:
+                base_str, proto_str = path_str.split("::", 1)
+                label_key = f"{Path(base_str).stem}::{proto_str}"
+            else:
+                label_key = item_path.stem
+            file_map[label_key].append(item["trial_index"])
 
         parts = []
         for fname, indices in file_map.items():
@@ -2763,9 +2937,15 @@ class ExplorerTab(QtWidgets.QWidget):
         self._update_plot()
 
     def _on_plot_mode_changed(self, mode):
+        was_live = self._live_analysis_enabled or bool(self.active_scatter_items)
+        self._clear_active_scatter_items()
         self.current_plot_mode = mode
+        if hasattr(self, "config_panel") and hasattr(self.config_panel, "_update_visibility"):
+            self.config_panel._update_visibility(mode)
         self._update_plot()
         self._update_all_ui_state()
+        if was_live and mode == self.PlotMode.CYCLE_SINGLE:
+            self._request_live_analysis()
 
     def _on_channel_visibility_changed(self, chan_id, visible):
         # Use the canvas helper which also collapses/expands the grid row so

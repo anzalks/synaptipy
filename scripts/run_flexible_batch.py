@@ -15,7 +15,7 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root / "src"))
 
 # Import analysis modules to trigger registration
-import synaptipy.core.analysis.spike_analysis  # noqa: F401, E402
+import synaptipy.core.analysis  # noqa: F401, E402
 from synaptipy.core.analysis.batch_engine import BatchAnalysisEngine  # noqa: E402
 from synaptipy.core.analysis.registry import AnalysisRegistry  # noqa: E402
 
@@ -43,12 +43,12 @@ def main():  # noqa: C901
         {
             "analysis": "spike_detection",
             "scope": "all_trials",
-            "params": {"threshold": -15.0, "refractory_ms": 2.0},  # mV
+            "params": {"threshold": -15.0, "refractory_period": 0.002},  # mV, seconds
         },
         {
             "analysis": "spike_detection",
             "scope": "average",
-            "params": {"threshold": -10.0, "refractory_ms": 2.0},  # mV (different threshold for average)
+            "params": {"threshold": -10.0, "refractory_period": 0.002},  # mV (different threshold for average)
         },
     ]
 

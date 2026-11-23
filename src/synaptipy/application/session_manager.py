@@ -5,10 +5,12 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from PySide6 import QtCore
 from PySide6.QtCore import QObject, Signal
 
 # We import Recording only for type hinting if possible.
 from synaptipy.core.data_model import Recording
+from synaptipy.shared.constants import APP_NAME, SETTINGS_SECTION
 
 log = logging.getLogger(__name__)
 
@@ -16,6 +18,11 @@ log = logging.getLogger(__name__)
 _SESSION_DIR: Path = Path.home() / ".synaptipy"
 _SESSION_FILE: Path = _SESSION_DIR / "session.json"
 _SESSION_SCHEMA_VERSION: int = 1
+
+
+def _physical_path(p: Path) -> Path:
+    """Strip virtual '::protocol' suffix to obtain the physical filesystem path."""
+    return Path(str(p).split("::", 1)[0])
 
 
 class SessionManager(QObject):
@@ -55,10 +62,29 @@ class SessionManager(QObject):
         self._preprocessing_settings: Optional[Dict[str, Any]] = None
         self._file_list: List[Path] = []
         self._current_file_index: int = -1
-        self._performance_settings: Dict[str, Any] = {"max_cpu_cores": 1, "max_ram_allocation_gb": 4.0}
+        self._performance_settings: Dict[str, Any] = {
+            "max_cpu_cores": 1,
+            "max_ram_allocation_gb": 4.0,
+        }
+        self._load_persisted_qsettings()
         self._batch_load_context: Optional[Dict[str, Any]] = None  # Context for batch-to-explorer roundtrip
         self._initialized = True
         log.debug("SessionManager initialized.")
+
+    def _load_persisted_qsettings(self) -> None:
+        """Read persisted performance and OpenGL preferences from QSettings."""
+        try:
+            qsettings = QtCore.QSettings(APP_NAME, SETTINGS_SECTION)
+            max_cores = max(1, int(qsettings.value("performance/max_cpu_cores", 1, type=int)))
+            max_ram = max(0.5, float(qsettings.value("performance/max_ram_allocation_gb", 4.0, type=float)))
+            opengl_exp = bool(qsettings.value("performance/enable_opengl_experimental", False, type=bool))
+            self._global_settings["enable_opengl_experimental"] = opengl_exp
+            self._performance_settings = {
+                "max_cpu_cores": max_cores,
+                "max_ram_allocation_gb": max_ram,
+            }
+        except Exception as exc:
+            log.debug("SessionManager: falling back to default QSettings values (%s)", exc)
 
     @property
     def liquid_junction_potential_mv(self) -> float:
@@ -337,11 +363,25 @@ class SessionManager(QObject):
             )
             return None
 
-        # Coerce file_paths back to Path objects
-        raw["file_paths"] = [Path(p) for p in raw.get("file_paths", []) if Path(p).is_file()]
+        # Coerce file_paths back to Path objects (supporting virtual '::protocol' suffixes)
+        raw_paths = [Path(p) for p in raw.get("file_paths", [])]
+        orig_idx = raw.get("current_file_index", -1)
+        target_path = raw_paths[orig_idx] if isinstance(orig_idx, int) and 0 <= orig_idx < len(raw_paths) else None
+
+        valid_paths = [p for p in raw_paths if _physical_path(p).is_file()]
+        raw["file_paths"] = valid_paths
+
+        if not valid_paths:
+            raw["current_file_index"] = -1
+        elif target_path is not None and target_path in valid_paths:
+            raw["current_file_index"] = valid_paths.index(target_path)
+        else:
+            raw["current_file_index"] = 0
+
         log.debug(
-            "SessionManager.load_session: found %d valid file path(s).",
+            "SessionManager.load_session: found %d valid file path(s) (current_file_index=%d).",
             len(raw["file_paths"]),
+            raw["current_file_index"],
         )
         return raw
 

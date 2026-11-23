@@ -896,9 +896,16 @@ def calculate_iv_curve(
     # Subthreshold Ohmic regression: exclude suprathreshold spiking sweeps (>= -15 mV
     # anywhere after baseline_window[1], including early adapting spikes prior to the
     # late steady-state response_window) when >= 2 subthreshold sweeps exist.
-    subthresh_indices = [
-        i for i in valid_indices if np.nanmax(sweeps[i][time_vectors[i] >= baseline_window[1]]) < -15.0
-    ]
+    subthresh_indices = []
+    for i in valid_indices:
+        post_base = sweeps[i][time_vectors[i] >= baseline_window[1]]
+        if post_base.size == 0:
+            resp_mask_i = (time_vectors[i] >= response_window[0]) & (time_vectors[i] < response_window[1])
+            seg = sweeps[i][resp_mask_i]
+        else:
+            seg = post_base
+        if seg.size > 0 and np.any(np.isfinite(seg)) and float(np.nanmax(seg)) < -15.0:
+            subthresh_indices.append(i)
     reg_indices = subthresh_indices if len(subthresh_indices) >= 2 else valid_indices
     reg_currents = [current_steps[i] for i in reg_indices]
     reg_delta_vs = [delta_vs[i] for i in reg_indices]
@@ -1048,8 +1055,8 @@ def calculate_tau(  # noqa: C901
         V_fit = voltage_trace[fit_mask]
 
         # Dynamically truncate the fit window at the absolute voltage peak
-        # (the point of maximum hyperpolarisation) so that I_h sag — which
-        # causes voltage to *rebound* after the peak — does not contaminate
+        # (the point of maximum hyperpolarisation) so that I_h sag - which
+        # causes voltage to *rebound* after the peak - does not contaminate
         # the mono-exponential fit.  For depolarising steps the "peak" is
         # the local maximum; for hyperpolarising steps it is the minimum.
         if len(V_fit) >= 3:
@@ -1065,7 +1072,7 @@ def calculate_tau(  # noqa: C901
                     t_fit = t_fit_truncated
                     V_fit = V_fit_truncated
                     log.debug(
-                        "Tau fit: sag detected — window truncated at sample %d (%.1f ms into step)",
+                        "Tau fit: sag detected - window truncated at sample %d (%.1f ms into step)",
                         _peak_idx,
                         float(t_fit[-1]) * 1000.0,
                     )
@@ -1912,6 +1919,32 @@ def run_sag_ratio_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: flo
         return {"module_used": "passive_properties", "metrics": {"sag_ratio": None, "sag_error": str(e)}}
 
 
+def _is_current_unit(units: Optional[str]) -> bool:
+    """Return True if *units* represents an electrical current channel."""
+    if not units:
+        return False
+    u_norm = str(units).strip().lower().replace(" ", "").replace("\u00b5", "u").replace("\u03bc", "u")
+    return u_norm in (
+        "pa",
+        "picoampere",
+        "picoamperes",
+        "na",
+        "nanoampere",
+        "nanoamperes",
+        "ua",
+        "microampere",
+        "microamperes",
+        "ma",
+        "milliampere",
+        "milliamperes",
+        "a",
+        "amp",
+        "amps",
+        "ampere",
+        "amperes",
+    )
+
+
 @AnalysisRegistry.register(
     "rin_analysis",
     label="Input Resistance",
@@ -1998,13 +2031,27 @@ def run_rin_analysis_wrapper(  # noqa: C901
 ) -> Dict[str, Any]:
     """Wrapper for Input Resistance analysis. Returns namespaced schema."""
     try:
-        current_amplitude = kwargs.get("current_amplitude", 0.0)
+        units: Optional[str] = kwargs.get("units")
+        is_current_ch = _is_current_unit(units)
+        has_current = "current_amplitude" in kwargs and kwargs["current_amplitude"] is not None
+        has_voltage = "voltage_step" in kwargs and kwargs["voltage_step"] is not None
+
+        current_amplitude = float(kwargs["current_amplitude"]) if has_current else 0.0
+        voltage_step = float(kwargs["voltage_step"]) if has_voltage else 0.0
+
+        if not has_current and not has_voltage:
+            if is_current_ch:
+                voltage_step = -10.0
+            else:
+                current_amplitude = -50.0
+        elif is_current_ch and current_amplitude != 0.0 and voltage_step != 0.0:
+            current_amplitude = 0.0
+
         auto_detect_pulse = kwargs.get("auto_detect_pulse", True)
         baseline_start = kwargs.get("baseline_start", 0.0)
         baseline_end = kwargs.get("baseline_end", 0.1)
         response_start = kwargs.get("response_start", 0.3)
         response_end = kwargs.get("response_end", 0.4)
-        voltage_step = kwargs.get("voltage_step", 0.0)
         rs_artifact_blanking_ms = float(kwargs.get("rs_artifact_blanking_ms", 0.5))
 
         if current_amplitude == 0 and voltage_step == 0:
@@ -2633,6 +2680,6 @@ def run_capacitance_analysis_wrapper(
     ui_params=[],
     plots=[],
 )
-def passive_properties_module(**kwargs):
+def passive_properties_module(*_args, **_kwargs):
     """Module-level aggregator tab for all passive membrane property analyses."""
     return {}

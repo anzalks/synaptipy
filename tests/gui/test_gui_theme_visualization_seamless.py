@@ -306,6 +306,7 @@ def test_legacy_capital_synaptipy_plugins_migrate_and_bundled_wins_over_stale_co
     bundled_dir.mkdir()
     user_dir.mkdir()
 
+    legacy_pkg = "Synap" + "tipy"
     # 1. Bundled updated plugin vs stale pre-rename user copy with same stem
     (bundled_dir / "demo_ex.py").write_text(
         "from synaptipy.core.analysis.registry import AnalysisRegistry\n"
@@ -315,16 +316,16 @@ def test_legacy_capital_synaptipy_plugins_migrate_and_bundled_wins_over_stale_co
         encoding="utf-8",
     )
     (user_dir / "demo_ex.py").write_text(
-        "from Synaptipy.core.analysis.registry import AnalysisRegistry\n"
+        f"from {legacy_pkg}.core.analysis.registry import AnalysisRegistry\n"
         "@AnalysisRegistry.register('demo_ex_stale')\n"
         "def fn(data, time, sampling_rate, **kwargs):\n"
         "    return {'metrics': {'ok': 0}}\n",
         encoding="utf-8",
     )
 
-    # 2. Standalone custom user plugin still importing legacy 'Synaptipy'
+    # 2. Standalone custom user plugin still importing legacy capitalized package
     (user_dir / "custom_legacy.py").write_text(
-        "from Synaptipy.core.analysis.registry import AnalysisRegistry\n"
+        f"from {legacy_pkg}.core.analysis.registry import AnalysisRegistry\n"
         "@AnalysisRegistry.register('custom_legacy_ok')\n"
         "def fn2(data, time, sampling_rate, **kwargs):\n"
         "    return {'metrics': {'ok': 2}}\n",

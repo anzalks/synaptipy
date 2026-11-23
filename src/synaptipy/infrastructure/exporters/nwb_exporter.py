@@ -124,6 +124,58 @@ except ImportError:
 # Configure logging (use specific logger for this module)
 log = logging.getLogger(__name__)
 
+_NWB_NON_METRIC_KEYS = frozenset(
+    {
+        "metrics",
+        "parameters",
+        "plot_payload",
+        "file",
+        "file_name",
+        "source_file_name",
+        "source_file_path",
+        "file_path",
+        "group",
+        "channel",
+        "channel_id",
+        "channel_name",
+        "channel_units",
+        "trial_index",
+        "trial_index_used",
+        "trial_count",
+        "sweep",
+        "analysis_type",
+        "analysis",
+        "analysis_name",
+        "scope",
+        "sampling_rate",
+        "protocol",
+        "recording_duration_s",
+        "batch_timestamp",
+        "timestamp_saved",
+        "data_source_used",
+        "subject_id",
+        "cell_id",
+        "protocol_family",
+        "protocol_fingerprint",
+        "protocol_source",
+        "protocol_status",
+        "protocol_assignment_id",
+        "segment_start_s",
+        "segment_end_s",
+        "analysis_result_schema_version",
+        "analysis_result_warnings",
+        "io_time_s",
+        "compute_time_s",
+        "module_used",
+        "schema_version",
+        "selected_trial_indices",
+        "selected_trial_count",
+        "secondary_channel",
+        "error",
+        "debug_trace",
+    }
+)
+
 
 class NWBExporter:
     """Handles exporting Recording domain objects to NWB files."""
@@ -523,7 +575,8 @@ class NWBExporter:
             for chan_id, channel in recording.channels.items():
                 if not isinstance(channel, Channel):
                     continue
-                if not getattr(channel, "data_trials", None):
+                n_trials = getattr(channel, "num_trials", 0) or len(getattr(channel, "data_trials", None) or [])
+                if n_trials <= 0:
                     continue
 
                 log.debug(f"Processing channel '{channel.name}' (ID: {chan_id})")
@@ -568,8 +621,13 @@ class NWBExporter:
                         continue
 
                 # --- Create PatchClampSeries ---
-                for trial_idx, trial_data in enumerate(channel.data_trials):
-                    if trial_data.size == 0:
+                for trial_idx in range(n_trials):
+                    trial_data = (
+                        channel.get_data(trial_idx)
+                        if hasattr(channel, "get_data")
+                        else (channel.data_trials[trial_idx] if trial_idx < len(channel.data_trials) else None)
+                    )
+                    if trial_data is None or trial_data.size == 0:
                         continue
 
                     ts_name = f"{channel.name}_trial_{trial_idx:03d}"
@@ -738,7 +796,9 @@ class NWBExporter:
                             continue
                         # Derive a unique table name from channel/analysis metadata
                         chan_label = row.get("channel_name") or row.get("channel") or "ch"
-                        analysis_label = row.get("analysis") or row.get("analysis_type") or "events"
+                        analysis_label = (
+                            row.get("analysis") or row.get("analysis_type") or row.get("analysis_name") or "events"
+                        )
                         base_name = f"{chan_label}_{analysis_label}"
                         suffix = _table_counts.get(base_name, 0)
                         _table_counts[base_name] = suffix + 1
@@ -766,12 +826,16 @@ class NWBExporter:
                         if not isinstance(row, dict):
                             continue
                         chan_label = str(row.get("channel_name") or row.get("channel") or "ch")
-                        analysis_label = str(row.get("analysis") or row.get("analysis_type") or "summary")
+                        analysis_label = str(
+                            row.get("analysis") or row.get("analysis_type") or row.get("analysis_name") or "summary"
+                        )
                         metrics_map = row.get("metrics") if isinstance(row.get("metrics"), dict) else row
                         for m_key, m_val in metrics_map.items():
-                            if str(m_key).startswith("_") or m_key in ("metrics", "parameters"):
+                            if str(m_key).startswith("_") or m_key in _NWB_NON_METRIC_KEYS:
                                 continue
-                            if isinstance(m_val, (int, float, np.integer, np.floating)) and not isinstance(m_val, bool):
+                            if isinstance(m_val, (int, float, np.integer, np.floating)) and not isinstance(
+                                m_val, (bool, np.bool_)
+                            ):
                                 f_val = float(m_val)
                                 if np.isfinite(f_val):
                                     scalar_rows.append((chan_label, analysis_label, str(m_key), f_val))
@@ -837,6 +901,8 @@ class NWBExporter:
                     log.warning("Failed to export preprocessing history (non-fatal): %s", e_preproc)
 
             # --- Write File ---
+            output_path = Path(output_path)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
             log.debug(f"Writing NWB to: {output_path}")
             with NWBHDF5IO(str(output_path), "w") as io:
                 io.write(nwbfile)
@@ -854,7 +920,7 @@ class NWBExporter:
                 if _validation_errors:
                     err_lines = "\n  ".join(str(e) for e in _validation_errors)
                     log.warning(
-                        "NWB validation found %d issue(s) — file may not be DANDI-compliant:\n  %s",
+                        "NWB validation found %d issue(s) - file may not be DANDI-compliant:\n  %s",
                         len(_validation_errors),
                         err_lines,
                     )

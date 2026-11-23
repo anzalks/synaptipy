@@ -72,8 +72,11 @@ def find_quiescent_baseline_rms(
         Tuple of (rms_noise_floor, (start_idx, end_idx)) where the indices
         define the quiescent window used for the RMS calculation.
     """
+    if data is None or len(data) < 2 or sample_rate <= 0:
+        return NOISE_FLOOR_MIN_RMS, (0, len(data) if data is not None else 0)
+
     n = len(data)
-    window_samples = max(2, int(window_ms / 1000.0 * sample_rate))
+    window_samples = min(n, max(2, int(window_ms / 1000.0 * sample_rate)))
     step_samples = max(1, window_samples // 2)
 
     min_var = np.inf
@@ -965,23 +968,47 @@ def detect_events_template(  # noqa: C901
     somatic and dendritic events.
     """
     try:
+        if data is None or len(data) < 2:
+            return EventDetectionResult(
+                value=0,
+                unit="Hz",
+                is_valid=False,
+                error_message="Insufficient data samples for template detection",
+            )
+        if sampling_rate <= 0:
+            return EventDetectionResult(
+                value=0,
+                unit="Hz",
+                is_valid=False,
+                error_message="sampling_rate must be positive",
+            )
+        if tau_decay <= 0:
+            return EventDetectionResult(
+                value=0,
+                unit="Hz",
+                is_valid=False,
+                error_message="tau_decay must be positive",
+            )
+
         dt = 1.0 / sampling_rate
         n_points = len(data)
 
         def _build_kernel(td: float) -> np.ndarray:
             """Build normalised kernel: mono-exponential or bi-exponential (alpha-function)."""
-            if kernel_shape == "mono-exponential":
-                t_k = np.arange(0, 5 * td, dt)
+            if td <= 0:
+                raise ValueError("tau_decay must be positive")
+            if kernel_shape == "mono-exponential" or tau_rise <= 0:
+                t_k = np.arange(0, max(dt, 5.0 * td), dt)
                 k = np.exp(-t_k / td)
             elif td == tau_rise:
-                t_k = np.arange(0, 5 * td, dt)
+                t_k = np.arange(0, max(dt, 5.0 * td), dt)
                 k = t_k * np.exp(-t_k / td)  # alpha function
             else:
-                t_k = np.arange(0, 5 * max(td, tau_rise), dt)
+                t_k = np.arange(0, max(dt, 5.0 * max(td, tau_rise)), dt)
                 k = np.exp(-t_k / td) - np.exp(-t_k / tau_rise)  # bi-exponential
             max_abs = np.max(np.abs(k))
             if max_abs > 0:
-                k /= max_abs
+                k = k / max_abs
             return k
 
         _multipliers: List[float] = kernel_multipliers if kernel_multipliers else [1.0, 2.0, 3.0]
@@ -1125,7 +1152,7 @@ def detect_events_template(  # noqa: C901
             artifact_mask=artifact_mask,
         )
 
-    except (ValueError, TypeError, IndexError, RuntimeError) as e:
+    except (ValueError, TypeError, IndexError, RuntimeError, ZeroDivisionError) as e:
         log.error(f"Error during template event detection: {e}", exc_info=True)
         return EventDetectionResult(value=0, unit="Hz", is_valid=False, error_message=str(e))
 
@@ -1165,7 +1192,7 @@ def detect_events_template(  # noqa: C901
             "label": "Tau Decay (ms):",
             "type": "float",
             "default": 5.0,
-            "min": 0.0,
+            "min": 0.05,
             "max": 1e9,
             "decimals": 4,
         },
@@ -1286,8 +1313,16 @@ def run_event_detection_template_wrapper(
         padding_ms = kwargs.get("artifact_padding_ms", 2.0)
         artifact_mask = find_artifact_windows(data, sampling_rate, slope_thresh, padding_ms)
 
+    filter_freq_hz = float(kwargs.get("filter_freq_hz", 0.0) or 0.0)
+    if data is not None and sampling_rate > 0 and 0.0 < filter_freq_hz < 0.5 * sampling_rate:
+        from synaptipy.core import signal_processor
+
+        detection_data = signal_processor.lowpass_filter(data.copy(), cutoff=filter_freq_hz, fs=sampling_rate)
+    else:
+        detection_data = data
+
     result = detect_events_template(
-        data=data,
+        data=detection_data,
         sampling_rate=sampling_rate,
         threshold_std=threshold_sd,
         tau_rise=tau_rise,
@@ -1305,6 +1340,8 @@ def run_event_detection_template_wrapper(
         return {"module_used": "synaptic_events", "metrics": {"event_error": result.error_message}}
 
     _idx = np.asarray(result.event_indices if result.event_indices is not None else [], dtype=int)
+    if len(_idx) > 0:
+        _idx = _idx[(_idx >= 0) & (_idx < len(data))]
 
     # Compute local pre-event baseline for each event (handles summating events).
     local_baselines = compute_local_pre_event_baseline(data, _idx, sampling_rate, polarity=direction)
@@ -1351,6 +1388,6 @@ def run_event_detection_template_wrapper(
     ui_params=[],
     plots=[],
 )
-def synaptic_events_module(**kwargs):
+def synaptic_events_module(*_args, **_kwargs):
     """Module-level aggregator tab for synaptic event detection analyses."""
     return {}

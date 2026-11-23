@@ -521,12 +521,16 @@ class AddStepDialog(QtWidgets.QDialog):
         if not analysis_name:
             return
 
-        # Get selected scope
-        selected_scope = "average"
-        for button in self.scope_group.buttons():
-            if button.isChecked():
-                selected_scope = button.property("scope_id")
-                break
+        # Get selected scope (preprocessing steps always run across all trials)
+        meta = AnalysisRegistry.get_metadata(analysis_name) or {}
+        if meta.get("type") == "preprocessing":
+            selected_scope = "all_trials"
+        else:
+            selected_scope = "average"
+            for button in self.scope_group.buttons():
+                if button.isChecked():
+                    selected_scope = button.property("scope_id")
+                    break
 
         # Gather parameters
         params = {}
@@ -1154,6 +1158,13 @@ class BatchAnalysisDialog(QtWidgets.QDialog):
 
                 log.debug(f"Requesting load for: {file_path}, Ch={channel}, Trial={trial}, Params={params}")
                 self.load_file_request.emit(str(file_path), params, channel, trial)
+                if self.isModal():
+                    self.hide()
+                if self.parentWidget() is not None:
+                    top_win = self.parentWidget().window()
+                    if top_win is not None:
+                        top_win.raise_()
+                        top_win.activateWindow()
 
         except Exception as e:
             log.error(f"Error handling row click: {e}")

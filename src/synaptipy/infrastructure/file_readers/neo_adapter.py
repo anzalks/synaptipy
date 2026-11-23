@@ -125,18 +125,81 @@ class NeoAdapter:
 
     _has_warned_nwbv1 = False
 
+    _NWB_UNIT_MAP: Dict[str, str] = {
+        "volts": "V",
+        "volt": "V",
+        "v": "V",
+        "millivolts": "mV",
+        "millivolt": "mV",
+        "mv": "mV",
+        "microvolts": "uV",
+        "microvolt": "uV",
+        "uv": "uV",
+        "amperes": "A",
+        "ampere": "A",
+        "a": "A",
+        "picoamperes": "pA",
+        "picoampere": "pA",
+        "pa": "pA",
+        "nanoamperes": "nA",
+        "nanoampere": "nA",
+        "na": "nA",
+        "microamperes": "uA",
+        "microampere": "uA",
+        "ua": "uA",
+    }
+
+    @staticmethod
+    def _safe_close_reader(reader: object) -> None:
+        """Close a Neo IO reader/instance without raising if close() fails or is absent."""
+        if reader is not None and hasattr(reader, "close"):
+            try:
+                reader.close()  # type: ignore[attr-defined]
+            except Exception:
+                pass
+
+    @staticmethod
+    def _to_seconds(val: object, default: float = 0.0) -> float:
+        """Convert a Neo/quantities time or duration scalar to seconds."""
+        if val is None:
+            return default
+        if hasattr(val, "rescale"):
+            try:
+                rescaled = val.rescale("s")  # type: ignore[attr-defined]
+                return float(getattr(rescaled, "magnitude", rescaled))
+            except Exception:
+                pass
+        try:
+            return float(val)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return default
+
+    @classmethod
+    def _normalize_nwb_unit(cls, raw_unit: object, default: str) -> str:
+        """Decode bytes/str HDF5 unit attributes and map common unit names to quantities symbols."""
+        if raw_unit is None:
+            return default
+        unit_str = raw_unit.decode("utf-8", "ignore") if isinstance(raw_unit, bytes) else str(raw_unit)
+        unit_str = unit_str.strip()
+        if not unit_str:
+            return default
+        return cls._NWB_UNIT_MAP.get(unit_str.lower(), unit_str)
+
     def _get_neo_io_class(self, filepath: Path) -> Type:  # Use generic Type hint
         """Determines appropriate neo IO class using neo.io.get_io first, then fallback to IODict."""
         if not filepath.is_file():
             raise SynaptipyFileNotFoundError(f"File not found: {filepath}")
 
         # Priority 1: Let Neo decide (Robust discovery)
+        io_instance = None
         try:
             io_instance = neo.io.get_io(str(filepath))
             log.debug(f"neo.io.get_io detected class: {io_instance.__class__.__name__}")
             return io_instance.__class__
         except Exception as e:
             log.debug(f"neo.io.get_io failed to detect IO for {filepath}: {e}. Falling back to extension map.")
+        finally:
+            self._safe_close_reader(io_instance)
 
         # Priority 2: Fallback to extension-based lookup (IODict)
         extension = filepath.suffix.lower().lstrip(".")
@@ -629,12 +692,14 @@ class NeoAdapter:
             # Generic Neo approach
             io_class = self._get_neo_io_class(filepath)
             reader = io_class(filename=str(filepath))
-
-            # read() returns a list of blocks
-            blocks = reader.read(lazy=True)
-            for block in blocks:
-                if block.name and block.name not in protocols:
-                    protocols.append(block.name)
+            try:
+                # read() returns a list of blocks
+                blocks = reader.read(lazy=True)
+                for block in blocks:
+                    if block.name and block.name not in protocols:
+                        protocols.append(block.name)
+            finally:
+                self._safe_close_reader(reader)
 
             # If there's only one block, we don't consider it "nested"
             if len(protocols) <= 1:
@@ -645,7 +710,9 @@ class NeoAdapter:
 
         return protocols
 
-    def _allen_nwb_rescue(self, filepath: Path, protocol: Optional[str] = None) -> Tuple[neo.Block, object]:
+    def _allen_nwb_rescue(  # noqa: C901
+        self, filepath: Path, protocol: Optional[str] = None
+    ) -> Tuple[neo.Block, object]:
         """Convert an old Allen SDK NWBv1 file to a neo Block using raw h5py.
 
         PyNWB strictly enforces NWBv2 schemas and throws a TypeError for NWBv1.
@@ -660,6 +727,7 @@ class NeoAdapter:
             self.__class__._has_warned_nwbv1 = True
 
         block = neo.Block(name=filepath.stem)
+        has_current = False
 
         with h5py.File(str(filepath), "r") as f:
             if "acquisition/timeseries" not in f:
@@ -683,7 +751,6 @@ class NeoAdapter:
                             desc_val = desc[()]
                             desc_str = desc_val.decode("utf-8") if isinstance(desc_val, bytes) else str(desc_val)
                             search_str = f"Stimulus was {protocol}"
-                            # log.debug(f"Sweep {sweep_name} desc: {desc_str} | search: {search_str}")
                             if search_str not in desc_str:
                                 continue  # Skip this sweep, it doesn't match the protocol
                     else:
@@ -694,14 +761,10 @@ class NeoAdapter:
 
                 # Extract Voltage
                 v_data = acq_sweep["data"][:]
-                v_rate = acq_sweep["starting_time"].attrs.get("rate", 200000.0)
-                v_unit = (
-                    acq_sweep["data"].attrs.get("unit", b"V").decode("utf-8", "ignore")
-                    if isinstance(acq_sweep["data"].attrs.get("unit"), bytes)
-                    else "V"
+                v_rate = (
+                    acq_sweep["starting_time"].attrs.get("rate", 200000.0) if "starting_time" in acq_sweep else 200000.0
                 )
-                if v_unit.lower() == "volts":
-                    v_unit = "V"
+                v_unit = self._normalize_nwb_unit(acq_sweep["data"].attrs.get("unit", "V"), "V")
 
                 sweep_idx = int(sweep_name.split("_")[-1]) if "_" in sweep_name else 0
                 seg = neo.Segment(name=sweep_name, index=sweep_idx)
@@ -719,15 +782,14 @@ class NeoAdapter:
                 if stim_group and sweep_name in stim_group:
                     stim_sweep = stim_group[sweep_name]
                     if "data" in stim_sweep:
+                        has_current = True
                         i_data = stim_sweep["data"][:]
-                        i_rate = stim_sweep["starting_time"].attrs.get("rate", 200000.0)
-                        i_unit = (
-                            stim_sweep["data"].attrs.get("unit", b"A").decode("utf-8", "ignore")
-                            if isinstance(stim_sweep["data"].attrs.get("unit"), bytes)
-                            else "A"
+                        i_rate = (
+                            stim_sweep["starting_time"].attrs.get("rate", 200000.0)
+                            if "starting_time" in stim_sweep
+                            else 200000.0
                         )
-                        if i_unit.lower() == "amperes":
-                            i_unit = "A"
+                        i_unit = self._normalize_nwb_unit(stim_sweep["data"].attrs.get("unit", "A"), "A")
 
                         i_sig = neo.AnalogSignal(
                             i_data * getattr(pq, i_unit, pq.A),
@@ -742,7 +804,9 @@ class NeoAdapter:
 
         block.create_relationship()
 
-        header_channels = [{"id": "0", "name": "Voltage"}, {"id": "1", "name": "Current"}]
+        header_channels = [{"id": "0", "name": "Voltage"}]
+        if has_current:
+            header_channels.append({"id": "1", "name": "Current"})
 
         class _NwbFakeReader:
             header: Dict = {"signal_channels": header_channels}
@@ -776,12 +840,16 @@ class NeoAdapter:
 
         io_class = self._get_neo_io_class(filepath)
         _pyabf_rescue: bool = False
+        reader = None
         try:
             reader = io_class(filename=str(filepath))
 
             if protocol is not None:
                 # Read all blocks and find the one matching the protocol
-                blocks = reader.read(lazy=lazy)
+                try:
+                    blocks = reader.read(lazy=lazy, signal_group_mode="split-all")
+                except TypeError:
+                    blocks = reader.read(lazy=lazy)
                 block = next((b for b in blocks if b.name == protocol), None)
                 if block is None:
                     raise ValueError(f"Protocol '{protocol}' not found in file {filepath.name}")
@@ -797,6 +865,8 @@ class NeoAdapter:
 
             log.debug(f"Successfully read neo Block using {io_class.__name__}.")
         except Exception as e:
+            self._safe_close_reader(reader)
+            reader = None
             # For .abf files we have a pyabf rescue path.
             # For old .nwb files we have a h5py rescue path.
             _is_abf = filepath.suffix.lower() == ".abf"
@@ -804,14 +874,14 @@ class NeoAdapter:
 
             if _is_abf:
                 log.debug(
-                    "neo AxonIO could not read '%s' (Lazy: %s): %s — will attempt pyabf rescue.",
+                    "neo AxonIO could not read '%s' (Lazy: %s): %s - will attempt pyabf rescue.",
                     filepath.name,
                     lazy,
                     e,
                 )
             elif _is_nwb and "Missing NWB version" in str(e):
                 log.debug(
-                    "neo NWBIO rejected old NWBv1 '%s' — will attempt h5py rescue.",
+                    "neo NWBIO rejected old NWBv1 '%s' - will attempt h5py rescue.",
                     filepath.name,
                 )
             else:
@@ -831,19 +901,32 @@ class NeoAdapter:
                     _pyabf_rescue = True
                     log.info("pyabf rescue succeeded for '%s'.", filepath.name)
                 except ImportError:
+                    log.warning(
+                        "ABF file '%s' could not be read by Neo and optional 'pyabf' is not installed.",
+                        filepath.name,
+                    )
                     try:
                         from PySide6 import QtCore, QtWidgets
 
-                        def _show_pyabf_warning():
-                            QtWidgets.QMessageBox.warning(
-                                None,
-                                "Missing pyabf Dependency",
-                                "ABF file could not be read by Neo and the optional pyabf "
-                                "rescue loader is not installed.\n\n"
-                                "Please run 'pip install pyabf' to enable this file.",
-                            )
+                        app = QtWidgets.QApplication.instance()
+                        is_live_gui = (
+                            app is not None
+                            and QtCore.QThread.currentThread() == app.thread()
+                            and app.platformName().lower() not in ("offscreen", "minimal")
+                            and any(w.isVisible() for w in app.topLevelWidgets())
+                        )
+                        if is_live_gui:
 
-                        QtCore.QTimer.singleShot(0, _show_pyabf_warning)
+                            def _show_pyabf_warning():
+                                QtWidgets.QMessageBox.warning(
+                                    None,
+                                    "Missing pyabf Dependency",
+                                    "ABF file could not be read by Neo and the optional pyabf "
+                                    "rescue loader is not installed.\n\n"
+                                    "Please run 'pip install pyabf' to enable this file.",
+                                )
+
+                            QtCore.QTimer.singleShot(0, _show_pyabf_warning)
                     except Exception:
                         pass
                     raise FileReadError("ABF rescue failed: pyabf not installed.")
@@ -879,6 +962,8 @@ class NeoAdapter:
                         # If we fallback, we must treat this as lazy=True for the rest of function
                         lazy = True
                     except Exception as e_lazy:
+                        self._safe_close_reader(reader)
+                        reader = None
                         log.error(f"Lazy fallback also failed: {e_lazy}")
                         raise FileReadError(f"Could not read file (even lazily): {e}") from e_lazy
                 else:
@@ -949,9 +1034,12 @@ class NeoAdapter:
                     # Approximation using Neo Block structure
                     if len(block.segments) > 0 and len(block.segments[0].analogsignals) > 0:
                         sig = block.segments[0].analogsignals[0]
-                        recording.duration = float(sig.duration) if hasattr(sig, "duration") else 0.0
+                        recording.duration = self._to_seconds(getattr(sig, "duration", None), 0.0)
                 except Exception as e:
                     log.debug(f"Could not extract recording duration: {e}")
+
+        if not lazy:
+            self._safe_close_reader(reader)
 
         # Store block reference on recording (Crucial for keeping lazy file handles alive/accessible)
         # recording.neo_block = block # REMOVED: Replaced by source_handle
@@ -1014,16 +1102,90 @@ class NeoAdapter:
 
                 map_key = f"id_{ch_id}"
                 if map_key not in channel_metadata_map:
-                    # Pre-allocate data_trials list if not lazy
+                    # Pre-allocate data_trials and t_starts lists if not lazy
                     data_trials_list = [None] * num_segments if not lazy else []
+                    t_starts_list = [None] * num_segments if not lazy else []
                     channel_metadata_map[map_key] = {
                         "id": ch_id,
                         "name": ch_name,
                         "data_trials": data_trials_list,
+                        "t_starts": t_starts_list,
                     }
 
             log.debug(f"Discovered {len(channel_metadata_map)} channels from header.")
         return channel_metadata_map
+
+    @staticmethod
+    def _decode_annotation_text(raw: object) -> str:
+        """Decode a bytes or scalar annotation value to a stripped string."""
+        if raw is None:
+            return ""
+        if isinstance(raw, bytes):
+            return raw.decode("utf-8", errors="replace").strip()
+        return str(raw).strip()
+
+    def _resolve_signal_columns(  # noqa: C901
+        self,
+        anasig: object,
+        anasig_idx: int,
+        num_seg_signals: int,
+        channel_metadata_map: Dict[str, Dict],
+    ) -> List[Tuple[int, str, Optional[str], bool]]:
+        """Return ``(col_idx, ch_id, col_name, is_single_col)`` entries for an AnalogSignal."""
+        shape = getattr(anasig, "shape", ())
+        n_cols = int(shape[1]) if isinstance(shape, tuple) and len(shape) > 1 else 1
+        ann = getattr(anasig, "annotations", None) or {}
+        arr_ann = getattr(anasig, "array_annotations", None) or {}
+
+        if n_cols <= 1:
+            if "channel_id" in ann:
+                anasig_id = self._decode_annotation_text(ann["channel_id"])
+            elif hasattr(anasig, "channel_index") and getattr(anasig, "channel_index", None) is not None:
+                anasig_id = str(getattr(anasig, "channel_index"))
+            elif "channel_id" in arr_ann and len(arr_ann["channel_id"]) > 0:
+                anasig_id = self._decode_annotation_text(arr_ann["channel_id"][0])
+            elif "channel_ids" in arr_ann and len(arr_ann["channel_ids"]) > 0:
+                anasig_id = self._decode_annotation_text(arr_ann["channel_ids"][0])
+            else:
+                anasig_id = str(anasig_idx)
+
+            native_name = (
+                self._decode_annotation_text(getattr(anasig, "name", None))
+                if hasattr(anasig, "name") and getattr(anasig, "name", None)
+                else None
+            )
+            return [(0, anasig_id, native_name or None, True)]
+
+        header_entries = list(channel_metadata_map.values())
+        arr_ids = arr_ann.get("channel_ids") if "channel_ids" in arr_ann else arr_ann.get("channel_id")
+        arr_names = arr_ann.get("channel_names") if "channel_names" in arr_ann else arr_ann.get("channel_name")
+        ann_ids = ann.get("channel_ids") if isinstance(ann.get("channel_ids"), (list, tuple, np.ndarray)) else None
+        ann_names = (
+            ann.get("channel_names") if isinstance(ann.get("channel_names"), (list, tuple, np.ndarray)) else None
+        )
+
+        columns: List[Tuple[int, str, Optional[str], bool]] = []
+        for col_idx in range(n_cols):
+            col_id: Optional[str] = None
+            if arr_ids is not None and col_idx < len(arr_ids):
+                col_id = self._decode_annotation_text(arr_ids[col_idx])
+            elif ann_ids is not None and col_idx < len(ann_ids):
+                col_id = self._decode_annotation_text(ann_ids[col_idx])
+            elif num_seg_signals == 1 and col_idx < len(header_entries):
+                col_id = str(header_entries[col_idx]["id"])
+            elif num_seg_signals == 1:
+                col_id = str(col_idx)
+            else:
+                col_id = f"{anasig_idx}_{col_idx}"
+
+            col_name: Optional[str] = None
+            if arr_names is not None and col_idx < len(arr_names):
+                col_name = self._decode_annotation_text(arr_names[col_idx]) or None
+            elif ann_names is not None and col_idx < len(ann_names):
+                col_name = self._decode_annotation_text(ann_names[col_idx]) or None
+
+            columns.append((col_idx, col_id, col_name, False))
+        return columns
 
     def _process_segment_signals(  # noqa: C901
         self,
@@ -1036,202 +1198,161 @@ class NeoAdapter:
         force_kHz_to_Hz: bool = False,
     ):
         """Stage 2: Process signals in a segment and update the metadata map."""
+        num_seg_signals = len(segment.analogsignals)
         for anasig_idx, anasig in enumerate(segment.analogsignals):
             if not isinstance(anasig, (neo.AnalogSignal, neo.io.proxyobjects.AnalogSignalProxy)):
                 continue
 
-            # Extract channel ID with fallbacks
-            anasig_id = None
-            if hasattr(anasig, "annotations") and "channel_id" in anasig.annotations:
-                anasig_id = str(anasig.annotations["channel_id"])
-            elif hasattr(anasig, "channel_index") and anasig.channel_index is not None:
-                anasig_id = str(anasig.channel_index)
-            elif hasattr(anasig, "array_annotations") and "channel_id" in anasig.array_annotations:
-                anasig_id = str(anasig.array_annotations["channel_id"][0])
-            else:
-                anasig_id = str(anasig_idx)
+            seg_t_start = self._to_seconds(getattr(anasig, "t_start", 0.0), 0.0)
+            columns = self._resolve_signal_columns(anasig, anasig_idx, num_seg_signals, channel_metadata_map)
 
-            map_key = f"id_{anasig_id}"
+            for col_idx, anasig_id, col_native_name, is_single_col in columns:
+                map_key = f"id_{anasig_id}"
 
-            # Whitelist check
-            should_load = True
-            if channel_whitelist:
-                should_load = False
-                if anasig_id in channel_whitelist:
-                    should_load = True
-                elif map_key in channel_metadata_map:
-                    if channel_metadata_map[map_key]["name"] in channel_whitelist:
+                # Whitelist check
+                should_load = True
+                if channel_whitelist:
+                    should_load = False
+                    if anasig_id in channel_whitelist or (col_native_name and col_native_name in channel_whitelist):
                         should_load = True
+                    elif map_key in channel_metadata_map:
+                        if channel_metadata_map[map_key]["name"] in channel_whitelist:
+                            should_load = True
 
-            if not should_load:
-                continue
+                if not should_load:
+                    continue
 
-            # Ensure entry exists
-            if map_key not in channel_metadata_map:
-                # Dynamic discovery fallback for channels not seen in the header.
-                # Prefer the native .name attribute on the AnalogSignal object so
-                # the UI always shows the label from the acquisition file rather
-                # than a synthetic "Channel N" string.
-                native_name = ""
-                if hasattr(anasig, "name") and anasig.name:
-                    raw_name = anasig.name
-                    native_name = (
-                        raw_name.decode("utf-8", errors="replace").strip()
-                        if isinstance(raw_name, bytes)
-                        else str(raw_name).strip()
+                # Ensure entry exists
+                if map_key not in channel_metadata_map:
+                    fallback_name = col_native_name
+                    if not fallback_name and not is_single_col and hasattr(anasig, "name") and anasig.name:
+                        grp_name = self._decode_annotation_text(anasig.name)
+                        if grp_name:
+                            fallback_name = f"{grp_name}_{col_idx}"
+                    channel_metadata_map[map_key] = {
+                        "id": anasig_id,
+                        "name": fallback_name if fallback_name else anasig_id,
+                        "data_trials": [],
+                        "t_starts": [],
+                    }
+                    log.warning(
+                        "Channel %s discovered late (not in header); name='%s'.",
+                        anasig_id,
+                        channel_metadata_map[map_key]["name"],
                     )
-                channel_metadata_map[map_key] = {
-                    "id": anasig_id,
-                    "name": native_name if native_name else anasig_id,
-                    "data_trials": [],
-                }
-                log.warning(
-                    "Channel %s discovered late (not in header); name='%s'.",
-                    anasig_id,
-                    channel_metadata_map[map_key]["name"],
-                )
-            else:
-                # If the header pre-populated an entry, still prefer the AnalogSignal
-                # .name attribute as the most authoritative source (it is populated
-                # directly from Neo's internal channel metadata, which can be richer
-                # than the flattened header record for multi-column signals).
-                current_name = channel_metadata_map[map_key].get("name", "")
-                if hasattr(anasig, "name") and anasig.name and seg_idx == 0:
-                    raw_name = anasig.name
-                    native_name = (
-                        raw_name.decode("utf-8", errors="replace").strip()
-                        if isinstance(raw_name, bytes)
-                        else str(raw_name).strip()
-                    )
-                    # Override only if the native name is non-empty and different
-                    # from the already-discovered header name.
-                    if native_name and native_name != current_name:
+                elif col_native_name and seg_idx == 0:
+                    current_name = channel_metadata_map[map_key].get("name", "")
+                    if col_native_name != current_name:
                         log.debug(
                             "Channel %s: overriding header name '%s' with signal name '%s'.",
                             anasig_id,
                             current_name,
-                            native_name,
+                            col_native_name,
                         )
-                        channel_metadata_map[map_key]["name"] = native_name
+                        channel_metadata_map[map_key]["name"] = col_native_name
 
-            # --- Populate Handle Map ---
-            if handle_map is not None and anasig_id not in handle_map:
-                # Assuming 1 AnalogSignal = 1 Channel for now.
-                # Note: Currently Synaptipy treats each AnalogSignal as a channel usually,
-                # unless we are splitting columns.
-                # Assuming 1 AnalogSignal = 1 Channel for now as per previous logic.
-                handle_map[anasig_id] = {"signal_index": anasig_idx, "channel_offset": 0}  # Default to 0
+                channel_metadata_map[map_key].setdefault("t_starts", [])
 
-            # Extract Data/Ref
-            if lazy:
-                if "num_trials" not in channel_metadata_map[map_key]:
-                    channel_metadata_map[map_key]["num_trials"] = 0
-                channel_metadata_map[map_key]["num_trials"] += 1
-                if "_rescaled_unit" not in channel_metadata_map[map_key] and hasattr(anasig, "units"):
-                    for target_u in ("mV", "pA"):
-                        try:
-                            (1.0 * anasig.units).rescale(target_u)
-                            channel_metadata_map[map_key]["_rescaled_unit"] = target_u
-                            break
-                        except Exception:
-                            continue
-            else:
-                # --- Data unit standardization via Neo's native rescale() ---
-                # Electrophysiology convention: voltage in mV, current in pA.
-                # Neo's rescale() handles all intermediate SI prefixes correctly
-                # (V, mV, µV, A, nA, µA, pA, etc.) without brittle string matching.
-                # ValueError is raised when the source dimensionality is incompatible
-                # (e.g. trying to rescale a current signal to mV) — this is the
-                # normal detection mechanism used to distinguish voltage from current.
-                rescaled_unit: Optional[str] = None
-                try:
-                    # Attempt voltage rescaling first.
-                    signal_data = np.array(anasig.rescale("mV").magnitude).ravel()
-                    rescaled_unit = "mV"
-                    log.info(f"Channel {anasig_id}: rescaled to mV via Neo rescale()")
-                except ValueError:
-                    try:
-                        # Incompatible with mV — try current rescaling.
-                        signal_data = np.array(anasig.rescale("pA").magnitude).ravel()
-                        rescaled_unit = "pA"
-                        log.info(f"Channel {anasig_id}: rescaled to pA via Neo rescale()")
-                    except ValueError:
-                        # Unitless or unknown dimensionality — keep raw magnitude.
-                        signal_data = np.array(anasig.magnitude).ravel()
-                        log.debug(
-                            f"Channel {anasig_id}: incompatible units "
-                            f"({anasig.units}); using raw magnitude without rescaling."
-                        )
-                except Exception as e:
-                    signal_data = np.array(anasig.magnitude).ravel()
-                    log.debug(f"Could not rescale channel {anasig_id}: {e}")
+                # --- Populate Handle Map ---
+                if handle_map is not None and anasig_id not in handle_map:
+                    handle_map[anasig_id] = {"signal_index": anasig_idx, "channel_offset": col_idx}
 
-                # Store rescaled unit so the metadata reflects the actual data units
-                if rescaled_unit is not None:
-                    channel_metadata_map[map_key]["_rescaled_unit"] = rescaled_unit
-
-                # Use direct assignment to pre-allocated slot if possible
-                trials_list = channel_metadata_map[map_key]["data_trials"]
-                if seg_idx < len(trials_list):
-                    trials_list[seg_idx] = signal_data
+                # Extract Data/Ref
+                if lazy:
+                    if "num_trials" not in channel_metadata_map[map_key]:
+                        channel_metadata_map[map_key]["num_trials"] = 0
+                    channel_metadata_map[map_key]["num_trials"] += 1
+                    channel_metadata_map[map_key]["t_starts"].append(seg_t_start)
+                    if "_rescaled_unit" not in channel_metadata_map[map_key] and hasattr(anasig, "units"):
+                        for target_u in ("mV", "pA"):
+                            try:
+                                (1.0 * anasig.units).rescale(target_u)
+                                channel_metadata_map[map_key]["_rescaled_unit"] = target_u
+                                break
+                            except Exception:
+                                continue
                 else:
-                    # Fallback if list was short (e.g. late discovery)
-                    trials_list.append(signal_data)
+                    col_sig = anasig if is_single_col else anasig[:, col_idx]
+                    rescaled_unit: Optional[str] = None
+                    try:
+                        # Attempt voltage rescaling first.
+                        signal_data = np.array(col_sig.rescale("mV").magnitude).ravel()
+                        rescaled_unit = "mV"
+                        log.info(f"Channel {anasig_id}: rescaled to mV via Neo rescale()")
+                    except ValueError:
+                        try:
+                            # Incompatible with mV - try current rescaling.
+                            signal_data = np.array(col_sig.rescale("pA").magnitude).ravel()
+                            rescaled_unit = "pA"
+                            log.info(f"Channel {anasig_id}: rescaled to pA via Neo rescale()")
+                        except ValueError:
+                            # Unitless or unknown dimensionality - keep raw magnitude.
+                            signal_data = np.array(col_sig.magnitude).ravel()
+                            log.debug(
+                                f"Channel {anasig_id}: incompatible units "
+                                f"({anasig.units}); using raw magnitude without rescaling."
+                            )
+                    except Exception as e:
+                        signal_data = np.array(col_sig.magnitude).ravel()
+                        log.debug(f"Could not rescale channel {anasig_id}: {e}")
 
-            # Metadata Extraction (First encounter)
-            if "sampling_rate" not in channel_metadata_map[map_key]:
-                try:
-                    raw_fs = float(anasig.sampling_rate)
+                    if rescaled_unit is not None:
+                        channel_metadata_map[map_key]["_rescaled_unit"] = rescaled_unit
 
-                    signal_units = channel_metadata_map[map_key].get(
-                        "_rescaled_unit",
-                        str(anasig.units.dimensionality),
-                    )
-                    if force_kHz_to_Hz:
-                        # Apply Correction (keep legacy metadata_map['units'] == 'Hz' contract while
-                        # preserving true amplitude units in '_signal_units' for Channel construction).
-                        fs = raw_fs * 1000.0
-                        units_dim = "Hz"
-                        log.info(f"Applying Unit Correction: {raw_fs} -> {fs} Hz for Channel {anasig_id}")
+                    trials_list = channel_metadata_map[map_key]["data_trials"]
+                    t_starts_list = channel_metadata_map[map_key]["t_starts"]
+                    if seg_idx < len(trials_list):
+                        trials_list[seg_idx] = signal_data
+                        while len(t_starts_list) <= seg_idx:
+                            t_starts_list.append(None)
+                        t_starts_list[seg_idx] = seg_t_start
                     else:
-                        fs = raw_fs
-                        units_dim = signal_units
+                        trials_list.append(signal_data)
+                        t_starts_list.append(seg_t_start)
 
-                    channel_metadata_map[map_key].update(
-                        {
-                            "units": units_dim,
-                            "_signal_units": signal_units,
-                            "sampling_rate": fs,
-                            "t_start": float(anasig.t_start),
-                        }
-                    )
+                # Metadata Extraction (First encounter)
+                if "sampling_rate" not in channel_metadata_map[map_key]:
+                    try:
+                        raw_fs = float(anasig.sampling_rate)
 
-                    # Phase 4: Validate sampling rate
-                    # If forced, we assume the new 'fs' is correct and we skip the 'UnitError' check
-                    # (though we might still want to warn if it's STILL low, but the explicit intent was to fix it)
-
-                    # Phase 4: Identify Suspicious Sampling Rates
-                    # If forced, we assume the new 'fs' is correct.
-                    # Otherwise, if < 100Hz, we suspect unit mismatch (kHz vs Hz).
-
-                    validate_sampling_rate(fs)
-
-                    if not force_kHz_to_Hz and fs < 100.0:
-                        # Strict Scientific Safety Rule:
-                        # If < 100Hz, we assume units are wrong (e.g. kHz input as Hz) or data is invalid.
-                        raise UnitError(
-                            f"Critical Safety: Sampling Rate {fs}Hz is dangerously low (<100Hz). "
-                            f"Check if units are in kHz."
+                        signal_units = channel_metadata_map[map_key].get(
+                            "_rescaled_unit",
+                            str(anasig.units.dimensionality),
                         )
-                except UnitError:
-                    raise
-                except Exception as e:
-                    # Re-raise UnitError to be caught by UI
-                    if isinstance(sys.exc_info()[1], UnitError):
-                        raise
-                    log.debug(f"Skipped non-critical error during data loading: {e}")
+                        if force_kHz_to_Hz:
+                            fs = raw_fs * 1000.0
+                            units_dim = "Hz"
+                            log.info(f"Applying Unit Correction: {raw_fs} -> {fs} Hz for Channel {anasig_id}")
+                        else:
+                            fs = raw_fs
+                            units_dim = signal_units
 
-    def _build_channels(self, channel_metadata_map: Dict[str, Dict], lazy: bool, recording: Recording) -> List[Channel]:
+                        channel_metadata_map[map_key].update(
+                            {
+                                "units": units_dim,
+                                "_signal_units": signal_units,
+                                "sampling_rate": fs,
+                                "t_start": seg_t_start,
+                            }
+                        )
+
+                        validate_sampling_rate(fs)
+
+                        if not force_kHz_to_Hz and fs < 100.0:
+                            raise UnitError(
+                                f"Critical Safety: Sampling Rate {fs}Hz is dangerously low (<100Hz). "
+                                f"Check if units are in kHz."
+                            )
+                    except UnitError:
+                        raise
+                    except Exception as e:
+                        if isinstance(sys.exc_info()[1], UnitError):
+                            raise
+                        log.debug(f"Skipped non-critical error during data loading: {e}")
+
+    def _build_channels(  # noqa: C901
+        self, channel_metadata_map: Dict[str, Dict], lazy: bool, recording: Recording
+    ) -> List[Channel]:
         """Stage 3: Create Channel objects from the populated metadata map."""
         created_channels: List[Channel] = []
 
@@ -1240,7 +1361,20 @@ class NeoAdapter:
             return lambda idx: handle.load_channel_data(ch_id, idx)
 
         for meta in channel_metadata_map.values():
-            has_data = len(meta["data_trials"]) > 0
+            raw_trials = meta.get("data_trials", [])
+            raw_t_starts = meta.get("t_starts", [])
+            valid_trials: List[np.ndarray] = []
+            valid_t_starts: List[float] = []
+            if not lazy:
+                for idx_t, trial_arr in enumerate(raw_trials):
+                    if trial_arr is not None:
+                        valid_trials.append(trial_arr)
+                        if idx_t < len(raw_t_starts) and raw_t_starts[idx_t] is not None:
+                            valid_t_starts.append(float(raw_t_starts[idx_t]))
+            else:
+                valid_t_starts = [float(ts) for ts in raw_t_starts if ts is not None]
+
+            has_data = len(valid_trials) > 0
             is_lazy_mode = lazy
 
             if not has_data and not is_lazy_mode and meta.get("sampling_rate") is None:
@@ -1265,10 +1399,12 @@ class NeoAdapter:
                 name=meta["name"],
                 units=resolved_units,
                 sampling_rate=meta.get("sampling_rate", 0.0),
-                data_trials=meta["data_trials"] if not lazy else [],
+                data_trials=valid_trials if not lazy else [],
                 loader=loader,
             )
-            channel.t_start = meta.get("t_start", 0.0)
+            channel.t_start = valid_t_starts[0] if valid_t_starts else meta.get("t_start", 0.0)
+            if valid_t_starts:
+                channel.t_starts = valid_t_starts
 
             # Pass num_trials metadata if lazy
             if lazy and "num_trials" in meta:

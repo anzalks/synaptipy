@@ -69,6 +69,8 @@ def _round_sig(x: float, sig: int = _SIG_FIGS) -> float:
 
 def _sanitize_elem(val: Any, sig: int = _SIG_FIGS) -> Any:
     """Convert a single scalar *val* to a CSV-safe Python native type."""
+    if isinstance(val, (np.bool_,)):
+        return bool(val)
     if isinstance(val, (np.floating,)):
         f = float(val)
         return _round_sig(f, sig=sig) if np.isfinite(f) else f
@@ -97,7 +99,7 @@ def _sanitize_csv_value(val: Any, key: Optional[str] = None) -> Any:
     sig = _TIME_SIG_FIGS if _is_high_precision_time_key(key) else _SIG_FIGS
 
     # numpy scalar
-    if isinstance(val, (np.floating, np.integer)):
+    if isinstance(val, (np.floating, np.integer, np.bool_)):
         return _sanitize_elem(val, sig=sig)
 
     # plain Python float
@@ -167,6 +169,7 @@ _TIDY_METADATA_KEYS = frozenset(
         "sweep",
         "analysis_type",
         "analysis",
+        "analysis_name",
         "scope",
         "sampling_rate",
         "channel_units",
@@ -176,6 +179,27 @@ _TIDY_METADATA_KEYS = frozenset(
         "batch_timestamp",
         "timestamp_saved",
         "data_source_used",
+        "subject_id",
+        "cell_id",
+        "protocol_family",
+        "protocol_fingerprint",
+        "protocol_source",
+        "protocol_status",
+        "protocol_assignment_id",
+        "segment_start_s",
+        "segment_end_s",
+        "analysis_result_schema_version",
+        "analysis_result_warnings",
+        "io_time_s",
+        "compute_time_s",
+        "module_used",
+        "schema_version",
+        "selected_trial_indices",
+        "selected_trial_count",
+        "secondary_channel",
+        "plot_payload",
+        "parameters",
+        "metrics",
     }
 )
 
@@ -306,10 +330,13 @@ def _build_tidy_row(
             continue
         if isinstance(value, (list, np.ndarray, dict)):
             continue
-        if not isinstance(value, (int, float, bool, str, type(None))):
+        if not isinstance(value, (int, float, bool, str, type(None), np.integer, np.floating, np.bool_)):
             continue
         if metric in ("error", "debug_trace"):
             continue
+        if isinstance(value, (np.integer, np.floating, np.bool_)):
+            sig = _TIME_SIG_FIGS if _is_high_precision_time_key(metric) else _SIG_FIGS
+            value = _sanitize_elem(value, sig=sig)
         unit = _resolve_tidy_unit(metric, units_chan)
         rows.append(
             {
@@ -342,14 +369,16 @@ def _tidy_row_to_long(
 ) -> List[Dict[str, Any]]:
     """Convert one wide-format result dict into a list of tidy long-format dicts."""
     flat: Dict[str, Any] = dict(row)
+    flat.pop("plot_payload", None)
     if isinstance(flat.get("metrics"), dict):
         for k, v in flat.pop("metrics").items():
-            flat.setdefault(k, v)
+            if not str(k).startswith("_"):
+                flat.setdefault(k, v)
     file_val = _tidy_get_meta(flat, file_keys)
     group_val = _tidy_get_meta(flat, group_keys)
     sweep_val = flat.get("trial_index", flat.get("trial_index_used", ""))
-    channel_val = flat.get("channel_name", flat.get("channel", flat.get("channel_id", "")))
-    analysis_val = flat.get("analysis_type", flat.get("analysis", ""))
+    channel_val = _tidy_get_meta(flat, ["channel_name", "channel", "channel_id"])
+    analysis_val = _tidy_get_meta(flat, ["analysis_type", "analysis", "analysis_name"])
     units_chan = flat.get("channel_units", "")
     return _build_tidy_row(flat, file_val, group_val, sweep_val, channel_val, analysis_val, units_chan)
 
@@ -437,15 +466,18 @@ class CSVExporter:
             return False
 
         try:
+            output_path = Path(output_path)
             log.debug(f"Writing {len(results)} analysis results to CSV: {output_path}")
 
             # Pre-flatten consolidated-module schema: {"module_used": ..., "metrics": {...}}
             # so that metric keys appear as top-level columns rather than a single "metrics" column.
             def _pre_flatten(r: dict) -> dict:
                 out = dict(r)
+                out.pop("plot_payload", None)
                 if isinstance(out.get("metrics"), dict):
                     for k, v in out.pop("metrics").items():
-                        out.setdefault(k, v)
+                        if not str(k).startswith("_") and k != "plot_payload":
+                            out.setdefault(k, v)
                 return out
 
             results = [_pre_flatten(r) for r in results]
@@ -456,9 +488,13 @@ class CSVExporter:
             # First pass to identify all fields, including nested ones
             for result in results:
                 for key, value in result.items():
+                    if str(key).startswith("_") or key == "plot_payload":
+                        continue
                     if isinstance(value, dict):
-                        # For nested dictionaries, add flattened keys
+                        # For nested dictionaries, add flattened keys (skipping private _* keys)
                         for nested_key in value.keys():
+                            if str(nested_key).startswith("_"):
+                                continue
                             flat_key = f"{key}.{nested_key}"
                             all_fields.add(flat_key)
                     else:
@@ -547,11 +583,13 @@ class CSVExporter:
                 # Process each key-value pair in the result dictionary
                 for key, value in result.items():
                     # Skip private/internal keys (used by GUI but not useful in CSV)
-                    if key.startswith("_"):
+                    if str(key).startswith("_") or key == "plot_payload":
                         continue
                     if isinstance(value, dict):
                         # For nested dictionaries (like summary_stats or parameters)
                         for nested_key, nested_value in value.items():
+                            if str(nested_key).startswith("_"):
+                                continue
                             flat_key = f"{key}.{nested_key}"
                             if flat_key in ordered_fields:
                                 flat_result[flat_key] = _sanitize_csv_value(nested_value, key=nested_key)
@@ -570,7 +608,8 @@ class CSVExporter:
             # Key fix: Drop columns that are completely NA across all rows
             df.dropna(axis=1, how="all", inplace=True)
 
-            # Create the CSV file
+            # Ensure parent directory exists and create the CSV file
+            output_path.parent.mkdir(parents=True, exist_ok=True)
             df.to_csv(output_path, index=False, encoding="utf-8", na_rep="")
 
             log.info(f"Successfully exported {len(results)} analysis results to {output_path}")
@@ -621,9 +660,9 @@ class CSVExporter:
         )
         analysis_types = sorted(
             {
-                str(r.get("analysis_type") or r.get("analysis") or "")
+                str(r.get("analysis_type") or r.get("analysis") or r.get("analysis_name") or "")
                 for r in results
-                if isinstance(r, dict) and (r.get("analysis_type") or r.get("analysis"))
+                if isinstance(r, dict) and (r.get("analysis_type") or r.get("analysis") or r.get("analysis_name"))
             }
         )
 

@@ -6,6 +6,7 @@ Manages overall window structure, menu, status bar, tabs, and core adapters.
 """
 
 import logging
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -62,7 +63,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.session_manager = SessionManager()
         self.setWindowTitle("Synaptipy - Electrophysiology Visualizer")
 
-        # Set Window Icon — prefer the native format for each platform
+        # Set Window Icon - prefer the native format for each platform
         if hasattr(sys, "_MEIPASS"):
             icons_dir = Path(sys._MEIPASS) / "synaptipy" / "resources" / "icons"
         else:
@@ -147,6 +148,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # --- Setup Core UI Components ---
         self._setup_menu_and_status_bar()
         self._setup_tabs()
+        self.session_manager.current_recording_changed.connect(lambda _rec: self._update_menu_state())
 
         # --- Restore Window State ---
         self._restore_window_state()  # Call after UI is created
@@ -670,6 +672,10 @@ class MainWindow(QtWidgets.QMainWindow):
             hasattr(self, "explorer_tab")
             and self.explorer_tab is not None
             and self.explorer_tab.get_current_recording() is not None
+        ) or (
+            hasattr(self, "session_manager")
+            and self.session_manager is not None
+            and self.session_manager.current_recording is not None
         )
         self.export_nwb_action.setEnabled(has_data_in_explorer)
         log.debug(f"Updated menu state: Export enabled = {has_data_in_explorer}")
@@ -928,9 +934,12 @@ class MainWindow(QtWidgets.QMainWindow):
         # Update status bar with progress
         current_msg = self.status_bar.currentMessage()
         if "Loading" in current_msg:
-            self.status_bar.showMessage(f"{current_msg} ({progress}%)", 0)
+            base_msg = re.sub(r"\s*\(\d+%\)$", "", current_msg)
+            while re.search(r"\s*\(\d+%\)$", base_msg):
+                base_msg = re.sub(r"\s*\(\d+%\)$", "", base_msg)
+            self.status_bar.showMessage(f"{base_msg} ({progress}%)", 0)
 
-    def _on_data_ready(self, recording_data: Recording):
+    def _on_data_ready(self, recording_data: Recording):  # noqa: C901
         """Handle successful data loading."""
         log.debug(f"Background loading completed successfully for: {recording_data.source_file.name}")
 
@@ -953,6 +962,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 # Update SessionManager
                 self.session_manager.set_file_context(file_list, current_index)
                 self.session_manager.current_recording = recording_data
+                if (
+                    self.session_manager.batch_load_context is not None
+                    and hasattr(self, "explorer_tab")
+                    and self.explorer_tab is not None
+                ):
+                    self.explorer_tab.apply_batch_load_context()
 
                 self.tab_widget.setCurrentWidget(self.explorer_tab)
 
@@ -973,6 +988,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 # Update SessionManager
                 self.session_manager.set_file_context(file_list, current_index)
                 self.session_manager.current_recording = recording_data
+                if (
+                    self.session_manager.batch_load_context is not None
+                    and hasattr(self, "explorer_tab")
+                    and self.explorer_tab is not None
+                ):
+                    self.explorer_tab.apply_batch_load_context()
 
                 self.tab_widget.setCurrentWidget(self.explorer_tab)
                 self.status_bar.showMessage(f"Loaded {recording_data.source_file.name}", 5000)
@@ -989,11 +1010,6 @@ class MainWindow(QtWidgets.QMainWindow):
                     self.exporter_tab.update_state()
                 except Exception as e_export_update:
                     log.error(f"Error updating exporter tab state: {e_export_update}", exc_info=True)
-            # if hasattr(self, 'analyser_tab') and self.analyser_tab:
-            #     try:
-            #         self.analyser_tab.update_state(self.explorer_tab._analysis_items)
-            #     except Exception as e_analyse_update:
-            #         log.error(f"Error updating analyser tab state: {e_analyse_update}", exc_info=True)
 
     def _on_data_error(self, file_path, error_message):
         """Handle data loading errors."""
@@ -1005,10 +1021,19 @@ class MainWindow(QtWidgets.QMainWindow):
         QtWidgets.QMessageBox.critical(self, "File Loading Error", f"Failed to load file:\n{error_message}")
         self.status_bar.showMessage("File loading failed", 5000)
 
+        # Update UI state
+        self._update_menu_state()
+        if hasattr(self, "exporter_tab") and self.exporter_tab:
+            try:
+                self.exporter_tab.update_state()
+            except Exception as e_export_update:
+                log.error(f"Error updating exporter tab state: {e_export_update}", exc_info=True)
+
     @staticmethod
     def _load_path_key(path: Path) -> Path:
         """Normalise paths used to match loader completions to requests."""
-        return Path(path).resolve(strict=False)
+        base = str(path).split("::", 1)[0]
+        return Path(base).resolve(strict=False)
 
     def _take_pending_load(self, path: Path):
         """Remove and return the oldest outstanding request for *path*."""
@@ -1020,19 +1045,6 @@ class MainWindow(QtWidgets.QMainWindow):
         if not requests:
             self._pending_load_requests.pop(key, None)
         return request
-
-        # Update UI state
-        self._update_menu_state()
-        if hasattr(self, "exporter_tab") and self.exporter_tab:
-            try:
-                self.exporter_tab.update_state()
-            except Exception as e_export_update:
-                log.error(f"Error updating exporter tab state: {e_export_update}", exc_info=True)
-        # if hasattr(self, 'analyser_tab') and self.analyser_tab:
-        #     try:
-        #         self.analyser_tab.update_state(self.explorer_tab._analysis_items)
-        #     except Exception as e_analyse_update:
-        #         log.error(f"Error updating analyser tab state: {e_analyse_update}", exc_info=True)
 
     # --- File Handling and Export Logic methods (_open_file_dialog, _load_in_explorer, _export_to_nwb) remain the same
     # as previous answer ---
@@ -1112,20 +1124,31 @@ class MainWindow(QtWidgets.QMainWindow):
                 log.warning("Cannot update exporter tab state: Exporter tab not found.")
             # else: log.warning("Cannot update analyser tab state: Analyser tab not found.")
 
-    def _on_analyser_load_file_request(self, file_path_str: str):
+    def _on_analyser_load_file_request(self, filepath: Path):
         """Handle request from AnalyserTab to load a specific file."""
         try:
-            file_path = Path(file_path_str)
-            if not file_path.exists():
-                QtWidgets.QMessageBox.warning(self, "File Not Found", f"The file could not be found:\n{file_path}")
+            raw_str = str(filepath)
+            phys_str = raw_str.split("::", 1)[0]
+            phys_path = Path(phys_str)
+            target_path = Path(raw_str)
+
+            if not phys_path.exists():
+                QtWidgets.QMessageBox.warning(self, "File Not Found", f"The file could not be found:\n{phys_path}")
                 return
 
-            log.debug(f"MainWindow received request to load: {file_path}")
+            log.debug(f"MainWindow received request to load: {target_path}")
 
-            # Use _load_in_explorer to handle the loading
-            # Treat as single file context if not already in list, or just load it.
-            # _load_in_explorer expects: initial_filepath, file_list, index, lazy_load
-            self._load_in_explorer(file_path, [file_path], 0, False)
+            file_list, idx = self._build_sibling_file_list(phys_path)
+            if "::" in raw_str and 0 <= idx < len(file_list):
+                file_list = list(file_list)
+                file_list[idx] = target_path
+
+            if hasattr(self, "tab_widget") and hasattr(self, "explorer_tab") and self.explorer_tab:
+                self.tab_widget.setCurrentWidget(self.explorer_tab)
+            self.raise_()
+            self.activateWindow()
+
+            self._load_in_explorer(target_path, file_list, idx, False)
 
         except Exception as e:
             log.error(f"Error handling analyser load request: {e}")
@@ -1355,7 +1378,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         file_paths: List[Path] = session.get("file_paths", [])
         if not file_paths:
-            # No files to restore — still apply settings silently.
+            # No files to restore - still apply settings silently.
             try:
                 self.session_manager.apply_session(session)
             except Exception:
@@ -1379,21 +1402,21 @@ class MainWindow(QtWidgets.QMainWindow):
         except Exception as exc:
             log.warning("Could not apply session settings: %s", exc)
 
-        # Load the first file; session context is restored via SessionManager.
-        first_file = file_paths[0]
-        current_index = session.get("current_file_index", 0)
-        if current_index < 0 or current_index >= len(file_paths):
-            current_index = 0
+        # Load the active file from the saved index; session context is restored via SessionManager.
+        raw_index = session.get("current_file_index", 0)
+        current_index = raw_index if isinstance(raw_index, int) else 0
+        idx = current_index if 0 <= current_index < len(file_paths) else 0
+        target_file = file_paths[idx]
 
         log.info(
             "_offer_session_restore: restoring %d file(s), starting from index %d.",
             len(file_paths),
-            current_index,
+            idx,
         )
         self._load_in_explorer(
-            first_file,
+            target_file,
             file_paths,
-            current_index,
+            idx,
             lazy_load=False,
         )
 

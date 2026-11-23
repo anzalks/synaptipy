@@ -213,6 +213,16 @@ def _sanitize_sphinx_html(raw_html: str) -> str:
     return cleaned
 
 
+def _notify_missing_help_target(widget: QtWidgets.QWidget, target: object) -> None:
+    """Log a debug note and display a brief status-bar hint instead of rendering a broken page."""
+    log.debug("Offline help target not bundled locally: %s", target)
+    win = widget.window()
+    if isinstance(win, QtWidgets.QMainWindow):
+        bar = win.statusBar()
+        if bar is not None:
+            bar.showMessage("Requested source or page is not included in offline help; see online documentation.", 4000)
+
+
 class _HelpBrowser(QtWidgets.QTextBrowser):
     """``QTextBrowser`` subclass that can render ``qthelp://`` URLs."""
 
@@ -242,12 +252,28 @@ class _HelpBrowser(QtWidgets.QTextBrowser):
                 return data
         return super().loadResource(resource_type, url)
 
+    def setSource(self, url: QtCore.QUrl, *args: object) -> None:  # noqa: N802
+        """Guard navigation against unbundled qthelp:// targets (such as _modules/[source])."""
+        if url.scheme() in ("http", "https"):
+            QtGui.QDesktopServices.openUrl(url)
+            return
+        if url.scheme() == "qthelp":
+            probe = QtCore.QUrl(url)
+            probe.setFragment("")
+            probe.setQuery("")
+            if not self._engine.fileData(probe):
+                _notify_missing_help_target(self, url.toString())
+                return
+        super().setSource(url, *args)  # type: ignore[arg-type]
+
     def _navigate(self, url: QtCore.QUrl) -> None:
         """Handle link clicks inside the browser pane."""
         if url.scheme() in ("http", "https"):
             QtGui.QDesktopServices.openUrl(url)
-        else:
-            self.setSource(url)
+            return
+        if not url.scheme() and not self.source().isEmpty():
+            url = self.source().resolved(url)
+        self.setSource(url)
 
 
 # ---------------------------------------------------------------------------
@@ -273,16 +299,24 @@ class _LocalHtmlBrowser(QtWidgets.QTextBrowser):
         if not self.source().isEmpty():
             self.reload()
 
+    def _resolve_local_candidate(self, url: QtCore.QUrl) -> Optional[Path]:
+        """Resolve *url* to an on-disk Path under ``_html_root`` (ignoring URL fragments)."""
+        path_str = url.toLocalFile() if url.isLocalFile() else url.path()
+        if not path_str:
+            return None
+        candidate = Path(path_str)
+        if not candidate.is_absolute():
+            candidate = (self._html_root / path_str.lstrip("/")).resolve()
+        return candidate
+
     def loadResource(self, resource_type: int, url: QtCore.QUrl) -> object:  # noqa: N802
         """Serve sanitized local HTML files and suppress conflicting Sphinx RTD CSS."""
         path_str = url.toLocalFile() if url.isLocalFile() else url.path()
         if path_str.lower().endswith(".css"):
             return ""
         if path_str.lower().endswith((".html", ".htm")):
-            candidate = Path(path_str)
-            if not candidate.is_absolute():
-                candidate = (self._html_root / path_str.lstrip("/")).resolve()
-            if candidate.is_file():
+            candidate = self._resolve_local_candidate(url)
+            if candidate is not None and candidate.is_file():
                 try:
                     raw = candidate.read_text(encoding="utf-8", errors="replace")
                     return _sanitize_sphinx_html(raw)
@@ -294,12 +328,35 @@ class _LocalHtmlBrowser(QtWidgets.QTextBrowser):
         """Navigate to the documentation index page."""
         self.setSource(self._home)
 
+    def setSource(self, url: QtCore.QUrl, *args: object) -> None:  # noqa: N802
+        """Navigate to *url* only when the local target exists, keeping the current page otherwise."""
+        if url.scheme() in ("http", "https"):
+            QtGui.QDesktopServices.openUrl(url)
+            return
+        resolved = url
+        if not resolved.isLocalFile() and not resolved.scheme():
+            if not resolved.path() and resolved.fragment() and not self.source().isEmpty():
+                super().setSource(resolved, *args)  # type: ignore[arg-type]
+                return
+            base = self.source() if not self.source().isEmpty() else self._home
+            resolved = base.resolved(resolved)
+        if resolved.isEmpty():
+            return
+        candidate = self._resolve_local_candidate(resolved)
+        if candidate is None or not candidate.is_file():
+            _notify_missing_help_target(self, candidate if candidate is not None else resolved.toString())
+            return
+        super().setSource(resolved, *args)  # type: ignore[arg-type]
+
     def _navigate(self, url: QtCore.QUrl) -> None:
         """Delegate external URLs to the system browser; resolve relative local links cleanly."""
         if url.scheme() in ("http", "https"):
             QtGui.QDesktopServices.openUrl(url)
             return
         if not url.isLocalFile() and not url.scheme():
+            if not url.path() and url.fragment() and not self.source().isEmpty():
+                self.setSource(url)
+                return
             base = self.source() if not self.source().isEmpty() else self._home
             url = base.resolved(url)
         self.setSource(url)
@@ -384,7 +441,7 @@ class HelpWindow(QtWidgets.QMainWindow):
 
         # Online documentation link pinned to the bottom of the left pane.
         # setOpenExternalLinks(True) delegates the click to the OS browser
-        # via QDesktopServices — no custom slot required.
+        # via QDesktopServices - no custom slot required.
         online_link = QtWidgets.QLabel(
             '<a href="https://synaptipy.readthedocs.io/en/latest/">' "View Online Documentation</a>"
         )

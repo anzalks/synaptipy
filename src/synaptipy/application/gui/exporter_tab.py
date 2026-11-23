@@ -603,7 +603,8 @@ class ExporterTab(QtWidgets.QWidget):
             df = pd.DataFrame(processed_results)
 
             if output_path.lower().endswith(".json"):
-                df.to_json(output_path, orient="records", indent=2, default_handler=str)
+                json_cols = [c for c in df.columns if not str(c).startswith("_") and str(c) != "plot_payload"]
+                df[json_cols].to_json(output_path, orient="records", indent=2, default_handler=str)
                 log.debug(f"Exported analysis results to JSON: {output_path}")
                 QtWidgets.QMessageBox.information(self, "Export Successful", f"Results exported to:\n{output_path}")
             else:

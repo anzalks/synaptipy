@@ -922,7 +922,7 @@ def calculate_n_pulse_ratio(  # noqa: C901
             "type": "float",
             "label": "Tau Decay (ms)",
             "default": 5.0,
-            "min": 0.0,
+            "min": 0.05,
             "max": 1e9,
             "decimals": 3,
             "visible_when": {"param": "event_detection_type", "value": "Events (Template)"},
@@ -1188,9 +1188,24 @@ def run_opto_sync_wrapper(  # noqa: C901
     _blank_s = artifact_blanking_ms / 1000.0
     _baseline_s = baseline_window_ms / 1000.0
     if result.stimulus_onsets is not None and len(data) > 0:
-        for _onset in result.stimulus_onsets:
-            _idx_start = int(np.searchsorted(time, _onset + _blank_s, side="left"))
-            _idx_end = int(np.searchsorted(time, _onset + _amp_window_s, side="right"))
+        for _i, _onset in enumerate(result.stimulus_onsets):
+            _onset_f = float(_onset)
+            # Baseline over the window immediately preceding the stimulus.
+            _base_start = int(np.searchsorted(time, _onset_f - _baseline_s, side="left"))
+            _base_end = int(np.searchsorted(time, _onset_f, side="left"))
+            _base_start = max(0, _base_start)
+            _base_end = max(_base_start + 1, min(_base_end, len(data)))
+            _base_data = data[_base_start:_base_end]
+            _base_mean = float(np.mean(_base_data)) if len(_base_data) > 0 else 0.0
+
+            _idx_start = int(np.searchsorted(time, _onset_f + _blank_s, side="left"))
+            _has_next = _i + 1 < len(result.stimulus_onsets)
+            _next_onset_s = float(result.stimulus_onsets[_i + 1]) if _has_next else np.inf
+            _win_end_s = min(_onset_f + _amp_window_s, _next_onset_s)
+            if _has_next and (_onset_f + _amp_window_s) >= _next_onset_s:
+                _idx_end = int(np.searchsorted(time, _win_end_s, side="left"))
+            else:
+                _idx_end = int(np.searchsorted(time, _win_end_s, side="right"))
             _idx_start = max(0, min(_idx_start, len(data) - 1))
             _idx_end = max(_idx_start + 1, min(_idx_end, len(data)))
             _window_data = data[_idx_start:_idx_end]
@@ -1199,21 +1214,14 @@ def run_opto_sync_wrapper(  # noqa: C901
             if response_polarity == "min":
                 _local_idx = int(np.argmin(_window_data))
             elif response_polarity == "abs":
-                _local_idx = int(np.argmax(np.abs(_window_data)))
+                _local_idx = int(np.argmax(np.abs(_window_data - _base_mean)))
             else:
                 _local_idx = int(np.argmax(_window_data))
             _abs_idx = _idx_start + _local_idx
             _peak_times.append(float(time[_abs_idx]))
             _peak_amps.append(float(data[_abs_idx]))
-
-            # Baseline over the window immediately preceding the stimulus.
-            _base_start = int(np.searchsorted(time, _onset - _baseline_s, side="left"))
-            _base_end = int(np.searchsorted(time, _onset, side="left"))
-            _base_start = max(0, _base_start)
-            _base_end = max(_base_start + 1, min(_base_end, len(data)))
-            _base_data = data[_base_start:_base_end]
             if len(_base_data) > 0:
-                _response_amps.append(float(data[_abs_idx] - np.mean(_base_data)))
+                _response_amps.append(float(data[_abs_idx] - _base_mean))
 
     if _response_amps:
         _mean_amp = float(np.mean(_response_amps))
@@ -1250,9 +1258,13 @@ def run_opto_sync_wrapper(  # noqa: C901
                 else None
             ),
             "_first_window_end_s": (
-                float(result.stimulus_onsets[0]) + _amp_window_s
-                if result.stimulus_onsets is not None and len(result.stimulus_onsets) > 0
-                else None
+                min(float(result.stimulus_onsets[0]) + _amp_window_s, float(result.stimulus_onsets[1]))
+                if result.stimulus_onsets is not None and len(result.stimulus_onsets) > 1
+                else (
+                    float(result.stimulus_onsets[0]) + _amp_window_s
+                    if result.stimulus_onsets is not None and len(result.stimulus_onsets) > 0
+                    else None
+                )
             ),
         },
     }
@@ -1917,6 +1929,6 @@ def run_stimulus_train_stp_wrapper(
     ui_params=[],
     plots=[],
 )
-def evoked_responses_module(**kwargs):
+def evoked_responses_module(*_args, **_kwargs):
     """Module-level aggregator tab for evoked-response analyses."""
     return {}

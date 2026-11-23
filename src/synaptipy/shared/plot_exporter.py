@@ -57,7 +57,9 @@ class PlotExporter:
         Export the plot to the specified file.
         Returns True if successful, False otherwise.
         """
+        fmt = str(fmt).lower().lstrip(".")
         try:
+            Path(filename).parent.mkdir(parents=True, exist_ok=True)
             if fmt in ["pdf"]:
                 exported = self._save_via_matplotlib(filename, fmt, dpi)
             else:
@@ -87,6 +89,14 @@ class PlotExporter:
         sidecar = output.with_suffix(output.suffix + ".provenance.json")
         sidecar.write_text(json.dumps(provenance, indent=2, default=str), encoding="utf-8")
 
+    @staticmethod
+    def _set_exporter_white_background(exporter: Any) -> None:
+        """Set an opaque white background parameter on a PyQtGraph exporter if supported."""
+        try:
+            exporter.parameters()["background"] = pg.mkColor("w")
+        except Exception:
+            pass
+
     def _save_via_pyqtgraph(self, filename: str, fmt: str, dpi: int) -> bool:
         """Save raster images using pyqtgraph (WYSIWYG).
 
@@ -114,16 +124,18 @@ class PlotExporter:
             if hasattr(self.widget, "setBackground"):
                 self.widget.setBackground("w")  # solid white
         except Exception:
-            pass  # non-fatal — proceed with whatever background exists
+            pass  # non-fatal - proceed with whatever background exists
 
         try:
             if fmt == "svg":
                 exporter = pg.exporters.SVGExporter(target_item)
+                self._set_exporter_white_background(exporter)
                 exporter.export(filename)
                 log.info(f"Exported SVG plot to {filename}")
                 return True
             else:
                 exporter = pg.exporters.ImageExporter(target_item)
+                self._set_exporter_white_background(exporter)
 
                 # Scale for DPI (Screen DPI is usually ~96)
                 scale_factor = max(0.5, float(dpi or 300) / 96.0)

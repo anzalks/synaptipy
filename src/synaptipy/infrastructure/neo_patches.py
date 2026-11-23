@@ -32,7 +32,7 @@ def apply_winwcp_patch():  # noqa: C901
             for line in headertext.split("\r\n"):
                 if "=" not in line:
                     continue
-                key, val = line.split("=")
+                key, val = line.split("=", 1)
                 if key in [
                     "VER",
                     "NC",
@@ -72,11 +72,15 @@ def apply_winwcp_patch():  # noqa: C901
                 header["ADCMAX"] = 1
 
             # --- FIX START: Estimate NR from file size if 0 ---
-            if header["NR"] == 0:
-                try:
-                    import os
+            import os
 
-                    file_size = os.path.getsize(self.filename)
+            try:
+                file_size = os.path.getsize(self.filename)
+            except OSError:
+                file_size = None
+
+            if header["NR"] == 0 and file_size is not None:
+                try:
                     # Block Size = AnalysisHeader (1024) + Data (SECTORSIZE * NBD)
                     block_size = 1024 + (SECTORSIZE * header["NBD"])
                     # Header is 1024 bytes
@@ -89,8 +93,6 @@ def apply_winwcp_patch():  # noqa: C901
                 except Exception as e:
                     log.warning(f"Failed to estimate NR from file size: {e}")
             # --- FIX END ---
-
-            nb_segment = header["NR"]
 
             # get rec_datetime when WCP data file version is later than 8
             if header.get("VER", 0) > 8 and "RTIME" in header:
@@ -107,14 +109,14 @@ def apply_winwcp_patch():  # noqa: C901
             analysisHeader = None
             # --- FIX END ---
 
-            # loop for record number
+            # loop for record number, indexing valid segments contiguously
+            valid_seg_idx = 0
             for seg_index in range(header["NR"]):
                 offset = 1024 + seg_index * (SECTORSIZE * header["NBD"] + 1024)
 
                 try:
                     # read analysis zone
-                    analysisHeader = HeaderReader(fid, AnalysisDescription).read_f(offset=offset)
-                    all_sampling_interval.append(analysisHeader["SamplingInterval"])
+                    seg_analysis_header = HeaderReader(fid, AnalysisDescription).read_f(offset=offset)
                 except Exception as e:
                     log.warning(f"Failed to read analysis header for segment {seg_index}: {e}")
                     continue
@@ -129,19 +131,30 @@ def apply_winwcp_patch():  # noqa: C901
 
                 NC = header["NC"]
                 ind0 = offset + header["NBA"] * SECTORSIZE
+                if file_size is not None and (ind0 + NP * NC * 2) > file_size:
+                    log.warning(
+                        f"Truncated data block for segment {seg_index} "
+                        f"(needs {ind0 + NP * NC * 2} bytes, file has {file_size}); skipping."
+                    )
+                    continue
+
+                analysisHeader = seg_analysis_header
+                all_sampling_interval.append(analysisHeader["SamplingInterval"])
+
                 buffer_id = "0"
-
-                if seg_index not in self._buffer_descriptions[0]:
-                    self._buffer_descriptions[0][seg_index] = {}
-
-                self._buffer_descriptions[0][seg_index][buffer_id] = {
-                    "type": "raw",
-                    "file_path": str(self.filename),
-                    "dtype": "int16",
-                    "order": "C",
-                    "file_offset": ind0,
-                    "shape": (NP, NC),
+                self._buffer_descriptions[0][valid_seg_idx] = {
+                    buffer_id: {
+                        "type": "raw",
+                        "file_path": str(self.filename),
+                        "dtype": "int16",
+                        "order": "C",
+                        "file_offset": ind0,
+                        "shape": (NP, NC),
+                    }
                 }
+                valid_seg_idx += 1
+
+            nb_segment = len(self._buffer_descriptions[0])
 
             # --- FIX START: Handling missing analysisHeader ---
             if analysisHeader is None:

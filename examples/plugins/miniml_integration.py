@@ -37,15 +37,17 @@ miniML class API (as of commit 9bab948):
 import contextlib
 import io
 import logging
+import os
 import sys
 import traceback
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import numpy as np
 
 from synaptipy.core.analysis.registry import AnalysisRegistry
 
 log = logging.getLogger(__name__)
+_loaded_miniml_core_path: Optional[str] = None
 
 
 class _StreamToLogger(io.TextIOBase):
@@ -72,12 +74,25 @@ class _StreamToLogger(io.TextIOBase):
             self._buf = ""
 
 
+def _evict_stale_miniml_modules(previous_dir: str) -> None:
+    """Remove cached miniML modules and old sys.path entry when switching core_path."""
+    prev_norm = os.path.normcase(os.path.abspath(previous_dir))
+    sys.path[:] = [p for p in sys.path if os.path.normcase(os.path.abspath(p)) != prev_norm]
+    prefix_with_sep = prev_norm + os.sep
+    for mod_name in list(sys.modules.keys()):
+        mod_obj = sys.modules.get(mod_name)
+        mod_file = getattr(mod_obj, "__file__", None) if mod_obj is not None else None
+        from_prev = bool(mod_file and os.path.normcase(os.path.abspath(mod_file)).startswith(prefix_with_sep))
+        if mod_name == "miniML" or mod_name.startswith(("miniML.", "miniML_")) or from_prev:
+            sys.modules.pop(mod_name, None)
+
+
 def _import_miniml(miniml_core_path: str):
     """Lazily import miniML classes after adding core/ to sys.path.
 
     Returns (MiniTrace, EventDetection) or raises ImportError.
     """
-    import os
+    global _loaded_miniml_core_path
 
     core_path = miniml_core_path.strip()
     if not core_path:
@@ -86,18 +101,27 @@ def _import_miniml(miniml_core_path: str):
             "Paste the path to the miniML/core/ directory "
             "(the folder containing miniML.py) into the 'miniML core/ Path' field."
         )
+    resolved_core = os.path.abspath(core_path)
+    existing_mod = sys.modules.get("miniML")
+    existing_file = getattr(existing_mod, "__file__", None) if existing_mod is not None else None
+    existing_dir = os.path.abspath(os.path.dirname(existing_file)) if existing_file else _loaded_miniml_core_path
+    if existing_dir is not None and os.path.normcase(existing_dir) != os.path.normcase(resolved_core):
+        _evict_stale_miniml_modules(existing_dir)
+
     # TensorFlow >= 2.16 ships Keras 3 by default; .h5 models saved under
-    # Keras 2 require the tf_keras compatibility layer.  Setting this env var
-    # before TF imports redirects tf.keras → tf_keras (Keras 2 API).
+    # Keras 2 require the tf_keras compatibility layer. Setting this env var
+    # before TF imports redirects tf.keras -> tf_keras (Keras 2 API).
     os.environ.setdefault("TF_USE_LEGACY_KERAS", "1")
-    if core_path not in sys.path:
-        sys.path.insert(0, core_path)
+    if core_path in sys.path:
+        sys.path.remove(core_path)
+    sys.path.insert(0, core_path)
     try:
         import importlib
 
         miniml_mod = importlib.import_module("miniML")
         MiniTrace = miniml_mod.MiniTrace
         EventDetection = miniml_mod.EventDetection
+        _loaded_miniml_core_path = resolved_core
     except Exception as exc:
         raise ImportError(
             f"Could not import miniML from '{core_path}': {type(exc).__name__}: {exc}. "
@@ -143,6 +167,34 @@ def _compute_event_scores(detector: Any, ev_locs: np.ndarray, valid_mask: np.nda
                 round(float(np.min(scores_arr)), 4),
             )
     return None, None, None
+
+
+def _validate_miniml_inputs(
+    data: Optional[np.ndarray],
+    time: Optional[np.ndarray],
+    sampling_rate: float,
+    model_path: str,
+) -> Optional[str]:
+    """Validate array shapes, sampling rate, and model path; return error string or None."""
+    if data is None or data.size == 0:
+        return "Empty data array provided."
+    if sampling_rate is None or not np.isfinite(sampling_rate) or sampling_rate <= 0:
+        return "sampling_rate must be a positive finite value."
+    if time is None or len(time) != len(data):
+        return (
+            f"Time and data length mismatch: len(time)={0 if time is None else len(time)} " f"vs len(data)={len(data)}."
+        )
+    if not model_path.strip():
+        return "No model path provided. Paste the full path to your .h5 model file into the 'Model Path' field."
+    return None
+
+
+def _build_minitrace(mini_trace_cls: Any, data: np.ndarray, sampling_interval: float) -> Any:
+    """Instantiate MiniTrace across legacy (`sampling`) and current (`sampling_interval`) APIs."""
+    try:
+        return mini_trace_cls(data=data, sampling_interval=sampling_interval)
+    except TypeError:
+        return mini_trace_cls(data=data, sampling=sampling_interval)
 
 
 def run_miniml_detection(
@@ -195,16 +247,11 @@ def run_miniml_detection(
         results table. ``_event_times`` and ``_event_peaks`` drive the marker
         overlay on the plot.
     """
-    if data.size == 0:
-        return {"error": "Empty data array provided."}
+    validation_err = _validate_miniml_inputs(data, time, sampling_rate, model_path)
+    if validation_err is not None:
+        return {"error": validation_err}
 
     active_model = model_path.strip()
-    if not active_model:
-        return {
-            "error": (
-                "No model path provided. " "Paste the full path to your .h5 model file into the 'Model Path' field."
-            )
-        }
 
     try:
         MiniTrace, EventDetection = _import_miniml(miniml_core_path)
@@ -215,10 +262,7 @@ def run_miniml_detection(
 
     try:
         sampling_interval = 1.0 / sampling_rate  # seconds per sample
-        try:
-            trace = MiniTrace(data=data, sampling_interval=sampling_interval)
-        except TypeError:
-            trace = MiniTrace(data=data, sampling=sampling_interval)
+        trace = _build_minitrace(MiniTrace, data, sampling_interval)
         log.info(
             "miniML: trace - %.3f s at %.0f Hz (%d samples)",
             float(time[-1] - time[0]),
@@ -450,8 +494,8 @@ def run_miniml_events_wrapper(
     ``Std_IEI_ms``            Standard deviation of IEI in milliseconds
     ``Mean_Score``            Mean miniML model confidence score (if available)
     ``Min_Score``             Minimum confidence score (quality filter proxy)
-    ``_event_times``          Per-event peak times (s) — drives marker overlay
-    ``_event_peaks``          Per-event amplitude values — drives marker overlay
+    ``_event_times``          Per-event peak times (s) - drives marker overlay
+    ``_event_peaks``          Per-event amplitude values - drives marker overlay
     ``_event_scores``         Per-event confidence scores list (private)
     ``_event_amplitudes``     Per-event amplitudes list (private, same as peaks)
     ========================  ================================================
