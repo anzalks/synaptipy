@@ -18,10 +18,10 @@ license details.
 """
 
 import logging
+import sys
 from typing import Optional
 
-from PySide6 import QtCore, QtWidgets
-from PySide6.QtCore import QCoreApplication, QEventLoop
+from PySide6 import QtCore, QtGui, QtWidgets
 
 log = logging.getLogger(__name__)
 
@@ -160,10 +160,9 @@ class AnalysisStatusWindow(QtWidgets.QWidget):
         # --- Log text area ---
         self._log_text = QtWidgets.QTextEdit()
         self._log_text.setReadOnly(True)
-        font = self._log_text.font()
-        font.setFamily("Courier New")
-        font.setStyleHint(font.StyleHint.Monospace)
-        font.setPointSize(9)
+        self._log_text.document().setMaximumBlockCount(5000)
+        font = QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.SystemFont.FixedFont)
+        font.setPointSize(11 if sys.platform == "darwin" else 10)
         self._log_text.setFont(font)
         self._log_text.setLineWrapMode(QtWidgets.QTextEdit.LineWrapMode.WidgetWidth)
         layout.addWidget(self._log_text, stretch=1)
@@ -236,19 +235,18 @@ class AnalysisStatusWindow(QtWidgets.QWidget):
                 colour = hex_colour
                 break
 
+        escaped = msg.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         if colour:
-            escaped = msg.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
             self._log_text.append(f'<span style="color:{colour};">{escaped}</span>')
         else:
-            self._log_text.append(msg)
+            default_fg = self.palette().color(QtGui.QPalette.ColorRole.Text).name()
+            self._log_text.append(f'<span style="color:{default_fg};">{escaped}</span>')
 
         sb = self._log_text.verticalScrollBar()
         sb.setValue(sb.maximum())
         self._entry_count += 1
         self._entry_count_label.setText(f"{self._entry_count} entries")
         self._status_bar_label.setText(msg.split("\n")[0])
-        if self.isVisible():
-            QCoreApplication.processEvents(QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents)
 
     def _on_clear(self) -> None:
         """Clear the log text and reset entry count."""

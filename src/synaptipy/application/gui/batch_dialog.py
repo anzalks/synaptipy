@@ -123,10 +123,10 @@ class PipelineStepWidget(QtWidgets.QFrame):
         layout.setSpacing(8)
 
         # Step number
-        step_label = QtWidgets.QLabel(f"#{self.step_index + 1}")
-        step_label.setMinimumWidth(30)
-        style_label(step_label, "subheading")
-        layout.addWidget(step_label)
+        self.step_label = QtWidgets.QLabel(f"#{self.step_index + 1}")
+        self.step_label.setMinimumWidth(30)
+        style_label(self.step_label, "subheading")
+        layout.addWidget(self.step_label)
 
         # Analysis name
         analysis_name = self.step_config.get("analysis", "Unknown")
@@ -158,6 +158,12 @@ class PipelineStepWidget(QtWidgets.QFrame):
         remove_btn.setToolTip("Remove this step")
         remove_btn.clicked.connect(lambda: self.remove_requested.emit(self))
         layout.addWidget(remove_btn)
+
+    def update_index(self, new_index: int) -> None:
+        """Refresh the 1-based step badge after drag-reorder or deletion."""
+        self.step_index = new_index
+        if hasattr(self, "step_label") and self.step_label is not None:
+            self.step_label.setText(f"#{new_index + 1}")
 
     def get_config(self) -> Dict[str, Any]:
         """Return the step configuration."""
@@ -193,27 +199,30 @@ class AddStepDialog(QtWidgets.QDialog):
         preprocessing_names = sorted(AnalysisRegistry.list_preprocessing())
 
         # Populate combo with parent analyses and expand method_selector children (HIGH-9)
+        child_ids = set()
+        for name in analysis_names:
+            meta = AnalysisRegistry.get_metadata(name)
+            ms = meta.get("method_selector") if meta else None
+            if isinstance(ms, dict):
+                child_ids.update(ms.values())
+
         if analysis_names or preprocessing_names:
             if analysis_names:
                 for name in analysis_names:
-                    meta = AnalysisRegistry.get_metadata(name)
-                    # Check if this is a parent module with method_selector
+                    meta = AnalysisRegistry.get_metadata(name) or {}
                     method_selector = meta.get("method_selector")
                     if method_selector:
-                        # Add separator and child methods
                         self.analysis_combo.insertSeparator(self.analysis_combo.count())
                         label = meta.get("label", name)
-                        self.analysis_combo.addItem(f"── {label} ──")
+                        self.analysis_combo.addItem(f"-- {label} --")
                         self.analysis_combo.setItemData(self.analysis_combo.count() - 1, None, QtCore.Qt.UserRole)
-                        # Make it non-selectable
                         idx = self.analysis_combo.count() - 1
                         self.analysis_combo.model().item(idx).setEnabled(False)
-                        # Add child analyses
                         for display_name, child_id in method_selector.items():
                             self.analysis_combo.addItem(f"  {display_name}", userData=child_id)
-                    else:
-                        # Regular analysis
-                        self.analysis_combo.addItem(name, userData=name)
+                    elif name not in child_ids:
+                        label = meta.get("label", name)
+                        self.analysis_combo.addItem(label, userData=name)
             if preprocessing_names:
                 self.analysis_combo.insertSeparator(self.analysis_combo.count())
                 for name in preprocessing_names:
@@ -383,51 +392,100 @@ class AddStepDialog(QtWidgets.QDialog):
         # Add common parameter widgets based on analysis type
         self._add_parameter_widgets(analysis_name)
 
-    def _add_parameter_widgets(self, analysis_name: str):
+    def _add_parameter_widgets(self, analysis_name: str):  # noqa: C901
         """Add parameter widgets based on the analysis type."""
-        # Get metadata from registry
-        metadata = AnalysisRegistry.get_metadata(analysis_name)
+        metadata = AnalysisRegistry.get_metadata(analysis_name) or {}
         ui_params = metadata.get("ui_params", [])
+        self._param_defs = list(ui_params)
 
-        if ui_params:
-            for param in ui_params:
-                param_type = param.get("type", "float")
-                name = param.get("name")
-                label = param.get("label", name)
+        if not ui_params:
+            return
 
-                if param_type == "float":
-                    default = param.get("default", 0.0)
-                    min_val = param.get("min", -10000.0)
-                    max_val = param.get("max", 10000.0)
-                    decimals = param.get("decimals", 2)
-                    self._add_param(name, label, default, min_val, max_val, decimals)
+        for param in ui_params:
+            if param.get("hidden", False):
+                continue
+            param_type = param.get("type", "float")
+            name = param.get("name")
+            label = param.get("label", name)
+            tooltip = param.get("tooltip", "")
 
-                elif param_type == "choice":
-                    choices = param.get("choices", [])
-                    default = param.get("default")
+            if param_type == "float":
+                default = float(param.get("default", 0.0))
+                min_val = float(param.get("min", -1e9))
+                max_val = float(param.get("max", 1e9))
+                decimals = int(param.get("decimals", 2))
+                self._add_param(name, label, default, min_val, max_val, decimals, tooltip=tooltip)
 
-                    combo = QtWidgets.QComboBox()
-                    combo.addItems(choices)
-                    if default and default in choices:
-                        combo.setCurrentText(default)
+            elif param_type == "int":
+                spin = QtWidgets.QSpinBox()
+                spin.setRange(int(param.get("min", -1000000)), int(param.get("max", 1000000)))
+                spin.setSingleStep(int(param.get("step", 1)))
+                spin.setValue(int(param.get("default", 0)))
+                if tooltip:
+                    spin.setToolTip(tooltip)
+                spin.valueChanged.connect(self._update_conditional_param_visibility)
+                self.params_layout.addRow(label, spin)
+                self.param_widgets[name] = spin
 
-                    self.params_layout.addRow(label, combo)
-                    self.param_widgets[name] = combo
+            elif param_type in ("choice", "combo"):
+                raw_choices = param.get("choices") or param.get("options") or []
+                choices = [str(c) for c in raw_choices]
+                default = str(param.get("default", ""))
 
-                elif param_type == "bool":
-                    checkbox = QtWidgets.QCheckBox()
-                    checkbox.setChecked(bool(param.get("default", False)))
-                    self.params_layout.addRow(label, checkbox)
-                    self.param_widgets[name] = checkbox
+                combo = QtWidgets.QComboBox()
+                combo.addItems(choices)
+                if default and default in choices:
+                    combo.setCurrentText(default)
+                if tooltip:
+                    combo.setToolTip(tooltip)
+                combo.currentTextChanged.connect(self._update_conditional_param_visibility)
+                self.params_layout.addRow(label, combo)
+                self.param_widgets[name] = combo
 
-                elif param_type in ("string", "str"):
-                    line_edit = QtWidgets.QLineEdit()
-                    line_edit.setText(str(param.get("default", "")))
-                    tooltip = param.get("tooltip", "")
-                    if tooltip:
-                        line_edit.setToolTip(tooltip)
-                    self.params_layout.addRow(label, line_edit)
-                    self.param_widgets[name] = line_edit
+            elif param_type == "bool":
+                checkbox = QtWidgets.QCheckBox()
+                checkbox.setChecked(bool(param.get("default", False)))
+                if tooltip:
+                    checkbox.setToolTip(tooltip)
+                checkbox.toggled.connect(self._update_conditional_param_visibility)
+                self.params_layout.addRow(label, checkbox)
+                self.param_widgets[name] = checkbox
+
+            elif param_type in ("string", "str", "filepath", "dirpath"):
+                line_edit = QtWidgets.QLineEdit()
+                line_edit.setText(str(param.get("default", "")))
+                if tooltip:
+                    line_edit.setToolTip(tooltip)
+                self.params_layout.addRow(label, line_edit)
+                self.param_widgets[name] = line_edit
+
+        self._update_conditional_param_visibility()
+
+    def _update_conditional_param_visibility(self, *_args):
+        """Show/hide conditional batch parameters governed by visible_when rules."""
+        for param in getattr(self, "_param_defs", []):
+            vis_rule = param.get("visible_when")
+            name = param.get("name")
+            widget = self.param_widgets.get(name)
+            if not isinstance(vis_rule, dict) or widget is None or "param" not in vis_rule:
+                continue
+            ctrl_widget = self.param_widgets.get(vis_rule["param"])
+            if ctrl_widget is None:
+                continue
+            if isinstance(ctrl_widget, QtWidgets.QCheckBox):
+                cur_val = ctrl_widget.isChecked()
+            elif isinstance(ctrl_widget, QtWidgets.QComboBox):
+                cur_val = ctrl_widget.currentText()
+            elif isinstance(ctrl_widget, (QtWidgets.QSpinBox, QtWidgets.QDoubleSpinBox)):
+                cur_val = ctrl_widget.value()
+            else:
+                cur_val = None
+            expected = vis_rule.get("value")
+            visible = cur_val in expected if isinstance(expected, (list, tuple, set)) else (cur_val == expected)
+            try:
+                self.params_layout.setRowVisible(widget, bool(visible))
+            except RuntimeError:
+                pass
 
     def _on_scope_changed(self, button):
         """Show/hide trial index input based on scope selection."""
@@ -435,13 +493,24 @@ class AddStepDialog(QtWidgets.QDialog):
         self.trial_index_group.setVisible(scope_id == "specific_trial")
         self.selected_trials_group.setVisible(scope_id in ("selected_trials", "selected_trials_average"))
 
-    def _add_param(self, name: str, label: str, default: float, min_val: float, max_val: float, decimals: int):
+    def _add_param(
+        self,
+        name: str,
+        label: str,
+        default: float,
+        min_val: float,
+        max_val: float,
+        decimals: int,
+        tooltip: str = "",
+    ):
         """Add a numeric parameter input."""
         spinbox = QtWidgets.QDoubleSpinBox()
         spinbox.setRange(min_val, max_val)
         spinbox.setDecimals(decimals)
         spinbox.setValue(default)
-        spinbox.setSingleStep(10 ** (-decimals))
+        spinbox.setSingleStep(10 ** (-min(decimals, 4)))
+        if tooltip:
+            spinbox.setToolTip(tooltip)
         self.params_layout.addRow(label, spinbox)
         self.param_widgets[name] = spinbox
 

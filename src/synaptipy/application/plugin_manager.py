@@ -28,6 +28,7 @@ import importlib.resources
 import importlib.util
 import logging
 import os
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -43,6 +44,41 @@ log = logging.getLogger(__name__)
 PLUGIN_DIR = Path.home() / ".synaptipy" / "plugins"
 
 _THIS_FILE = Path(__file__).resolve()
+
+_LEGACY_SYNAPTIPY_IMPORT_RE = re.compile(r"^\s*(?:from|import)\s+Synaptipy\b", re.MULTILINE)
+
+
+def _has_legacy_capital_synaptipy_import(p_file: Path) -> bool:
+    """Return True if *p_file* imports legacy capitalized ``Synaptipy``."""
+    try:
+        text = p_file.read_text(encoding="utf-8", errors="ignore")
+        return bool(_LEGACY_SYNAPTIPY_IMPORT_RE.search(text))
+    except OSError:
+        return False
+
+
+def _rewrite_legacy_synaptipy_imports(source: str) -> str:
+    """Rewrite legacy ``Synaptipy`` import statements to lowercase ``synaptipy`` in memory."""
+    patched = re.sub(r"^(\s*from\s+)Synaptipy(\b)", r"\1synaptipy\2", source, flags=re.MULTILINE)
+    patched = re.sub(
+        r"^(\s*import\s+)Synaptipy(\.[A-Za-z0-9_.]+)(\s+as\s+[A-Za-z_][A-Za-z0-9_]*)",
+        r"\1synaptipy\2\3",
+        patched,
+        flags=re.MULTILINE,
+    )
+    patched = re.sub(
+        r"^(\s*import\s+)Synaptipy(\s+as\s+[A-Za-z_][A-Za-z0-9_]*)",
+        r"\1synaptipy\2",
+        patched,
+        flags=re.MULTILINE,
+    )
+    patched = re.sub(
+        r"^(\s*import\s+)Synaptipy(\s*(?:#.*)?)$",
+        r"\1synaptipy as Synaptipy\2",
+        patched,
+        flags=re.MULTILINE,
+    )
+    return patched
 
 
 def _get_settings() -> QSettings:
@@ -138,17 +174,20 @@ class PluginManager:
             log.error(f"Failed to create plugin directory {PLUGIN_DIR}: {e}")
 
     @classmethod
-    def get_plugin_files(cls) -> List[Path]:
+    def get_plugin_files(cls) -> List[Path]:  # noqa: C901
         """
         Returns a deduplicated list of plugin ``.py`` files from both
         ``examples/plugins/`` (if found) and ``~/.synaptipy/plugins/``.
 
-        The user directory takes precedence: if a file with the same stem
-        exists in both locations, the examples copy is skipped and a warning
-        is emitted so the author knows their local version is active.
+        The user directory takes precedence unless a user file is an outdated
+        pre-rename copy (importing ``Synaptipy``) of an updated bundled example.
         A missing bundled plugin dir is silently ignored.
         """
         bundled_dir = _get_bundled_plugin_dir()
+        bundled_map = {}
+        if bundled_dir is not None and bundled_dir.exists() and bundled_dir.is_dir():
+            bundled_map = {p.stem: p for p in sorted(bundled_dir.glob("*.py")) if p.name != "__init__.py"}
+
         search_dirs = ([bundled_dir] if bundled_dir is not None else []) + [PLUGIN_DIR]
         seen_stems: dict = {}  # stem -> Path that claimed it first (user wins)
         result: List[Path] = []
@@ -157,10 +196,23 @@ class PluginManager:
         for search_dir in reversed(search_dirs):
             if not (search_dir.exists() and search_dir.is_dir()):
                 continue
+            is_user_dir = search_dir.resolve() == PLUGIN_DIR.resolve()
             for p_file in sorted(search_dir.glob("*.py")):
                 if p_file.name == "__init__.py":
                     continue
                 stem = p_file.stem
+                if is_user_dir and stem in bundled_map:
+                    bundled_file = bundled_map[stem]
+                    if _has_legacy_capital_synaptipy_import(p_file) and not _has_legacy_capital_synaptipy_import(
+                        bundled_file
+                    ):
+                        log.info(
+                            "Skipping outdated pre-rename plugin copy '%s' in %s in favor of "
+                            "updated bundled plugin (use Help -> Download Example Plugins to refresh).",
+                            p_file.name,
+                            search_dir,
+                        )
+                        continue
                 if stem in seen_stems:
                     log.warning(
                         "Plugin name collision: '%s' in %s is shadowed by the "
@@ -176,7 +228,7 @@ class PluginManager:
         return result
 
     @classmethod
-    def _load_single_plugin(cls, p_file: Path) -> Optional[PluginLoadFailure]:
+    def _load_single_plugin(cls, p_file: Path) -> Optional[PluginLoadFailure]:  # noqa: C901
         """Attempt to import one plugin file without stopping other plugins."""
         # A plugin can execute registration decorators before a later import or
         # top-level statement fails.  Keep a complete registry snapshot so a
@@ -210,6 +262,35 @@ class PluginManager:
             cls._restore_registry_after_failed_plugin(
                 AnalysisRegistry, registry_before, metadata_before, original_metadata_before, module_name
             )
+            missing_mod = str(getattr(e, "name", "") or "")
+            if missing_mod == "Synaptipy" or missing_mod.startswith("Synaptipy.") or "'Synaptipy'" in str(e):
+                try:
+                    raw_src = p_file.read_text(encoding="utf-8")
+                    migrated_src = _rewrite_legacy_synaptipy_imports(raw_src)
+                    if migrated_src != raw_src:
+                        spec = importlib.util.spec_from_file_location(module_name, str(p_file))
+                        if spec is not None:
+                            compat_mod = importlib.util.module_from_spec(spec)
+                            sys.modules[module_name] = compat_mod
+                            exec(compile(migrated_src, str(p_file), "exec"), compat_mod.__dict__)
+                            log.warning(
+                                "Loaded legacy plugin '%s' by mapping 'Synaptipy' imports to lowercase "
+                                "'synaptipy'. Update imports in %s or use Help -> Download Example Plugins.",
+                                p_file.name,
+                                p_file,
+                            )
+                            return None
+                except Exception as compat_err:
+                    cls._restore_registry_after_failed_plugin(
+                        AnalysisRegistry, registry_before, metadata_before, original_metadata_before, module_name
+                    )
+                    log.error(
+                        "Legacy import compatibility failed for '%s': %s",
+                        p_file.name,
+                        compat_err,
+                        exc_info=False,
+                    )
+                    return PluginLoadFailure(p_file, f"{type(compat_err).__name__}: {compat_err}")
             log.error(f"ImportError while loading plugin '{p_file.name}': {e}", exc_info=False)
             return PluginLoadFailure(p_file, f"ImportError: {e}")
         except SyntaxError as e:
@@ -250,7 +331,7 @@ class PluginManager:
         return hasher.hexdigest()
 
     @classmethod
-    def _warn_user_plugins(cls, user_plugin_files: List[Path]) -> bool:
+    def _warn_user_plugins(cls, user_plugin_files: List[Path]) -> bool:  # noqa: C901
         """Show a one-time security warning when user plugins are about to be loaded.
 
         User-provided code in ``~/.synaptipy/plugins/`` is executed with the
@@ -279,6 +360,7 @@ class PluginManager:
             return False
 
         try:
+            from PySide6 import QtCore
             from PySide6.QtWidgets import QApplication, QMessageBox
 
             app = QApplication.instance()
@@ -293,7 +375,14 @@ class PluginManager:
                 )
                 return True
 
-            msg = QMessageBox()
+            parent_win = app.activeWindow()
+            if parent_win is None:
+                for widget in app.topLevelWidgets():
+                    if widget.isVisible():
+                        parent_win = widget
+                        break
+            msg = QMessageBox(parent_win)
+            msg.setWindowFlag(QtCore.Qt.WindowType.WindowStaysOnTopHint, True)
             msg.setWindowTitle("Plugin Security Warning")
             msg.setIcon(QMessageBox.Icon.Warning)
             msg.setText("<b>External plugins detected in ~/.synaptipy/plugins/</b>")

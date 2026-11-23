@@ -454,14 +454,10 @@ class ExplorerTab(QtWidgets.QWidget):
         self.undo_btn.clicked.connect(self.plot_canvas.undo_last_cursor)
         self.clear_btn.clicked.connect(self.plot_canvas.clear_all_cursors)
 
-        # Global plot-customization signal — propagate pen/brush changes to Explorer canvas
+        # Global plot-customization signal - propagate pen/brush changes to Explorer canvas
         from synaptipy.shared.plot_customization import get_plot_customization_signals
 
         get_plot_customization_signals().preferences_updated.connect(self.update_plot_pens)
-
-        # Analysis Buttons
-        self.add_analysis_btn.clicked.connect(self._add_selection_to_analysis_set)
-        self.clear_analysis_btn.clicked.connect(self._clear_analysis_set)
 
         # Enable/disable the avg button whenever the project-tree selection changes
         if hasattr(self.sidebar, "project_tree") and self.sidebar.project_tree is not None:
@@ -564,13 +560,27 @@ class ExplorerTab(QtWidgets.QWidget):
             plot_item.removeItem(self.active_scatter_items[item_key])
 
         if result.spike_times is not None and len(result.spike_times) > 0:
+            from synaptipy.shared.plot_customization import (
+                get_scatter_pen_and_brush,
+                get_scatter_size,
+                get_scatter_symbol,
+            )
+
             threshold = result.parameters.get("threshold", 0)
             x_vals, y_vals = self._resolve_peak_y_values(
                 cid, trial_idx, result.spike_times, result.spike_indices, threshold
             )
+            s_pen, s_brush = get_scatter_pen_and_brush()
             scatter = pg.ScatterPlotItem(
-                x=x_vals, y=y_vals, pen=pg.mkPen(None), brush=pg.mkBrush("r"), size=10, pxMode=True
+                x=x_vals,
+                y=y_vals,
+                pen=s_pen,
+                brush=s_brush,
+                size=get_scatter_size(),
+                symbol=get_scatter_symbol(),
+                pxMode=True,
             )
+            scatter._synaptipy_role = "scatter_markers"
             plot_item.addItem(scatter)
             self.active_scatter_items[item_key] = scatter
 
@@ -837,7 +847,9 @@ class ExplorerTab(QtWidgets.QWidget):
                     if cid in self.plot_canvas.channel_plots:
                         plot = self.plot_canvas.channel_plots[cid]
                         if plot and plot.isVisible():
-                            self._explorer_set_xy_ranges_with_y_autoscale(plot, ranges[0], ranges[1])
+                            self._explorer_set_xy_ranges_with_y_autoscale(
+                                plot, ranges[0], ranges[1], preserve_manual_y=True
+                            )
                 restored_view = True
                 # Clear after use
                 self._pending_view_state = None
@@ -1107,9 +1119,9 @@ class ExplorerTab(QtWidgets.QWidget):
             # Function to apply common item settings
             def _apply_item_opts(item, is_ds):
                 if hasattr(item, "setDownsampling"):
-                    item.setDownsampling(ds=ds_factor if is_ds else 1, auto=False, method=ds_method)
+                    item.setDownsampling(ds=ds_factor if is_ds else 1, auto=bool(is_ds), method=ds_method)
                 if hasattr(item, "opts"):
-                    item.opts["autoDownsample"] = False
+                    item.opts["autoDownsample"] = bool(is_ds)
                     item.opts["downsample"] = ds_factor if is_ds else 1
                     item.opts["downsampleMethod"] = ds_method
                 if hasattr(item, "setClipToView"):
@@ -1138,7 +1150,7 @@ class ExplorerTab(QtWidgets.QWidget):
                         line = existing_items[item_index]
                         line.setData(x=t, y=data)
                         line.setPen(pen)
-                        if name is not None and hasattr(line, "opts"):
+                        if hasattr(line, "opts"):
                             line.opts["name"] = name
                         line.show()
                     else:
@@ -1147,8 +1159,8 @@ class ExplorerTab(QtWidgets.QWidget):
                         else:
                             line = plot_item.plot(t, data, pen=pen)
                         existing_items.append(line)
-                    if z_value is not None:
-                        line.setZValue(z_value)
+                    line.setZValue(z_value if z_value is not None else 0)
+                    line._synaptipy_raw_xy = (t, data)
                     _apply_item_opts(line, ds_enabled)
                     item_index += 1
 
@@ -1208,10 +1220,11 @@ class ExplorerTab(QtWidgets.QWidget):
 
                     # 2. Plot Average on Top
                     try:
-                        avg_data = channel.get_averaged_data(
-                            trial_indices=list(self.selected_trial_indices) if self.selected_trial_indices else None
-                        )
-                        avg_t = channel.get_relative_averaged_time_vector()
+                        sel_indices = list(self.selected_trial_indices) if self.selected_trial_indices else None
+                        avg_data = channel.get_averaged_data(trial_indices=sel_indices)
+                        avg_t = channel.get_relative_averaged_time_vector(trial_indices=sel_indices)
+                        if not isinstance(avg_t, np.ndarray) and avg_data is not None:
+                            avg_t = channel.get_relative_time_vector(0)
 
                         # APPLY PREPROCESSING (via Pipeline - same as trials)
                         if avg_data is not None:
@@ -1274,7 +1287,7 @@ class ExplorerTab(QtWidgets.QWidget):
                                     line = existing_items[item_index]
                                     line.setData(x=t, y=data)
                                     line.setPen(pen)
-                                    if name is not None and hasattr(line, "opts"):
+                                    if hasattr(line, "opts"):
                                         line.opts["name"] = name
                                     line.show()
                                 else:
@@ -1283,8 +1296,8 @@ class ExplorerTab(QtWidgets.QWidget):
                                     else:
                                         line = plot_item.plot(t, data, pen=pen)
                                     existing_items.append(line)
-                                if z_value is not None:
-                                    line.setZValue(z_value)
+                                line.setZValue(z_value if z_value is not None else 0)
+                                line._synaptipy_raw_xy = (t, data)
                                 _apply_item_opts(line, ds_enabled)
                                 item_index += 1
 
@@ -1328,7 +1341,11 @@ class ExplorerTab(QtWidgets.QWidget):
                     for cid, state in view_state.items():
                         plot = self.plot_canvas.get_plot(cid)
                         if plot and plot.isVisible():
-                            self._explorer_set_xy_ranges_with_y_autoscale(plot, state[0], state[1])
+                            vb = plot.getViewBox()
+                            manual_y = bool(getattr(vb, "_synaptipy_manual_y", False))
+                            self._explorer_set_xy_ranges_with_y_autoscale(
+                                plot, state[0], state[1], preserve_manual_y=manual_y
+                            )
                 finally:
                     for vb in _vboxes:
                         vb.blockLink(False)
@@ -1366,7 +1383,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self.plot_canvas.selected_average_plot_items.clear()
 
     def update_plot_pens(self):  # noqa: C901
-        """Update plot pens when customization preferences change."""
+        """Update plot pens, grid visibility, and scatter markers when customization preferences change."""
         # Prevent re-entrant calls
         if getattr(self, "_is_updating_pens", False):
             return
@@ -1376,31 +1393,73 @@ class ExplorerTab(QtWidgets.QWidget):
 
         self._is_updating_pens = True
         try:
-            from synaptipy.shared.plot_customization import get_average_pen, get_single_trial_pen
+            from synaptipy.shared.plot_customization import (
+                get_average_pen,
+                get_grid_pen,
+                get_scatter_pen_and_brush,
+                get_scatter_size,
+                get_scatter_symbol,
+                get_single_trial_pen,
+                is_grid_enabled,
+            )
 
             # Get pens once (cached in customization manager)
             avg_pen = get_average_pen()
             trial_pen = get_single_trial_pen()
+            grid_on = is_grid_enabled()
+            grid_pen = get_grid_pen()
+            grid_alpha = (
+                (grid_pen.color().alpha() / 255.0) if (grid_pen is not None and hasattr(grid_pen, "color")) else 0.3
+            )
+
+            # Update grid visibility on all plots
+            for plot_widget in self.plot_canvas.channel_plots.values():
+                if plot_widget is None:
+                    continue
+                try:
+                    if grid_on and grid_pen is not None:
+                        plot_widget.showGrid(x=True, y=True, alpha=grid_alpha)
+                    else:
+                        plot_widget.showGrid(x=False, y=False)
+                except Exception as e:
+                    log.debug(f"Could not update grid on plot: {e}")
 
             # Update existing plot item pens
             for cid, items in self.plot_canvas.channel_plot_data_items.items():
                 if not items:
                     continue
 
-                # Optimization: Skip hidden plots
                 plot_widget = self.plot_canvas.channel_plots.get(cid)
                 if not plot_widget or not plot_widget.isVisible():
                     continue
 
                 for item in items:
                     try:
-                        # Check if this is an average plot
-                        if hasattr(item, "name") and item.name() == "Average":
+                        item_name = None
+                        if hasattr(item, "opts") and isinstance(item.opts, dict):
+                            item_name = item.opts.get("name")
+                        if item_name is None and hasattr(item, "name"):
+                            item_name = item.name()
+                        if item_name in ("Average", "Global Average"):
                             item.setPen(avg_pen)
                         else:
                             item.setPen(trial_pen)
                     except Exception as e:
                         log.debug(f"Could not update pen for plot item: {e}")
+
+            # Update live-analysis scatter markers
+            if hasattr(self, "active_scatter_items") and self.active_scatter_items:
+                s_pen, s_brush = get_scatter_pen_and_brush()
+                s_size = get_scatter_size()
+                s_sym = get_scatter_symbol()
+                for scatter in self.active_scatter_items.values():
+                    try:
+                        scatter.setPen(s_pen)
+                        scatter.setBrush(s_brush)
+                        scatter.setSize(s_size)
+                        scatter.setSymbol(s_sym)
+                    except Exception as e:
+                        log.debug(f"Could not update scatter marker style: {e}")
 
             # Single repaint after all pens updated
             if self.plot_canvas.widget:
@@ -1845,20 +1904,28 @@ class ExplorerTab(QtWidgets.QWidget):
             self._file_nav_timer.start()  # restart coalesces rapid clicks
 
     def _explorer_set_xy_ranges_with_y_autoscale(
-        self, plot: pg.PlotItem, xrange_tuple: tuple, yrange_tuple: tuple
+        self,
+        plot: pg.PlotItem,
+        xrange_tuple: tuple,
+        yrange_tuple: tuple,
+        preserve_manual_y: bool = False,
     ) -> None:
-        """Apply explicit X/Y ranges, then let Y track data in the visible X window."""
+        """Apply explicit X/Y ranges, keeping manual Y if locked or letting Y track visible X."""
         vb = plot.getViewBox()
         if vb:
             vb.enableAutoRange(x=False, y=False)
         plot.setXRange(xrange_tuple[0], xrange_tuple[1], padding=0)
         plot.setYRange(yrange_tuple[0], yrange_tuple[1], padding=0)
         if vb:
-            self.plot_canvas.apply_explorer_y_follow_visible_x(vb)
-            try:
-                vb.updateAutoRange()
-            except Exception:
-                pass
+            if preserve_manual_y:
+                vb._synaptipy_manual_y = True
+                vb.enableAutoRange(x=False, y=False)
+            else:
+                self.plot_canvas.apply_explorer_y_follow_visible_x(vb)
+                try:
+                    vb.updateAutoRange()
+                except Exception:
+                    pass
 
     def _execute_pending_file_nav(self):
         """Slot called by the debounce timer: load the last-requested file."""
@@ -2046,14 +2113,6 @@ class ExplorerTab(QtWidgets.QWidget):
             center = (total_min + total_max) / 2
         else:
             scroll_ratio = scroll_val / scroll_max
-            # Apply scroll direction inversion based on user preference
-            try:
-                from synaptipy.shared.scroll_settings import is_scroll_inverted
-
-                if is_scroll_inverted():
-                    scroll_ratio = 1.0 - scroll_ratio
-            except ImportError:
-                pass
             center = min_center + (max_center - min_center) * scroll_ratio
 
         new_min = center - visible_span / 2
@@ -2115,15 +2174,6 @@ class ExplorerTab(QtWidgets.QWidget):
             scroll_val = scroll_max // 2
         else:
             scroll_ratio = (center - min_center) / (max_center - min_center)
-            # Mirror the inversion applied in _calculate_visible_range so that
-            # mouse-zoom/pan and slider-zoom/pan remain mutually consistent.
-            try:
-                from synaptipy.shared.scroll_settings import is_scroll_inverted
-
-                if is_scroll_inverted():
-                    scroll_ratio = 1.0 - scroll_ratio
-            except ImportError:
-                pass
             scroll_val = int(scroll_ratio * scroll_max)
             scroll_val = max(0, min(scroll_max, scroll_val))
 
@@ -2147,10 +2197,14 @@ class ExplorerTab(QtWidgets.QWidget):
 
         # Store in slot format (baseline slot + filters dict keyed by method)
         if step_type == "baseline":
-            self._active_preprocessing_settings["baseline"] = settings
-            # Pipeline: remove old baseline, add new
-            self.pipeline.remove_step_by_type("baseline")
-            self.pipeline.add_step(settings)
+            if settings.get("method") == "none":
+                self._active_preprocessing_settings.pop("baseline", None)
+                self.pipeline.remove_step_by_type("baseline")
+            else:
+                self._active_preprocessing_settings["baseline"] = settings
+                # Pipeline: remove old baseline, add new
+                self.pipeline.remove_step_by_type("baseline")
+                self.pipeline.add_step(settings)
         elif step_type == "filter":
             filter_method = settings.get("method", "unknown")
             if "filters" not in self._active_preprocessing_settings:
@@ -2160,8 +2214,17 @@ class ExplorerTab(QtWidgets.QWidget):
             # Pipeline: rebuild from all filters to ensure correct order
             self._rebuild_pipeline_from_settings()
 
-        # Notify SessionManager for global preprocessing state
-        self.session_manager.preprocessing_settings = settings
+        if not self._active_preprocessing_settings.get("baseline") and not self._active_preprocessing_settings.get(
+            "filters"
+        ):
+            self._active_preprocessing_settings = None
+
+        # Notify SessionManager with full accumulated preprocessing state (not just single step)
+        import copy
+
+        self.session_manager.preprocessing_settings = (
+            copy.deepcopy(self._active_preprocessing_settings) if self._active_preprocessing_settings else None
+        )
 
         # Trigger update
         self.preprocessing_widget.set_processing_state(True)
@@ -2193,6 +2256,7 @@ class ExplorerTab(QtWidgets.QWidget):
         self._cache_dirty = True
         self._active_preprocessing_settings = None  # Clear slot-based settings
         self.pipeline.clear()  # Clear pipeline
+        self.preprocessing_widget.reset_ui()
 
         # Notify SessionManager
         self.session_manager.preprocessing_settings = None
@@ -2305,8 +2369,12 @@ class ExplorerTab(QtWidgets.QWidget):
                 scroll_val = sb.value() if sb is not None else global_scroll_val
 
                 new_min, new_max = self._calculate_visible_range(base_range[0], base_range[1], value, scroll_val)
+                vb = plot.getViewBox()
+                if vb:
+                    vb._synaptipy_manual_y = True
+                    vb.enableAutoRange(y=False)
                 plot.setYRange(new_min, new_max, padding=0)
-                # Do NOT overwrite individual scrollbar — preserve each channel's scroll offset
+                # Do NOT overwrite individual scrollbar - preserve each channel's scroll offset
 
         finally:
             self._updating_viewranges = False
@@ -2328,6 +2396,10 @@ class ExplorerTab(QtWidgets.QWidget):
                     continue
 
                 new_min, new_max = self._calculate_visible_range(base_range[0], base_range[1], zoom_val, value)
+                vb = plot.getViewBox()
+                if vb:
+                    vb._synaptipy_manual_y = True
+                    vb.enableAutoRange(y=False)
                 plot.setYRange(new_min, new_max, padding=0)
                 self.y_controls.set_individual_scrollbar(cid, value)
 
@@ -2360,6 +2432,10 @@ class ExplorerTab(QtWidgets.QWidget):
             new_min, new_max = self._calculate_visible_range(base_range[0], base_range[1], val, scroll_val)
             plot = self.plot_canvas.get_plot(cid)
             if plot:
+                vb = plot.getViewBox()
+                if vb:
+                    vb._synaptipy_manual_y = True
+                    vb.enableAutoRange(y=False)
                 plot.setYRange(new_min, new_max, padding=0)
 
         finally:
@@ -2386,6 +2462,10 @@ class ExplorerTab(QtWidgets.QWidget):
             new_min, new_max = self._calculate_visible_range(base_range[0], base_range[1], zoom_val, val)
             plot = self.plot_canvas.get_plot(cid)
             if plot:
+                vb = plot.getViewBox()
+                if vb:
+                    vb._synaptipy_manual_y = True
+                    vb.enableAutoRange(y=False)
                 plot.setYRange(new_min, new_max, padding=0)
 
         finally:

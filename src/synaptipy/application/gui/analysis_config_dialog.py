@@ -25,7 +25,7 @@ class AnalysisConfigDialog(QtWidgets.QDialog):
     def __init__(self, parent: Optional[QtWidgets.QWidget] = None):
         super().__init__(parent)
         self.setWindowTitle("Analysis Configuration")
-        self.resize(800, 600)
+        self.resize(940, 620)
 
         # Store widget generators to retrieve values
         self._generators: Dict[str, ParameterWidgetGenerator] = {}
@@ -49,6 +49,7 @@ class AnalysisConfigDialog(QtWidgets.QDialog):
 
         # Tab Widget for Analyses
         self.tab_widget = QtWidgets.QTabWidget()
+        self.tab_widget.setUsesScrollButtons(True)
         main_layout.addWidget(self.tab_widget)
 
         # Buttons
@@ -108,8 +109,9 @@ class AnalysisConfigDialog(QtWidgets.QDialog):
             # Use display name if available, else registered name
             display_name = name.replace("_", " ").title()
 
-            # Scroll area for long lists
+            # Scroll area for long lists (borderless inside QTabWidget)
             scroll = QtWidgets.QScrollArea()
+            scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
             scroll.setWidgetResizable(True)
             scroll.setWidget(page)
 

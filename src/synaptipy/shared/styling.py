@@ -251,18 +251,22 @@ def style_button(button, style="secondary"):
     """Apply a semantic button role while preserving the active Qt theme.
 
     ``secondary`` is intentionally the default: navigation, reset, save, and
-    utility controls must retain the neutral palette colour.  Only the single
-    explicit ``primary`` action in a workflow becomes Qt's default/accented
-    button.  The helper deliberately contains no fixed colours, so light,
-    dark, and system themes remain the source of truth.
+    utility controls must retain the neutral palette colour. Only explicit
+    ``primary`` or ``danger`` actions receive distinct semantic styling via
+    dynamic QSS properties on ``theme_manager``.
     """
     if style == "primary":
         button.setDefault(True)
     else:
-        # An analysis panel can be rebuilt after a primary button existed;
-        # explicitly clear the default state so ordinary controls never inherit
-        # the platform accent colour.
         button.setDefault(False)
+
+    if isinstance(button, QtWidgets.QWidget):
+        button.setProperty("buttonRole", style)
+        qstyle = button.style()
+        if qstyle is not None:
+            qstyle.unpolish(button)
+            qstyle.polish(button)
+        button.update()
     return button
 
 
@@ -272,7 +276,8 @@ def style_label(label, style="normal"):
     if style == "heading":
         font = label.font()
         font.setBold(True)
-        font.setPointSize(font.pointSize() + 2)
+        base_pt = font.pointSize()
+        font.setPointSize((base_pt if (isinstance(base_pt, int) and base_pt > 0) else 10) + 2)
         label.setFont(font)
     elif style == "subheading":
         font = label.font()

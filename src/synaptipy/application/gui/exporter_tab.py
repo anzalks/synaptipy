@@ -180,7 +180,7 @@ class ExporterTab(QtWidgets.QWidget):
         # Table for showing results
         self.analysis_results_table = QtWidgets.QTableWidget()
         self.analysis_results_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
-        self.analysis_results_table.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.MultiSelection)
+        self.analysis_results_table.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
         self.analysis_results_table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
         self.analysis_results_table.setColumnCount(6)
         self.analysis_results_table.setHorizontalHeaderLabels(
@@ -406,6 +406,15 @@ class ExporterTab(QtWidgets.QWidget):
             log.debug(f"Selected analysis results output path: {filepath_str}")
             self.update_state()
 
+    def showEvent(self, event):
+        """Auto-refresh saved analysis results whenever user switches to the Exporter tab."""
+        super().showEvent(event)
+        self._refresh_analysis_results()
+
+    def populate_saved_results(self):
+        """Public alias invoked by MainWindow.add_saved_result() for live table refresh."""
+        self._refresh_analysis_results()
+
     def _refresh_analysis_results(self):
         """Refreshes the table of available analysis results."""
         # Access the main window to get the saved analysis results
@@ -489,9 +498,14 @@ class ExporterTab(QtWidgets.QWidget):
     def _flatten_result(res: dict) -> dict:  # noqa: C901
         """Flatten a single result dict, expanding nested objects/dicts."""
         flat_res = dict(res)
+        flat_res.pop("schema_version", None)
         # Flatten consolidated-module schema: {"module_used": ..., "metrics": {...}}
         if isinstance(flat_res.get("metrics"), dict):
             for k, v in flat_res.pop("metrics").items():
+                if k not in flat_res:
+                    flat_res[k] = v
+        if isinstance(flat_res.get("specific_data"), dict):
+            for k, v in flat_res.pop("specific_data").items():
                 if k not in flat_res:
                     flat_res[k] = v
         nested_obj = flat_res.get("result")

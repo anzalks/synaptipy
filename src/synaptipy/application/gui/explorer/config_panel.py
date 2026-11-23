@@ -100,7 +100,10 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
         self.downsample_factor_spin = QtWidgets.QSpinBox()
         self.downsample_factor_spin.setRange(1, 1000)
         self.downsample_factor_spin.setValue(10)
-        self.downsample_factor_spin.setToolTip("Downsampling factor (e.g., 10 means 1 in 10 samples are plotted)")
+        self.downsample_factor_spin.setToolTip(
+            "Maximum peak-preserving downsampling factor when zoomed out; "
+            "automatically restores full sample resolution as you zoom in."
+        )
         self.downsample_factor_spin.valueChanged.connect(
             lambda _: self.downsample_toggled.emit(self.downsample_cb.isChecked())
         )
@@ -345,8 +348,7 @@ class ExplorerConfigPanel(QtWidgets.QWidget):
         if not recording:
             return
 
-        sorted_chans = sorted(recording.channels.items(), key=lambda x: str(x[0]))
-        for cid, chan in sorted_chans:
+        for cid, chan in recording.channels.items():
             name = f"{chan.name}" if chan.name else f"Ch {cid}"
             cb = QtWidgets.QCheckBox(name)
             cb.setChecked(True)

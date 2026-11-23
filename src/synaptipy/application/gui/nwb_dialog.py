@@ -86,7 +86,7 @@ class NwbMetadataDialog(QtWidgets.QDialog):
         uuid_layout = QtWidgets.QHBoxLayout()
         uuid_layout.addWidget(self.identifier)
         self.refresh_uuid_btn = QtWidgets.QPushButton("Gen UUID")
-        self.refresh_uuid_btn.setFixedWidth(70)
+        self.refresh_uuid_btn.setMinimumWidth(88)
         self.refresh_uuid_btn.clicked.connect(lambda: self.identifier.setText(str(uuid.uuid4())))
         uuid_layout.addWidget(self.refresh_uuid_btn)
 

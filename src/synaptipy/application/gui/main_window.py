@@ -7,7 +7,6 @@ Manages overall window structure, menu, status bar, tabs, and core adapters.
 
 import logging
 import sys
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
@@ -17,12 +16,10 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from synaptipy.application.controllers.file_io_controller import FileIOController
 from synaptipy.application.session_manager import SessionManager
 
-# --- Synaptipy Imports / Dummies ---
 # --- Synaptipy Imports ---
 from synaptipy.core.data_model import Recording
 from synaptipy.infrastructure.exporters import NWBExporter
 from synaptipy.infrastructure.file_readers import NeoAdapter
-from synaptipy.shared.error_handling import ExportError, SynaptipyError
 
 # Import the new DataLoader for background file loading
 from ..data_loader import DataLoader
@@ -173,39 +170,63 @@ class MainWindow(QtWidgets.QMainWindow):
         # Setup auto-save timer (MEDIUM-12)
         self._setup_autosave_timer()
 
-    def _setup_menu_and_status_bar(self):
-        """Creates the main menu bar and status bar, and connects menu actions."""
+    def _setup_menu_and_status_bar(self):  # noqa: C901
+        """Creates the main menu bar and status bar using each OS's native convention."""
+        import os
+
         log.debug("Setting up menu bar and status bar...")
         # --- Status Bar ---
         self.status_bar = QtWidgets.QStatusBar()
         self.setStatusBar(self.status_bar)
         # --- Menu Bar ---
+        # macOS (interactive Cocoa): keep the native macOS top-of-screen menu bar,
+        # while exposing Preferences/About in BOTH the macOS App menu and Edit/Help
+        # so CLI/Conda users and .app users always find every item effortlessly.
+        # Windows / Linux / offscreen CI: render an in-window menu bar.
         menu_bar = self.menuBar()
+        is_interactive_macos = sys.platform == "darwin" and os.environ.get("QT_QPA_PLATFORM") != "offscreen"
+        if not is_interactive_macos:
+            menu_bar.setNativeMenuBar(False)
+            menu_bar.setVisible(True)
+
         file_menu = menu_bar.addMenu("&File")
         # Open Action
         self.open_file_action = file_menu.addAction("&Open...")
         self.open_file_action.setShortcut(QtGui.QKeySequence.StandardKey.Open)
         self.open_file_action.setToolTip("Open a recording file (scans folder for siblings)")
+        self.open_file_action.setMenuRole(QtGui.QAction.MenuRole.NoRole)
         self.open_file_action.triggered.connect(self._open_file_dialog)
         # Export NWB Action
         self.export_nwb_action = file_menu.addAction("Export to &NWB...")
         self.export_nwb_action.setToolTip("Export the currently loaded data (in Explorer tab) to NWB format.")
+        self.export_nwb_action.setMenuRole(QtGui.QAction.MenuRole.NoRole)
         self.export_nwb_action.setEnabled(False)  # Initially disabled
         self.export_nwb_action.triggered.connect(self._export_to_nwb)
         file_menu.addSeparator()
         # Quit Action
         self.quit_action = file_menu.addAction("&Quit")
         self.quit_action.setShortcut(QtGui.QKeySequence.StandardKey.Quit)
+        if not is_interactive_macos:
+            self.quit_action.setMenuRole(QtGui.QAction.MenuRole.NoRole)
         self.quit_action.triggered.connect(self.close)
 
         # --- Edit Menu ---
         edit_menu = menu_bar.addMenu("&Edit")
 
-        # Preferences Action
+        if is_interactive_macos:
+            # Register standard macOS App-menu Settings/Preferences (Cmd+,) AND keep
+            # an explicit visible item inside Edit so both locations work on macOS.
+            self._macos_app_prefs_action = edit_menu.addAction("Preferences...")
+            self._macos_app_prefs_action.setShortcut(QtGui.QKeySequence.StandardKey.Preferences)
+            self._macos_app_prefs_action.setMenuRole(QtGui.QAction.MenuRole.PreferencesRole)
+            self._macos_app_prefs_action.triggered.connect(self._show_preferences)
+
+        # Preferences Action (always visible inside Edit on every OS)
         self.preferences_action = edit_menu.addAction("&Preferences...")
-        self.preferences_action.setShortcut(QtGui.QKeySequence.StandardKey.Preferences)
+        if not is_interactive_macos:
+            self.preferences_action.setShortcut(QtGui.QKeySequence.StandardKey.Preferences)
         self.preferences_action.setToolTip("Open application preferences")
-        self.preferences_action.setMenuRole(QtGui.QAction.MenuRole.PreferencesRole)
+        self.preferences_action.setMenuRole(QtGui.QAction.MenuRole.NoRole)
         self.preferences_action.triggered.connect(self._show_preferences)
 
         edit_menu.addSeparator()
@@ -213,16 +234,36 @@ class MainWindow(QtWidgets.QMainWindow):
         # Configure Analysis Defaults Action
         self.configure_analysis_action = edit_menu.addAction("&Configure Analysis Defaults...")
         self.configure_analysis_action.setToolTip("Open the global analysis configuration dialog")
-        # Also ensure this doesn't get moved strangely
         self.configure_analysis_action.setMenuRole(QtGui.QAction.MenuRole.NoRole)
         self.configure_analysis_action.triggered.connect(self._show_analysis_config)
 
         # --- View Menu ---
         view_menu = menu_bar.addMenu("&View")
 
+        # Theme Submenu (direct 1-click access to Light / Dark / System)
+        from synaptipy.shared.theme_manager import ThemeMode
+
+        self.theme_menu = view_menu.addMenu("&Theme")
+        self._theme_action_group = QtGui.QActionGroup(self)
+        self._theme_action_group.setExclusive(True)
+        self.theme_light_action = self.theme_menu.addAction("&Light")
+        self.theme_dark_action = self.theme_menu.addAction("&Dark")
+        self.theme_system_action = self.theme_menu.addAction("&System")
+        for act, tmode in (
+            (self.theme_light_action, ThemeMode.LIGHT),
+            (self.theme_dark_action, ThemeMode.DARK),
+            (self.theme_system_action, ThemeMode.SYSTEM),
+        ):
+            act.setCheckable(True)
+            act.setMenuRole(QtGui.QAction.MenuRole.NoRole)
+            self._theme_action_group.addAction(act)
+            act.triggered.connect(lambda _checked=False, m=tmode: self._set_theme_from_menu(m))
+        self._sync_theme_menu_actions()
+
         # Plot Customization Action
         self.plot_customization_action = view_menu.addAction("Plot &Customization...")
         self.plot_customization_action.setToolTip("Customize plot colors, widths, and transparency")
+        self.plot_customization_action.setMenuRole(QtGui.QAction.MenuRole.NoRole)
         self.plot_customization_action.triggered.connect(self._show_plot_customization)
 
         view_menu.addSeparator()
@@ -230,6 +271,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Show Popup Windows Action
         self.show_popup_windows_action = view_menu.addAction("Show Analysis &Popup Windows...")
         self.show_popup_windows_action.setToolTip("Show or restore any analysis popup windows (F-I curve, etc.)")
+        self.show_popup_windows_action.setMenuRole(QtGui.QAction.MenuRole.NoRole)
         self.show_popup_windows_action.triggered.connect(self._show_popup_windows)
 
         # Show Analysis Status Action
@@ -242,7 +284,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # --- Help Menu ---
         help_menu = menu_bar.addMenu("&Help")
-        self.about_action = help_menu.addAction("&About synaptipy...")
+        if is_interactive_macos:
+            self._macos_app_about_action = help_menu.addAction("About Synaptipy...")
+            self._macos_app_about_action.setMenuRole(QtGui.QAction.MenuRole.AboutRole)
+            self._macos_app_about_action.triggered.connect(self._show_about_dialog)
+        self.about_action = help_menu.addAction("&About Synaptipy...")
         self.about_action.setToolTip("Show version and citation information")
         self.about_action.setMenuRole(QtGui.QAction.MenuRole.NoRole)
         self.about_action.triggered.connect(self._show_about_dialog)
@@ -360,10 +406,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Update-available banner (hidden until VersionCheckerWorker fires)
         self._update_banner = QtWidgets.QFrame(self)
+        self._update_banner.setObjectName("UpdateBanner")
         self._update_banner.setFrameShape(QtWidgets.QFrame.Shape.StyledPanel)
-        from synaptipy.shared.theme_manager import warning_banner_stylesheet
+        from synaptipy.shared.theme_manager import get_theme_signals, warning_banner_stylesheet
 
         self._update_banner.setStyleSheet(warning_banner_stylesheet())
+        get_theme_signals().theme_changed.connect(self._on_theme_changed)
         _ub_layout = QtWidgets.QHBoxLayout(self._update_banner)
         _ub_layout.setContentsMargins(12, 4, 12, 4)
         self._update_banner_label = QtWidgets.QLabel()
@@ -371,7 +419,6 @@ class MainWindow(QtWidgets.QMainWindow):
         _ub_layout.addWidget(self._update_banner_label)
         _ub_layout.addStretch()
         _ub_dismiss = QtWidgets.QPushButton("Dismiss")
-        _ub_dismiss.setFlat(True)
         _ub_dismiss.clicked.connect(lambda: self._update_banner.setVisible(False))
         _ub_layout.addWidget(_ub_dismiss)
         self._update_banner.setVisible(False)
@@ -390,29 +437,111 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # --- Keyboard Navigation ---
 
+    @staticmethod
+    def _is_text_input_focused() -> bool:
+        """Return True if an editable text input currently holds focus."""
+        fw = QtWidgets.QApplication.focusWidget()
+        if fw is None:
+            return False
+        if isinstance(
+            fw,
+            (
+                QtWidgets.QLineEdit,
+                QtWidgets.QAbstractSpinBox,
+                QtWidgets.QTextEdit,
+                QtWidgets.QPlainTextEdit,
+            ),
+        ):
+            return True
+        if isinstance(fw, QtWidgets.QComboBox) and fw.isEditable():
+            return True
+        return False
+
     def _navigate_next_file(self) -> None:
-        """Navigate to next file in folder (Ctrl+Right)."""
-        if hasattr(self, "explorer_tab"):
+        """Navigate to next file in folder (Ctrl+Right) when not editing text."""
+        if self._is_text_input_focused():
+            return
+        active = self.tab_widget.currentWidget() if hasattr(self, "tab_widget") else None
+        if active is getattr(self, "analyser_tab", None) and hasattr(self.analyser_tab, "central_analysis_item_combo"):
+            combo = self.analyser_tab.central_analysis_item_combo
+            if combo.count() > 0:
+                combo.setCurrentIndex((combo.currentIndex() + 1) % combo.count())
+            return
+        if hasattr(self, "explorer_tab") and active is self.explorer_tab:
             self.explorer_tab._next_file_folder()
 
     def _navigate_prev_file(self) -> None:
-        """Navigate to previous file in folder (Ctrl+Left)."""
-        if hasattr(self, "explorer_tab"):
+        """Navigate to previous file in folder (Ctrl+Left) when not editing text."""
+        if self._is_text_input_focused():
+            return
+        active = self.tab_widget.currentWidget() if hasattr(self, "tab_widget") else None
+        if active is getattr(self, "analyser_tab", None) and hasattr(self.analyser_tab, "central_analysis_item_combo"):
+            combo = self.analyser_tab.central_analysis_item_combo
+            if combo.count() > 0:
+                combo.setCurrentIndex((combo.currentIndex() - 1) % combo.count())
+            return
+        if hasattr(self, "explorer_tab") and active is self.explorer_tab:
             self.explorer_tab._prev_file_folder()
 
     def _navigate_next_trial(self) -> None:
-        """Navigate to next trial/sweep (Ctrl+Down)."""
-        if hasattr(self, "explorer_tab") and hasattr(self.explorer_tab, "toolbar"):
-            tb = self.explorer_tab.toolbar
-            if hasattr(tb, "trial_spinbox"):
-                tb.trial_spinbox.setValue(tb.trial_spinbox.value() + 1)
+        """Navigate to next trial/sweep (Ctrl+Down) on the active tab."""
+        if self._is_text_input_focused():
+            return
+        active = self.tab_widget.currentWidget() if hasattr(self, "tab_widget") else None
+        if active is getattr(self, "analyser_tab", None):
+            sub_tab = self.analyser_tab.sub_tab_widget.currentWidget()
+            if sub_tab is not None and hasattr(sub_tab, "_navigate_trial"):
+                sub_tab._navigate_trial(1)
+            return
+        if hasattr(self, "explorer_tab") and hasattr(self.explorer_tab, "_next_trial"):
+            self.explorer_tab._next_trial()
 
     def _navigate_prev_trial(self) -> None:
-        """Navigate to previous trial/sweep (Ctrl+Up)."""
-        if hasattr(self, "explorer_tab") and hasattr(self.explorer_tab, "toolbar"):
-            tb = self.explorer_tab.toolbar
-            if hasattr(tb, "trial_spinbox"):
-                tb.trial_spinbox.setValue(tb.trial_spinbox.value() - 1)
+        """Navigate to previous trial/sweep (Ctrl+Up) on the active tab."""
+        if self._is_text_input_focused():
+            return
+        active = self.tab_widget.currentWidget() if hasattr(self, "tab_widget") else None
+        if active is getattr(self, "analyser_tab", None):
+            sub_tab = self.analyser_tab.sub_tab_widget.currentWidget()
+            if sub_tab is not None and hasattr(sub_tab, "_navigate_trial"):
+                sub_tab._navigate_trial(-1)
+            return
+        if hasattr(self, "explorer_tab") and hasattr(self.explorer_tab, "_prev_trial"):
+            self.explorer_tab._prev_trial()
+
+    def _sync_theme_menu_actions(self) -> None:
+        """Synchronize View -> Theme radio actions with the persisted theme mode."""
+        if not hasattr(self, "theme_light_action"):
+            return
+        from synaptipy.shared.theme_manager import ThemeMode, get_theme_mode
+
+        current = get_theme_mode()
+        mapping = {
+            ThemeMode.LIGHT: self.theme_light_action,
+            ThemeMode.DARK: self.theme_dark_action,
+            ThemeMode.SYSTEM: self.theme_system_action,
+        }
+        for mode_key, act in mapping.items():
+            blocked = act.blockSignals(True)
+            act.setChecked(mode_key == current)
+            act.blockSignals(blocked)
+
+    def _set_theme_from_menu(self, mode) -> None:
+        """Persist and apply a theme mode chosen from View -> Theme."""
+        from synaptipy.shared.theme_manager import apply_theme, set_theme_mode
+
+        set_theme_mode(mode, emit_signal=False)
+        apply_theme(mode)
+        self._sync_theme_menu_actions()
+
+    @QtCore.Slot(str)
+    def _on_theme_changed(self, _mode: str) -> None:
+        """Refresh inline-styled MainWindow chrome when theme changes."""
+        self._sync_theme_menu_actions()
+        if hasattr(self, "_update_banner"):
+            from synaptipy.shared.theme_manager import warning_banner_stylesheet
+
+            self._update_banner.setStyleSheet(warning_banner_stylesheet())
 
     def _show_demo_download_banner(self) -> None:
         """Show (or reveal if already visible) the demo download banner."""
@@ -530,7 +659,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         release_url = f"https://github.com/anzalks/synaptipy/releases/tag/v{latest_version}"
         self._update_banner_label.setText(
-            f"Update Available: <b>v{latest_version}</b> &mdash; " f'<a href="{release_url}">View release notes</a>'
+            f"Update Available: <b>v{latest_version}</b> - " f'<a href="{release_url}">View release notes</a>'
         )
         self._update_banner.setVisible(True)
         log.info("Update banner shown: v%s available.", latest_version)
@@ -1037,30 +1166,8 @@ class MainWindow(QtWidgets.QMainWindow):
         # Save the chosen directory for next time
         self.settings.setValue("lastExportDirectory", str(output_filepath.parent))
 
-        # Prepare Metadata for Dialog (same logic as original)
-        default_identifier = str(uuid.uuid4())
-        # Ensure session_start_time_dt attribute exists before accessing
-        default_start_time_naive = getattr(current_recording, "session_start_time_dt", datetime.now())
-
-        aware_start_time = timezone.utc  # Default fallback
-        if default_start_time_naive.tzinfo is None:
-            log.warning("Recording start time is timezone-naive. Attempting to use local timezone for NWB dialog.")
-            if tzlocal:
-                try:
-                    local_tz = tzlocal.get_localzone()
-                    aware_start_time = default_start_time_naive.replace(tzinfo=local_tz)
-                    log.debug(f"Using local timezone from tzlocal: {local_tz}")
-                except Exception as e:
-                    log.warning(f"Failed to get local timezone using tzlocal: {e}. Defaulting to UTC.", exc_info=True)
-                    aware_start_time = default_start_time_naive.replace(tzinfo=timezone.utc)
-            else:
-                log.debug("tzlocal not found. Defaulting NWB start time to UTC.")
-                aware_start_time = default_start_time_naive.replace(tzinfo=timezone.utc)
-        else:
-            aware_start_time = default_start_time_naive  # Time from recording is already aware
-
-        # Show Metadata Dialog
-        dialog = NwbMetadataDialog(default_identifier, aware_start_time, self)
+        # Show Metadata Dialog (pre-filled from current_recording)
+        dialog = NwbMetadataDialog(recording=current_recording, parent=self)
         if dialog.exec() == QtWidgets.QDialog.DialogCode.Accepted:
             nwb_metadata = dialog.get_metadata()
             if nwb_metadata is None:  # Validation failed in dialog
@@ -1073,36 +1180,35 @@ class MainWindow(QtWidgets.QMainWindow):
             self.status_bar.showMessage("NWB export cancelled.", 3000)
             return
 
-        # Perform Export (using self.nwb_exporter)
-        self.status_bar.showMessage(f"Exporting NWB to '{output_filepath.name}'...")
-        QtWidgets.QApplication.processEvents()  # Keep UI responsive during export if possible
+        # Perform Export asynchronously via NwbExportWorker so HDF5 writes do not freeze the GUI
+        from .analysis_worker import NwbExportWorker
 
-        try:
-            # nwb_exporter is already instantiated and available via self
-            saved_results = getattr(self, "saved_analysis_results", None) or None
-            self.nwb_exporter.export(
-                current_recording,
-                output_filepath,
-                nwb_metadata,
-                analysis_results=saved_results,
-            )
-            log.debug(f"Successfully exported NWB file: {output_filepath}")
-            self.status_bar.showMessage(f"Export successful: {output_filepath.name}", 5000)
-            QtWidgets.QMessageBox.information(
-                self, "Export Successful", f"Data successfully saved to:\n{output_filepath}"
-            )
-        except (ValueError, ExportError, SynaptipyError) as e:
-            log.error(f"NWB Export failed: {e}", exc_info=False)  # Log known errors concisely
-            self.status_bar.showMessage(f"NWB Export failed: {e}", 5000)
-            QtWidgets.QMessageBox.critical(self, "NWB Export Error", f"Failed to export NWB file:\n{e}")
-        except Exception as e:
-            log.error(
-                f"An unexpected error occurred during NWB Export: {e}", exc_info=True
-            )  # Log unexpected errors with traceback
-            self.status_bar.showMessage("Unexpected NWB Export error occurred.", 5000)
-            QtWidgets.QMessageBox.critical(
-                self, "NWB Export Error", f"An unexpected error occurred during export:\n{e}"
-            )
+        self.status_bar.showMessage(f"Exporting NWB to '{output_filepath.name}'...")
+        self.export_nwb_action.setEnabled(False)
+        saved_results = getattr(self, "saved_analysis_results", None) or None
+        self._nwb_export_worker = NwbExportWorker(
+            exporter=self.nwb_exporter,
+            recording=current_recording,
+            output_filepath=output_filepath,
+            nwb_metadata=nwb_metadata,
+            parent=self,
+            analysis_results=saved_results,
+        )
+
+        def _on_nwb_done(written_path: str) -> None:
+            self._update_menu_state()
+            self.status_bar.showMessage(f"Export successful: {Path(written_path).name}", 5000)
+            QtWidgets.QMessageBox.information(self, "Export Successful", f"Data successfully saved to:\n{written_path}")
+
+        def _on_nwb_err(err_msg: str) -> None:
+            self._update_menu_state()
+            short_msg = err_msg.strip().splitlines()[-1] if err_msg else "Unknown error"
+            self.status_bar.showMessage(f"NWB Export failed: {short_msg}", 5000)
+            QtWidgets.QMessageBox.critical(self, "NWB Export Error", f"Failed to export NWB file:\n{short_msg}")
+
+        self._nwb_export_worker.export_finished.connect(_on_nwb_done)
+        self._nwb_export_worker.export_error.connect(_on_nwb_err)
+        self._nwb_export_worker.start()
 
     # ^ ^ ^ (Keep methods from previous answer here) ^ ^ ^
 
@@ -1327,6 +1433,11 @@ class MainWindow(QtWidgets.QMainWindow):
         result_data["timestamp_saved"] = datetime.now(timezone.utc).isoformat()
 
         self.saved_analysis_results.append(result_data)
+        if hasattr(self, "exporter_tab") and self.exporter_tab is not None:
+            try:
+                self.exporter_tab.populate_saved_results()
+            except Exception as exc:
+                log.debug(f"Could not auto-refresh ExporterTab results: {exc}")
         log.debug(
             f"Saved analysis result ({result_data.get('analysis_type', '?')} from "
             f"{result_data.get('source_file_name', '?')}). Total saved: {len(self.saved_analysis_results)}"

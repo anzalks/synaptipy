@@ -165,7 +165,7 @@ class PlotCustomizationManager:
             },
             # --- Advanced analysis marker styling ---
             "scatter_points": {
-                "color": "#ffff00",  # Yellow - high visibility against dark traces
+                "color": "#e41a1c",  # High-contrast red on white plot canvas
                 "opacity": 100,
                 "size": 8,  # Symbol size in pixels
                 "symbol": "o",  # 'o', 't', 'd', 's', '+', 'star'
@@ -446,13 +446,14 @@ class PlotCustomizationManager:
             log.warning(f"Invalid preference: {plot_type}/{property_name}")
 
     def _get_cached_pen(self, plot_type: str) -> Optional[pg.mkPen]:
-        """Get a cached pen if available and cache is not dirty."""
-        if not self._cache_dirty and plot_type in self._pen_cache:
+        """Get a cached pen if available; flush stale cache once when dirty."""
+        if self._cache_dirty:
+            self._pen_cache.clear()
+            self._cache_dirty = False
+        if plot_type in self._pen_cache:
             log.debug(f"Cache HIT for {plot_type} pen")
             return self._pen_cache[plot_type]
-        log.debug(
-            f"Cache MISS for {plot_type} pen (dirty: {self._cache_dirty}, exists: {plot_type in self._pen_cache})"
-        )
+        log.debug(f"Cache MISS for {plot_type} pen")
         return None
 
     def _cache_pen(self, plot_type: str, pen: pg.mkPen):
@@ -541,7 +542,7 @@ class PlotCustomizationManager:
         except Exception as e:
             log.warning(f"Failed to update grid visibility: {e}")
 
-    def update_plot_pens(self, plot_widgets: list):
+    def update_plot_pens(self, plot_widgets: list):  # noqa: C901
         """Update plot pens for existing plots when preferences change."""
         try:
             if not plot_widgets:
@@ -553,16 +554,17 @@ class PlotCustomizationManager:
 
             for plot_widget in plot_widgets:
                 try:
-                    # Update plot items in the widget
-                    if hasattr(plot_widget, "plotItem") and plot_widget.plotItem():
-                        plot_item = plot_widget.plotItem()
-                        self._update_plot_item_pens(plot_item, average_pen, single_trial_pen)
+                    target_item = None
+                    if isinstance(plot_widget, pg.PlotItem):
+                        target_item = plot_widget
+                    elif hasattr(plot_widget, "getPlotItem"):
+                        target_item = plot_widget.getPlotItem()
+                    elif hasattr(plot_widget, "plotItem") and callable(plot_widget.plotItem):
+                        target_item = plot_widget.plotItem()
 
-                    # Also try to update PlotItem if available
-                    if hasattr(plot_widget, "getPlotItem"):
-                        plot_item = plot_widget.getPlotItem()
-                        if plot_item:
-                            self._update_plot_item_pens(plot_item, average_pen, single_trial_pen)
+                    if target_item is not None:
+                        self._update_plot_item_pens(target_item, average_pen, single_trial_pen)
+                        self.update_grid_visibility([target_item])
 
                 except Exception as e:
                     log.debug(f"Could not update pens for plot widget: {e}")
@@ -573,21 +575,59 @@ class PlotCustomizationManager:
         except Exception as e:
             log.warning(f"Failed to update plot pens: {e}")
 
-    def _update_plot_item_pens(self, plot_item, average_pen, single_trial_pen):
-        """Update pens for all items in a plot item."""
+    def _update_plot_item_pens(self, plot_item, average_pen, single_trial_pen):  # noqa: C901
+        """Update pens/brushes for traces and tagged analysis overlays in a PlotItem."""
         try:
             if not plot_item or not hasattr(plot_item, "items"):
                 return
 
+            trace_overlay_pen = get_trace_overlay_pen()
+            fit_overlay_pen = get_event_fit_overlay_pen()
+            hv_pen = self.get_hv_line_pen()
+            sel_brush = self.get_selection_window_brush()
+            sel_pen = self.get_selection_window_pen()
+            auc_brush = self.get_auc_brush()
+            scatter_pen, scatter_brush = self.get_scatter_pen_and_brush()
+            scatter_size = self.get_scatter_size()
+            scatter_symbol = self.get_scatter_symbol()
+
             for item in plot_item.items:
-                if hasattr(item, "setPen") and hasattr(item, "opts"):
-                    # Try to determine item type from name or other properties
-                    item_name = item.opts.get("name", "").lower()
+                role = getattr(item, "_synaptipy_role", None)
+                if role == "skip_pen_update" or role in ("bracket", "artifact_overlay", "cursor_connector"):
+                    continue
+                if role == "trace_overlay":
+                    item.setPen(trace_overlay_pen)
+                    continue
+                if role in ("overlay_fit", "event_fit_overlay"):
+                    item.setPen(fit_overlay_pen)
+                    continue
+                if role == "hv_line" and isinstance(item, pg.InfiniteLine):
+                    item.setPen(hv_pen)
+                    continue
+                if role == "selection_window" and isinstance(item, pg.LinearRegionItem):
+                    item.setBrush(sel_brush)
+                    for line in getattr(item, "lines", []):
+                        line.setPen(sel_pen)
+                    continue
+                if role == "auc_fill" and isinstance(item, pg.FillBetweenItem):
+                    item.setBrush(auc_brush)
+                    continue
+                if role == "scatter_markers" and isinstance(item, pg.ScatterPlotItem):
+                    if not getattr(item, "_synaptipy_fixed_color", False):
+                        item.setPen(scatter_pen)
+                        item.setBrush(scatter_brush)
+                    item.setSize(scatter_size)
+                    if not getattr(item, "_synaptipy_fixed_symbol", False):
+                        item.setSymbol(scatter_symbol)
+                    continue
+
+                if isinstance(item, (pg.PlotDataItem, pg.PlotCurveItem)) and hasattr(item, "opts"):
+                    raw_name = item.opts.get("name") or ""
+                    item_name = str(raw_name).lower()
                     if "average" in item_name or "avg" in item_name:
                         item.setPen(average_pen)
                         log.debug(f"Updated average pen for item: {item_name}")
                     else:
-                        # Default to single trial pen
                         item.setPen(single_trial_pen)
                         log.debug(f"Updated single trial pen for item: {item_name}")
 
@@ -648,17 +688,19 @@ class PlotCustomizationManager:
         """
         Return (pen, brush) for scatter point items (detected spikes/peaks).
 
-        The pen uses fully opaque colour; the brush uses the configured
-        opacity so points are visually distinct from traces without
-        completely obscuring them.
+        Uses a contrasting dark border automatically when a high-luminance fill
+        color (such as yellow) is selected so markers remain legible on white canvases.
         """
         prefs = self.defaults.get("scatter_points", {})
-        color_str = prefs.get("color", "#ffff00")
+        color_str = prefs.get("color", "#e41a1c")
         opacity = self._safe_opacity(prefs.get("opacity", 100))
-        size = self._safe_size(prefs.get("size", 8))  # noqa: F841 — size consumed by caller
-        fill_color = self._make_qcolor(color_str, opacity, fallback="#ffff00")
-        border_color = self._make_qcolor(color_str, 100, fallback="#ffff00")
-        pen = pg.mkPen(color=border_color, width=1)
+        fill_color = self._make_qcolor(color_str, opacity, fallback="#e41a1c")
+        luminance = (0.299 * fill_color.red() + 0.587 * fill_color.green() + 0.114 * fill_color.blue()) / 255.0
+        if luminance > 0.72:
+            border_color = self._make_qcolor("#222222", 100, fallback="#222222")
+        else:
+            border_color = self._make_qcolor(color_str, 100, fallback="#e41a1c")
+        pen = pg.mkPen(color=border_color, width=1.2)
         brush = pg.mkBrush(color=fill_color)
         return pen, brush
 
@@ -743,6 +785,16 @@ def is_grid_enabled() -> bool:
 def get_scatter_pen_and_brush():
     """Get pen and brush for scatter point markers."""
     return get_plot_customization_manager().get_scatter_pen_and_brush()
+
+
+def get_scatter_size() -> int:
+    """Get symbol size (pixels) for scatter point markers."""
+    return get_plot_customization_manager().get_scatter_size()
+
+
+def get_scatter_symbol() -> str:
+    """Get symbol shape string for scatter point markers."""
+    return get_plot_customization_manager().get_scatter_symbol()
 
 
 def get_selection_window_brush():
@@ -860,8 +912,13 @@ def apply_plot_theme(plot_widget, background_color: str = "white", axis_color: s
                     # Set tick text color
                     axis.setTextPen(pg.mkPen(color=axis_color))
 
-                    # Set label style (text color)
-                    axis.setStyle(tickFont=QFont("Arial", 9))
+                    # Set label style (text color) using cross-platform sans-serif font
+                    import sys
+
+                    tick_font = QFont()
+                    tick_font.setStyleHint(QFont.StyleHint.SansSerif)
+                    tick_font.setPointSize(10 if sys.platform == "darwin" else 9)
+                    axis.setStyle(tickFont=tick_font)
                     axis.label.setDefaultTextColor(QColor(axis_color))
             except Exception:
                 pass  # Some axes may not exist

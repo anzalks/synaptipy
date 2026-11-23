@@ -267,6 +267,9 @@ def fit_biexponential_decay(  # noqa: C901
         popt_m, _ = curve_fit(mono_exp, t_fit, y_fit, p0=p0_mono, bounds=bounds_mono, maxfev=2000)
         tau_mono_ms = float(popt_m[1])
         result["tau_mono_ms"] = tau_mono_ms
+        y_hat = mono_exp(t_fit, *popt_m)
+        result["_fit_rel_time_s"] = np.arange(len(y_fit)) * dt
+        result["_fit_values"] = (local_baseline - y_hat) if polarity == "negative" else (local_baseline + y_hat)
     except (ValueError, TypeError, RuntimeError) as exc_m:
         result["decay_fit_error"] = f"Mono-exp failed: {exc_m}"
         return result
@@ -276,7 +279,6 @@ def fit_biexponential_decay(  # noqa: C901
         return a_f * np.exp(-t / tau_f) + a_s * np.exp(-t / tau_s)
 
     try:
-        # Initialise: fast half of mono, slow twice; amplitudes split equally
         p0_bi = [peak_amp * 0.6, tau_mono_ms * 0.4, peak_amp * 0.4, tau_mono_ms * 2.0]
         bounds_bi = (
             [0.0, 0.01, 0.0, 0.01],
@@ -285,16 +287,17 @@ def fit_biexponential_decay(  # noqa: C901
         popt_b, _ = curve_fit(bi_exp, t_fit, y_fit, p0=p0_bi, bounds=bounds_bi, maxfev=4000)
         a_f, tau_f, a_s, tau_s = popt_b
 
-        # Sanity: both amplitudes and both taus must be positive and tau_fast < tau_slow
-        # Use epsilon comparison instead of exact equality for floating-point safety
         if a_f > 0 and a_s > 0 and tau_f > 0 and tau_s > 0 and abs(tau_f - tau_s) > 0.01:
             tau_fast = min(tau_f, tau_s)
             tau_slow = max(tau_f, tau_s)
             result["tau_fast_ms"] = float(tau_fast)
             result["tau_slow_ms"] = float(tau_slow)
             result["bi_exp_converged"] = True
+            y_hat_bi = bi_exp(t_fit, *popt_b)
+            result["_fit_values"] = (
+                (local_baseline - y_hat_bi) if polarity == "negative" else (local_baseline + y_hat_bi)
+            )
     except (ValueError, TypeError, RuntimeError):
-        # Bi-exp failed; mono-exp result is still valid
         pass
 
     return result
@@ -737,8 +740,9 @@ def detect_events_threshold(  # noqa: C901
     "event_detection_threshold",
     label="Event (Amplitude)",
     plots=[
-        {"name": "Trace", "type": "trace", "show_spikes": True},
-        {"type": "markers", "x": "_event_times", "y": "_event_peaks", "color": "r", "symbol": "o"},
+        {"name": "Trace", "type": "trace"},
+        {"type": "markers", "x": "_event_times", "y": "_event_peaks", "role": "primary", "symbol": "o"},
+        {"type": "event_fit_overlay", "times_key": "_event_fit_times", "values_key": "_event_fit_values"},
         {"type": "threshold_line", "param": "threshold"},
         {"type": "artifact_overlay"},
     ],
@@ -799,11 +803,38 @@ def detect_events_threshold(  # noqa: C901
             "label": "Compute Kinetics",
             "type": "bool",
             "default": False,
-            "tooltip": "Fit exponential decays to every detected event. Warning: computationally heavy.",
+            "tooltip": "Fit exponential decays to every detected event and draw decay overlays.",
+        },
+        {
+            "name": "reject_artifacts",
+            "label": "Reject Slope Artifacts",
+            "type": "bool",
+            "default": False,
+            "tooltip": "Detect and mask sharp stimulation or hardware slope artifacts before event detection.",
+        },
+        {
+            "name": "artifact_slope_threshold",
+            "label": "Artifact Slope Thresh:",
+            "type": "float",
+            "default": 20.0,
+            "min": 0.0,
+            "max": 1e6,
+            "decimals": 1,
+            "visible_when": {"param": "reject_artifacts", "value": True},
+        },
+        {
+            "name": "artifact_padding_ms",
+            "label": "Artifact Padding (ms):",
+            "type": "float",
+            "default": 2.0,
+            "min": 0.0,
+            "max": 100.0,
+            "decimals": 1,
+            "visible_when": {"param": "reject_artifacts", "value": True},
         },
     ],
 )
-def run_event_detection_threshold_wrapper(
+def run_event_detection_threshold_wrapper(  # noqa: C901
     data: np.ndarray, time: np.ndarray, sampling_rate: float, **kwargs
 ) -> Dict[str, Any]:
     """Wrapper for adaptive threshold event detection."""
@@ -861,6 +892,8 @@ def run_event_detection_threshold_wrapper(
     tau_fast_list = []
     tau_slow_list = []
     tau_mono_list = []
+    event_fit_times: List[List[float]] = []
+    event_fit_values: List[List[float]] = []
 
     if compute_kinetics:
         for k, idx in enumerate(_idx):
@@ -868,6 +901,9 @@ def run_event_detection_threshold_wrapper(
             kin = fit_biexponential_decay(data, idx, sampling_rate, lb, polarity=direction)
             if kin["tau_mono_ms"] is not None:
                 tau_mono_list.append(kin["tau_mono_ms"])
+                if "_fit_rel_time_s" in kin and "_fit_values" in kin and int(idx) < len(time):
+                    event_fit_times.append((float(time[int(idx)]) + kin["_fit_rel_time_s"]).tolist())
+                    event_fit_values.append(np.asarray(kin["_fit_values"], dtype=float).tolist())
             if kin["bi_exp_converged"]:
                 tau_fast_list.append(kin["tau_fast_ms"])
                 tau_slow_list.append(kin["tau_slow_ms"])
@@ -891,6 +927,8 @@ def run_event_detection_threshold_wrapper(
             "_event_charges": event_charges,
             "_event_times": time[_idx].tolist() if len(_idx) > 0 else [],
             "_event_peaks": data[_idx].tolist() if len(_idx) > 0 else [],
+            "_event_fit_times": event_fit_times if event_fit_times else None,
+            "_event_fit_values": event_fit_values if event_fit_values else None,
             "_local_baselines": local_baselines.tolist() if local_baselines.size > 0 else [],
             "_local_amplitudes": local_amplitudes.tolist() if local_amplitudes.size > 0 else [],
             "_result_obj": result,
@@ -1096,8 +1134,8 @@ def detect_events_template(  # noqa: C901
     "event_detection_deconvolution",
     label="Event (Template)",
     plots=[
-        {"name": "Trace", "type": "trace", "show_spikes": True},
-        {"type": "markers", "x": "_event_times", "y": "_event_peaks", "color": "r", "symbol": "o"},
+        {"name": "Trace", "type": "trace"},
+        {"type": "markers", "x": "_event_times", "y": "_event_peaks", "role": "primary", "symbol": "o"},
         {"type": "artifact_overlay"},
     ],
     ui_params=[
@@ -1176,6 +1214,33 @@ def detect_events_template(  # noqa: C901
                 "filtering. E.g. '1.0, 2.0, 3.0' (Cable theory predicts ~2-3x "
                 "slowdown for distal inputs)."
             ),
+        },
+        {
+            "name": "reject_artifacts",
+            "label": "Reject Slope Artifacts",
+            "type": "bool",
+            "default": False,
+            "tooltip": "Detect and mask sharp stimulation or hardware slope artifacts before template matching.",
+        },
+        {
+            "name": "artifact_slope_threshold",
+            "label": "Artifact Slope Thresh:",
+            "type": "float",
+            "default": 20.0,
+            "min": 0.0,
+            "max": 1e6,
+            "decimals": 1,
+            "visible_when": {"param": "reject_artifacts", "value": True},
+        },
+        {
+            "name": "artifact_padding_ms",
+            "label": "Artifact Padding (ms):",
+            "type": "float",
+            "default": 2.0,
+            "min": 0.0,
+            "max": 100.0,
+            "decimals": 1,
+            "visible_when": {"param": "reject_artifacts", "value": True},
         },
         {
             "name": "filter_freq_hz",

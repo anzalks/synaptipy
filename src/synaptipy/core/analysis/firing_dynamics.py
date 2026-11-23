@@ -158,6 +158,7 @@ def calculate_fi_curve(  # noqa: C901
             break
 
     fi_slope = None
+    fi_intercept = None
     r_squared = None
     fi_p_value = None
     fi_slope_se = None
@@ -166,15 +167,15 @@ def calculate_fi_curve(  # noqa: C901
         x = sorted_currents[valid_slice]
         y = sorted_freqs[valid_slice]
         # Truncate at the maximum firing frequency to exclude the depolarisation
-        # block region where frequency drops back toward 0 Hz.  Including those
-        # points would produce a spuriously flat or negative slope.
-        peak_idx = int(np.argmax(y)) + 1  # +1 so the peak point itself is included
+        # block region where frequency drops back toward 0 Hz.
+        peak_idx = int(np.argmax(y)) + 1
         x = x[:peak_idx]
         y = y[:peak_idx]
         if len(x) >= 2:
             try:
                 slope, _intercept, r_value, p_value, std_err = linregress(x, y)
                 fi_slope = float(slope)
+                fi_intercept = float(_intercept)
                 r_squared = float(r_value**2)
                 fi_p_value = float(p_value)
                 fi_slope_se = float(std_err)
@@ -184,6 +185,7 @@ def calculate_fi_curve(  # noqa: C901
     return {
         "rheobase_pa": rheobase_pa,
         "fi_slope": fi_slope,
+        "fi_intercept": fi_intercept,
         "fi_r_squared": r_squared,
         "fi_p_value": fi_p_value,
         "fi_slope_se": fi_slope_se,
@@ -210,6 +212,9 @@ def calculate_fi_curve(  # noqa: C901
             "y": "frequencies",
             "x_label": "Current (pA)",
             "y_label": "Frequency (Hz)",
+            "slope_key": "fi_slope",
+            "intercept_key": "fi_intercept",
+            "r2_key": "fi_r_squared",
         },
     ],
     ui_params=[
@@ -327,6 +332,8 @@ def run_excitability_analysis_wrapper(  # noqa: C901
             "metrics": {
                 "rheobase_pa": results["rheobase_pa"],
                 "fi_slope": results["fi_slope"],
+                "_fi_intercept": results.get("fi_intercept"),
+                "fi_intercept": results.get("fi_intercept"),
                 "fi_r_squared": results["fi_r_squared"],
                 "fi_p_value": results.get("fi_p_value"),
                 "fi_slope_se": results.get("fi_slope_se"),

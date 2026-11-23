@@ -53,6 +53,7 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
     @staticmethod
     def apply_explorer_y_follow_visible_x(vb: pg.ViewBox) -> None:
         """Let Y track data visible at the current X span (per-channel; X stays manual/linked)."""
+        vb._synaptipy_manual_y = False
         vb.enableAutoRange(x=False, y=True)
         vb.setAutoVisible(y=True)
 
@@ -89,6 +90,8 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
     def _on_explorer_viewbox_x_changed_refresh_y(self, chan_id: str, vb: pg.ViewBox, _xr: object) -> None:
         if not self._channel_visible_pref.get(chan_id, True):
             return
+        if getattr(vb, "_synaptipy_manual_y", False):
+            return
         plot = self.plot_items.get(chan_id)
         if plot is None or not plot.isVisible():
             return
@@ -101,7 +104,7 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
     def _refresh_explorer_visible_y_after_layout(self, visible_plots: List[pg.PlotItem]) -> None:
         for pl in visible_plots:
             vb = pl.getViewBox()
-            if vb is None:
+            if vb is None or getattr(vb, "_synaptipy_manual_y", False):
                 continue
             self.apply_explorer_y_follow_visible_x(vb)
             try:
@@ -246,11 +249,24 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
         except Exception as e:
             log.debug("Could not refresh grid stretch factors: %s", e)
 
-    def _rebuild_visible_channels_grid(self) -> None:
+    def _rebuild_visible_channels_grid(self) -> None:  # noqa: C901
         """Detach stacked PlotItems, then re-insert only those marked visible in prefs."""
         if self.widget is None:
             return
         ci = self.widget.ci
+        # Capture active visible X range before unlinking so re-showing an earlier
+        # channel (e.g. Channel 0) inherits the current X zoom instead of snapping back.
+        saved_x_range: Optional[tuple] = None
+        for pl in self.plot_widgets:
+            if pl.scene() is not None and pl.isVisible():
+                try:
+                    xr = pl.viewRange()[0]
+                    if xr and len(xr) == 2:
+                        saved_x_range = (float(xr[0]), float(xr[1]))
+                        break
+                except Exception:
+                    pass
+
         self._teardown_explorer_y_autoscale_handlers()
         self._unlink_all_plots()
         stack_order = self._ordered_channel_ids()
@@ -262,6 +278,11 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
             pass
         row_count, visible_plots = self._stack_pref_visible_channels_into_grid(ci, stack_order)
         self._xlink_visible_stack(visible_plots)
+        if saved_x_range is not None and visible_plots:
+            try:
+                visible_plots[0].setXRange(saved_x_range[0], saved_x_range[1], padding=0)
+            except Exception:
+                pass
         self._sync_bottom_time_axis_labels(visible_plots)
         self._stretch_multichannel_grid_rows(row_count)
         self._refresh_explorer_visible_y_after_layout(visible_plots)
@@ -441,6 +462,7 @@ class ExplorerPlotCanvas(SynaptipyPlotCanvas):
             if not chan_display_name or chan_display_name == chan_key:
                 chan_display_name = channel.get_primary_data_label()
             plot_item.setLabel("left", text=chan_display_name, units=channel.units)
+            plot_item.getAxis("left").enableAutoSIPrefix(False)
             plot_item.getAxis("left").setWidth(self.Y_AXIS_FIXED_WIDTH)
 
             # Bottom Axis

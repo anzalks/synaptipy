@@ -107,6 +107,9 @@ class AnalyserTab(QtWidgets.QWidget):
         # Connect the signal from SessionManager
         self.session_manager.selected_analysis_items_changed.connect(self.update_analysis_sources)
         self.session_manager.preprocessing_settings_changed.connect(self._on_session_preprocessing_changed)
+        from synaptipy.shared.theme_manager import get_theme_signals
+
+        get_theme_signals().theme_changed.connect(self._on_theme_changed)
         # Initialize with current session state
         self.update_analysis_sources(self.session_manager.selected_analysis_items)
 
@@ -205,25 +208,44 @@ class AnalyserTab(QtWidgets.QWidget):
         else:
             self.preprocessing_indicator.setVisible(False)
 
-    def _show_global_preprocessing_popup(self, settings: Dict[str, Any]) -> bool:
+    @QtCore.Slot(str)
+    def _on_theme_changed(self, _mode: str = "") -> None:
+        """Refresh theme-sensitive banner styling on live theme switch."""
+        try:
+            if self.preprocessing_indicator is not None:
+                from synaptipy.shared.theme_manager import warning_label_stylesheet
+
+                self.preprocessing_indicator.setStyleSheet(warning_label_stylesheet())
+        except RuntimeError:
+            pass
+
+    def _show_global_preprocessing_popup(self, settings: Dict[str, Any]) -> str:
         """
         Shows popup asking user if they want to apply preprocessing globally.
-        Returns True if user wants global application, False otherwise.
+        Returns 'global', 'tab_only', or 'reset'.
         """
         from PySide6.QtWidgets import QMessageBox
 
-        # Build description of current preprocessing
-        # Settings use 'type' and 'method' keys
-        settings_type = settings.get("type", "unknown")
-        method = settings.get("method", "unknown")
-
-        if settings_type == "baseline":
-            settings_desc = f"Baseline: {method}"
-        elif settings_type == "filter":
-            cutoff = settings.get("cutoff", "")
-            settings_desc = f"Filter: {method} ({cutoff} Hz)"
+        # Build description of current preprocessing (slot-based or single-step)
+        steps = []
+        if "baseline" in settings or "filters" in settings:
+            if "baseline" in settings and isinstance(settings["baseline"], dict):
+                steps.append(f"Baseline: {settings['baseline'].get('method', 'unknown')}")
+            if "filters" in settings and isinstance(settings["filters"], dict):
+                for f_method, f_cfg in settings["filters"].items():
+                    cutoff = f_cfg.get("cutoff", "") if isinstance(f_cfg, dict) else ""
+                    steps.append(f"Filter: {f_method} ({cutoff} Hz)" if cutoff != "" else f"Filter: {f_method}")
+            settings_desc = " | ".join(steps) if steps else "Active preprocessing pipeline"
         else:
-            settings_desc = f"{settings_type}: {method}"
+            settings_type = settings.get("type", "unknown")
+            method = settings.get("method", "unknown")
+            if settings_type == "baseline":
+                settings_desc = f"Baseline: {method}"
+            elif settings_type == "filter":
+                cutoff = settings.get("cutoff", "")
+                settings_desc = f"Filter: {method} ({cutoff} Hz)"
+            else:
+                settings_desc = f"{settings_type}: {method}"
 
         msg_box = QMessageBox(self)
         msg_box.setWindowTitle("Apply Preprocessing Globally?")
@@ -242,18 +264,11 @@ class AnalyserTab(QtWidgets.QWidget):
 
         clicked = msg_box.clickedButton()
         if clicked == apply_btn:
-            return True
+            return "global"
         elif clicked == reset_btn:
-            # Reset preprocessing
-            self._global_preprocessing_settings = None
-            self._global_preprocessing_confirmed = False
-            for tab in self._loaded_analysis_tabs:
-                if hasattr(tab, "apply_global_preprocessing"):
-                    tab.apply_global_preprocessing(None)
-            return False
+            return "reset"
         else:
-            # This Tab Only - don't set global
-            return False
+            return "tab_only"
 
     def showEvent(self, event):
         """Override to check for pending preprocessing confirmation."""
@@ -262,12 +277,10 @@ class AnalyserTab(QtWidgets.QWidget):
         # Check SessionManager for preprocessing settings from Explorer
         session_preprocessing = self.session_manager.preprocessing_settings
         if session_preprocessing and not self._global_preprocessing_confirmed:
-            # Store locally and trigger popup
-            self._global_preprocessing_settings = session_preprocessing
             # Defer popup to after event processing
             QtCore.QTimer.singleShot(100, self._check_preprocessing_on_enter)
 
-    def _check_preprocessing_on_enter(self):
+    def _check_preprocessing_on_enter(self):  # noqa: C901
         """Called when entering Analyser tab to check preprocessing state."""
         if getattr(self, "_preprocessing_popup_active", False):
             return
@@ -276,15 +289,26 @@ class AnalyserTab(QtWidgets.QWidget):
         if session_preprocessing and not self._global_preprocessing_confirmed:
             self._preprocessing_popup_active = True
             try:
-                self._global_preprocessing_settings = session_preprocessing
-                apply_globally = self._show_global_preprocessing_popup(session_preprocessing)
-                if apply_globally:
+                choice = self._show_global_preprocessing_popup(session_preprocessing)
+                if choice == "global":
                     self._global_preprocessing_confirmed = True
-                    # Propagate to all tabs
                     self.set_global_preprocessing(session_preprocessing)
+                elif choice == "reset":
+                    self._global_preprocessing_settings = None
+                    self._global_preprocessing_confirmed = False
+                    self.session_manager.preprocessing_settings = None
+                    self._update_preprocessing_indicator()
+                    for tab in self._loaded_analysis_tabs:
+                        if hasattr(tab, "apply_global_preprocessing"):
+                            tab.apply_global_preprocessing(None)
                 else:
-                    # Don't show popup again for this session (until reset)
+                    # This Tab Only - keep global cleared and apply only to current active sub-tab
                     self._global_preprocessing_confirmed = True
+                    self._global_preprocessing_settings = None
+                    self._update_preprocessing_indicator()
+                    current_tab = self.sub_tab_widget.currentWidget() if self.sub_tab_widget else None
+                    if current_tab and hasattr(current_tab, "apply_global_preprocessing"):
+                        current_tab.apply_global_preprocessing(session_preprocessing)
             finally:
                 self._preprocessing_popup_active = False
 
@@ -321,7 +345,7 @@ class AnalyserTab(QtWidgets.QWidget):
     def _setup_ui(self):
         """Setup UI with sub-tabs only. Global controls are injected into each tab's left panel."""
         main_layout = QtWidgets.QVBoxLayout(self)
-        main_layout.setContentsMargins(10, 30, 10, 10)  # Top margin prevents macOS traffic light clipping
+        main_layout.setContentsMargins(10, 8, 10, 10)
         main_layout.setSpacing(5)
 
         # --- Top Toolbar with Batch Analysis Button ---
@@ -341,8 +365,6 @@ class AnalyserTab(QtWidgets.QWidget):
         self.copy_methods_btn.clicked.connect(self._copy_methods_to_clipboard)
         style_button(self.copy_methods_btn, style="secondary")
         toolbar_layout.addWidget(self.copy_methods_btn)
-
-        toolbar_layout.addStretch()
 
         toolbar_layout.addStretch()
 
@@ -652,28 +674,47 @@ class AnalyserTab(QtWidgets.QWidget):
         current_tab = self.sub_tab_widget.currentWidget()
         if current_tab and isinstance(current_tab, BaseAnalysisTab):
             try:
+                from synaptipy.core.analysis.registry import AnalysisRegistry
+
                 # 1. Gather current parameters
                 params = current_tab._gather_analysis_parameters()
-                if params:
-                    # 2. Get registry name
-                    registry_name = getattr(current_tab, "get_registry_name", lambda: None)()
-
-                    if not registry_name:
-                        # Attempt to get from metadata if it's a metadata tab
-                        if hasattr(current_tab, "analysis_name"):
-                            registry_name = current_tab.analysis_name
+                if params is not None:
+                    # 2. Prefer active sub-analysis name over module-level aggregator stub
+                    registry_name = (
+                        getattr(current_tab, "analysis_name", None)
+                        or getattr(current_tab, "get_registry_name", lambda: None)()
+                    )
 
                     # Handle special case for method-selector tabs which may return registry_key in params
                     if "registry_key" in params:
                         registry_name = params.pop("registry_key")
 
+                    # If registry_name is still a module aggregator, resolve from method_combobox
+                    meta_check = AnalysisRegistry.get_metadata(registry_name) if registry_name else {}
+                    if meta_check and "method_selector" in meta_check:
+                        method_cb = getattr(current_tab, "method_combobox", None)
+                        method_map = getattr(current_tab, "_method_map", {})
+                        if method_cb is not None and method_cb.currentText() in method_map:
+                            registry_name = method_map[method_cb.currentText()]
+                        elif meta_check["method_selector"]:
+                            registry_name = next(iter(meta_check["method_selector"].values()))
+                        meta_check = AnalysisRegistry.get_metadata(registry_name) if registry_name else {}
+
                     # Remove internal keys
                     params.pop("method_display", None)
 
                     if registry_name:
+                        scope = "all_trials"
+                        if meta_check and meta_check.get("requires_multi_trial", False):
+                            scope = "channel_set"
+                        elif getattr(current_tab, "data_source_combobox", None) is not None:
+                            ds_val = current_tab.data_source_combobox.currentData()
+                            if ds_val == "average":
+                                scope = "average"
+
                         task_entry: Dict[str, Any] = {
                             "analysis": registry_name,
-                            "scope": "all_trials",
+                            "scope": scope,
                             "params": params,
                         }
                         sec_combo = getattr(current_tab, "_secondary_channel_combobox", None)
@@ -782,13 +823,22 @@ class AnalyserTab(QtWidgets.QWidget):
             return
 
         # Try to find a result object on the tab
-        result = None
-        if hasattr(current_tab, "last_result"):
-            result = current_tab.last_result
-        elif hasattr(current_tab, "current_result"):
-            result = current_tab.current_result
+        result = (
+            getattr(current_tab, "_last_analysis_result", None)
+            or getattr(current_tab, "last_result", None)
+            or getattr(current_tab, "current_result", None)
+        )
 
         if result:
+            if isinstance(result, dict):
+                result = dict(result)
+                if "parameters" not in result and hasattr(current_tab, "_gather_analysis_parameters"):
+                    try:
+                        result["parameters"] = current_tab._gather_analysis_parameters()
+                    except Exception:
+                        pass
+                if "analysis_name" not in result and hasattr(current_tab, "analysis_name"):
+                    result["analysis_name"] = current_tab.analysis_name
             methods_text = generate_methods_text(result)
             clipboard = QtWidgets.QApplication.clipboard()
             clipboard.setText(methods_text)
@@ -823,7 +873,9 @@ class AnalyserTab(QtWidgets.QWidget):
                 self.files_info_label.setText(f"{n_items} item(s) loaded")
             else:
                 self.files_info_label.setText(f"{n_items} items ({n_files} file(s))")
-            self.files_info_label.setStyleSheet("")  # Reset to default color
+            from synaptipy.shared.theme_manager import clear_subdued_style
+
+            clear_subdued_style(self.files_info_label)
         else:
             self.files_info_label.setText("No files loaded")
             from synaptipy.shared.theme_manager import style_as_subdued
@@ -1070,7 +1122,9 @@ class AnalyserTab(QtWidgets.QWidget):
 
     # --- Cross-Tab Navigation Handler ---
     @QtCore.Slot(QtWidgets.QTreeWidgetItem, QtWidgets.QTreeWidgetItem)
-    def _on_sidebar_selection_changed(self, current: QtWidgets.QTreeWidgetItem, previous: QtWidgets.QTreeWidgetItem):
+    def _on_sidebar_selection_changed(  # noqa: C901
+        self, current: QtWidgets.QTreeWidgetItem, previous: QtWidgets.QTreeWidgetItem
+    ):
         """
         Handle selection changes in the sidebar (Analysis Source List).
         If a specific trial is selected, notify the current analysis tab to highlight it.
@@ -1095,16 +1149,16 @@ class AnalyserTab(QtWidgets.QWidget):
         self.central_analysis_item_combo.setCurrentIndex(row)
         self.central_analysis_item_combo.blockSignals(False)
 
-        # Check if it's a specific trial selection (from Explorer expansion)
-        # Note: The item dictionary structure from ExplorerTab typically is:
-        # {"path": Path(...), "target_type": "Current Trial", "trial_index": 5}
+        # Forward item selection so active recording and plot switch to the clicked item
+        current_tab = self.sub_tab_widget.currentWidget()
+        if current_tab and isinstance(current_tab, BaseAnalysisTab):
+            if getattr(current_tab, "_selected_item_index", -1) != row:
+                self._on_central_item_selected(row)
 
         trial_index = -1
         if target_type == "Current Trial":
             trial_index = selected_item.get("trial_index", -1)
 
-        # Forward to current tab
-        current_tab = self.sub_tab_widget.currentWidget()
         if current_tab and isinstance(current_tab, BaseAnalysisTab):
             if hasattr(current_tab, "highlight_trial"):
                 try:

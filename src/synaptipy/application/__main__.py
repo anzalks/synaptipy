@@ -231,10 +231,8 @@ class CrashReportDialog(QtWidgets.QDialog):
         self._text_area = QtWidgets.QPlainTextEdit()
         self._text_area.setReadOnly(True)
         self._text_area.setPlainText(self._markdown_report)
-        font = QtGui.QFont()
-        font.setStyleHint(QtGui.QFont.StyleHint.Monospace)
-        font.setFamily("monospace")
-        font.setPointSize(9)
+        font = QtGui.QFontDatabase.systemFont(QtGui.QFontDatabase.SystemFont.FixedFont)
+        font.setPointSize(11 if sys.platform == "darwin" else 10)
         self._text_area.setFont(font)
         layout.addWidget(self._text_area)
 
@@ -451,10 +449,6 @@ def _start_welcome_flow(app: QtWidgets.QApplication, smoke_test: bool = False):
 
     startup_manager = StartupManager(app, headless_smoke_test=smoke_test)
     welcome_screen = startup_manager.start_loading()
-    welcome_screen.show()
-    welcome_screen.raise_()
-    welcome_screen.activateWindow()
-    app.processEvents()
     welcome_screen.force_display()
     log.debug("Welcome screen displayed, beginning startup process")
     return startup_manager
@@ -500,6 +494,10 @@ def run_gui():
     log.debug("Forced application locale to English/US (dot decimal separator)")
 
     smoke_test = bool(getattr(args, "smoke_test", False))
+    if sys.platform == "darwin" and not smoke_test:
+        from synaptipy.shared.theme_manager import activate_macos_foreground_app
+
+        activate_macos_foreground_app(focus=False)
     _install_excepthook(headless=smoke_test)
     log.debug("Crash-report excepthook installed.")
 

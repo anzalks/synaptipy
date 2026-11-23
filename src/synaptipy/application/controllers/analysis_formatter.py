@@ -54,13 +54,20 @@ class AnalysisResultFormatter:
             analysis_type = "Unknown object"
 
         else:
-            # It's a dictionary. Check if it has a nested "result" object and flatten its attributes
+            # Dictionary result: unpack nested 'result', Schema v1 'metrics', and 'specific_data'
+            merged: Dict[str, Any] = {}
             nested_result = result.get("result")
             if hasattr(nested_result, "__dict__"):
-                # Merge the nested object's attributes into the dictionary for easier formatting
-                result = {**nested_result.__dict__, **result}
-
-            analysis_type = result.get("analysis_type", "Unknown")
+                merged.update({k: v for k, v in nested_result.__dict__.items() if not str(k).startswith("_")})
+            if isinstance(result.get("specific_data"), dict):
+                merged.update({k: v for k, v in result["specific_data"].items() if not str(k).startswith("_")})
+            if isinstance(result.get("metrics"), dict):
+                merged.update({k: v for k, v in result["metrics"].items() if not str(k).startswith("_")})
+            for k, v in result.items():
+                if k not in ("metrics", "specific_data", "schema_version") and not str(k).startswith("_"):
+                    merged[k] = v
+            result = merged
+            analysis_type = str(result.get("analysis_type") or result.get("analysis_name") or "Unknown")
 
         value_str = "N/A"
         details = []
@@ -75,13 +82,44 @@ class AnalysisResultFormatter:
                     if details_fallback:
                         details.extend(details_fallback)
 
-            elif "baseline" in target_type or "rmp" in target_type:
+            elif "i-v" in target_type or "iv_curve" in target_type:
+                rin_iv = result.get("rin_aggregate_mohm")
+                value_str = f"{AnalysisResultFormatter._to_float(rin_iv):.2f} MOhm" if rin_iv is not None else "N/A"
+                if result.get("iv_r_squared") is not None:
+                    details.append(f"R^2: {AnalysisResultFormatter._to_float(result['iv_r_squared']):.3f}")
+
+            elif "capacitance" in target_type:
+                cm = result.get("capacitance_pf")
+                value_str = f"{AnalysisResultFormatter._to_float(cm):.2f} pF" if cm is not None else "N/A"
+
+            elif "baseline" in target_type or "rmp" in target_type or "resting membrane" in target_type:
                 value_str = AnalysisResultFormatter._format_baseline(result)
                 details = AnalysisResultFormatter._details_baseline(result)
                 if value_str == "N/A":
                     value_str, details_fallback = AnalysisResultFormatter._format_rmp_fallback(result)
                     if details_fallback:
                         details.extend(details_fallback)
+
+            elif "train dynamics" in target_type or target_type == "train_dynamics":
+                cv = result.get("cv")
+                value_str = f"CV: {AnalysisResultFormatter._to_float(cv):.3f}" if cv is not None else "N/A"
+                if result.get("spike_count") is not None:
+                    details.append(f"Spikes: {int(result['spike_count'])}")
+
+            elif "burst" in target_type:
+                bc = result.get("burst_count")
+                value_str = f"{int(bc)} bursts" if bc is not None else "N/A"
+
+            elif "paired-pulse" in target_type or "ppr" in target_type:
+                ppr = result.get("ratio_p2", result.get("ppr"))
+                value_str = f"PPR: {AnalysisResultFormatter._to_float(ppr):.3f}" if ppr is not None else "N/A"
+
+            elif "evoked sync" in target_type or "optogenetic" in target_type:
+                lat = result.get("optical_latency_ms")
+                value_str = f"Latency: {AnalysisResultFormatter._to_float(lat):.2f} ms" if lat is not None else "N/A"
+                if result.get("response_probability_pct") is not None:
+                    prob_val = AnalysisResultFormatter._to_float(result["response_probability_pct"])
+                    details.append(f"Prob: {prob_val:.1f}%")
 
             elif "spike" in target_type or "action potential" in target_type:
                 value_str = AnalysisResultFormatter._format_spike_detection(result)
@@ -107,12 +145,27 @@ class AnalysisResultFormatter:
                 details = AnalysisResultFormatter._details_sag(result)
 
             else:
-                # Provide a generic fallback for other analysis types
-                # First try to find a numeric primary value
+                skip_meta = {
+                    "analysis_type",
+                    "analysis_name",
+                    "channel_id",
+                    "channel_name",
+                    "trial_index_used",
+                    "schema_version",
+                    "data_source_used",
+                    "source_file_name",
+                    "source_file_path",
+                    "item_target_type",
+                    "timestamp_saved",
+                }
                 numeric_vals = [
                     f"{k}: {AnalysisResultFormatter._to_float(v):.2f}"
                     for k, v in result.items()
-                    if isinstance(v, (int, float, np.number)) and not isinstance(v, bool) and "time" not in k.lower()
+                    if k not in skip_meta
+                    and isinstance(v, (int, float, np.number))
+                    and not isinstance(v, bool)
+                    and np.isfinite(float(v))
+                    and "time" not in k.lower()
                 ]
 
                 if numeric_vals:
@@ -120,12 +173,10 @@ class AnalysisResultFormatter:
                     if len(numeric_vals) > 1:
                         details.extend(numeric_vals[1:])
                 else:
-                    # If no obvious numerics, gather strings/others
                     other_vals = [
                         f"{k}: {v}"
                         for k, v in result.items()
-                        if not isinstance(v, (dict, list, tuple))
-                        and k not in ["analysis_type", "channel_id", "channel_name"]
+                        if not isinstance(v, (dict, list, tuple, np.ndarray)) and k not in skip_meta
                     ]
                     if other_vals:
                         value_str = other_vals[0]
@@ -254,11 +305,14 @@ class AnalysisResultFormatter:
         units = result.get("baseline_units", "")
         method = result.get("calculation_method", "")
 
-        # Fallback to rmp_mv if baseline_mean is not found
         if mean is None:
             mean = result.get("rmp_mv")
+        if mean is None:
+            mean = result.get("RMP (mV)")
         if sd is None:
             sd = result.get("rmp_std")
+        if sd is None:
+            sd = result.get("Std Dev (mV)")
         if not units:
             units = "mV"
 
@@ -331,7 +385,7 @@ class AnalysisResultFormatter:
                 count = int(AnalysisResultFormatter._to_float(spike_count))
                 value_str = f"{count} spikes"
 
-                rate = result.get("average_firing_rate_hz")
+                rate = result.get("average_firing_rate_hz", result.get("mean_freq_hz"))
                 if rate is not None:
                     try:
                         rate_float = AnalysisResultFormatter._to_float(rate)
@@ -367,7 +421,7 @@ class AnalysisResultFormatter:
     # --- Event Detection ---
     @staticmethod
     def _format_event_detection(result: Dict[str, Any]) -> str:
-        event_count = result.get("event_count")
+        event_count = result.get("event_count", result.get("Event Count"))
 
         # Fallback to older nested stat structure
         if event_count is None:
@@ -503,19 +557,36 @@ def _extract_result_parameters(result: Any) -> Dict[str, Any]:
         m_params = result.metrics.get("parameters")
         if isinstance(m_params, dict):
             return dict(m_params)
-        if hasattr(result, "provenance") and isinstance(getattr(result, "provenance"), dict):
-            p_params = result.provenance.get("parameters")
-            if isinstance(p_params, dict):
-                return dict(p_params)
+    if hasattr(result, "provenance") and isinstance(getattr(result, "provenance"), dict):
+        p_params = result.provenance.get("parameters")
+        if isinstance(p_params, dict):
+            return dict(p_params)
     if isinstance(result, dict):
         if isinstance(result.get("parameters"), dict):
             return dict(result["parameters"])
+        if isinstance(result.get("provenance"), dict) and isinstance(result["provenance"].get("parameters"), dict):
+            return dict(result["provenance"]["parameters"])
         if isinstance(result.get("metrics"), dict) and isinstance(result["metrics"].get("parameters"), dict):
             return dict(result["metrics"]["parameters"])
     return {}
 
 
-def generate_methods_text(result: Any) -> str:
+def _extract_analysis_name(result: Any) -> str:
+    """Resolve canonical analysis name or label from result object or dict."""
+    if isinstance(result, SpikeTrainResult):
+        return "spike_detection"
+    if isinstance(result, RinResult):
+        return "rin_analysis"
+    if hasattr(result, "analysis_name") and getattr(result, "analysis_name"):
+        return str(result.analysis_name)
+    if isinstance(result, dict):
+        for k in ("analysis_name", "_analysis_type_override", "analysis_type"):
+            if result.get(k):
+                return str(result[k])
+    return ""
+
+
+def generate_methods_text(result: Any) -> str:  # noqa: C901
     """
     Generate a natural language description of the analysis performed.
 
@@ -526,14 +597,14 @@ def generate_methods_text(result: Any) -> str:
         String description suitable for a paper's Methods section.
     """
     params = _extract_result_parameters(result)
-    if not params:
-        return "Analysis was performed using default parameters."
+    analysis_id = _extract_analysis_name(result).lower()
 
-    if isinstance(result, SpikeTrainResult):
+    if isinstance(result, SpikeTrainResult) or "spike_detection" in analysis_id or analysis_id == "spike detection":
+        if not params:
+            return "Action potentials were detected using a voltage threshold crossing algorithm."
         threshold = params.get("threshold", "unknown")
         refractory = params.get("refractory_period", "unknown")
 
-        # Convert to ms if float (assuming seconds)
         if isinstance(refractory, (float, int)):
             refractory_str = f"{refractory * 1000.0:.2f} ms"
         else:
@@ -551,8 +622,100 @@ def generate_methods_text(result: Any) -> str:
                 f"using a dV/dt onset threshold of {params['dvdt_threshold']} V/s. "
             )
 
-        return text
+        return text.strip()
 
-    # Fallback for generic results
-    param_str = ", ".join([f"{k}={v}" for k, v in params.items()])
-    return f"Analysis performed with parameters: {param_str}."
+    if "rmp" in analysis_id or "baseline" in analysis_id:
+        b0 = params.get("baseline_start", 0.0)
+        b1 = params.get("baseline_end", 0.1)
+        ljp = params.get("ljp_correction_mv", 0.0)
+        txt = f"Resting membrane potential (RMP) was measured as the mean baseline potential over {b0}-{b1} s."
+        if ljp:
+            txt += f" Voltages were corrected for a liquid junction potential of {ljp} mV."
+        return txt
+
+    if "rin" in analysis_id or "input resistance" in analysis_id:
+        step_i = params.get("current_amplitude")
+        step_v = params.get("voltage_step")
+        stim_desc = f"{step_i} pA current step" if step_i else (f"{step_v} mV voltage step" if step_v else "step pulse")
+        return (
+            f"Input resistance was calculated from the steady-state deflection evoked by a {stim_desc} "
+            f"relative to pre-stimulus baseline."
+        )
+
+    if "tau" in analysis_id or "time constant" in analysis_id:
+        model = params.get("tau_model", params.get("model", "mono"))
+        dur = params.get("fit_duration", 0.05)
+        return (
+            f"Membrane time constant (tau) was estimated by fitting a {model}-exponential function "
+            f"over a {dur} s window following stimulus onset."
+        )
+
+    if "sag" in analysis_id:
+        return (
+            "Hyperpolarization-activated sag ratio was quantified from baseline, peak hyperpolarization, "
+            "and steady-state membrane potential windows."
+        )
+
+    if "iv_curve" in analysis_id or "i-v" in analysis_id:
+        return (
+            "Current-voltage (I-V) relationships were constructed across sequential current steps "
+            "and input resistance was derived by subthreshold linear regression."
+        )
+
+    if "phase_plane" in analysis_id or "phase plane" in analysis_id:
+        dvdt_thr = params.get("dvdt_threshold", 20.0)
+        sigma = params.get("sigma_ms", 0.1)
+        return (
+            f"Action potential phase-plane trajectories (dV/dt vs. V) were computed using Savitzky-Golay "
+            f"differentiation ({sigma} ms window) with an onset threshold of {dvdt_thr} V/s."
+        )
+
+    if "excitability" in analysis_id or "f-i" in analysis_id:
+        thr = params.get("threshold", -20.0)
+        return (
+            f"Intrinsic excitability (F-I curve and rheobase) was quantified across current steps "
+            f"using a spike threshold of {thr} mV, fitting firing-frequency gain over the linear rising phase."
+        )
+
+    if "deconvolution" in analysis_id or "template" in analysis_id:
+        tr = params.get("tau_rise_ms", 0.5)
+        td = params.get("tau_decay_ms", 5.0)
+        sd = params.get("threshold_sd", 4.0)
+        return (
+            f"Synaptic events were detected via zero-mean template matching (tau_rise={tr} ms, "
+            f"tau_decay={td} ms, detection threshold={sd} SD)."
+        )
+
+    if "event_detection" in analysis_id or "event" in analysis_id:
+        thr = params.get("threshold", 5.0)
+        pol = params.get("direction", "negative")
+        return (
+            f"Spontaneous synaptic events ({pol} polarity) were detected using rolling-baseline "
+            f"adaptive prominence thresholding (threshold={thr})."
+        )
+
+    if "paired_pulse" in analysis_id or "ppr" in analysis_id:
+        win = params.get("response_window_ms", 20.0)
+        return (
+            f"Paired-pulse ratios (PPR) were computed within a {win} ms post-stimulus peak window "
+            f"with exponential decay residual subtraction."
+        )
+
+    if "optogenetic" in analysis_id or "evoked sync" in analysis_id:
+        win = params.get("response_window_ms", 20.0)
+        return (
+            f"Stimulus-evoked synchronization, latency, and jitter were quantified within a "
+            f"{win} ms post-TTL response window."
+        )
+
+    if not params:
+        if analysis_id:
+            return f"{analysis_id.replace('_', ' ').title()} analysis was performed using default parameters."
+        return "Analysis was performed using default parameters."
+
+    clean_params = {
+        k: v for k, v in params.items() if not str(k).startswith("_") and not isinstance(v, (np.ndarray, list, dict))
+    }
+    param_str = ", ".join([f"{k}={v}" for k, v in clean_params.items()])
+    prefix = f"{analysis_id.replace('_', ' ').title()} analysis" if analysis_id else "Analysis"
+    return f"{prefix} performed with parameters: {param_str}."

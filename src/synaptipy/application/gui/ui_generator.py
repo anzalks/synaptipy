@@ -33,7 +33,7 @@ class FileBrowseWidget(QtWidgets.QWidget):
         hbox.setSpacing(4)
         self._line_edit = QtWidgets.QLineEdit()
         self._browse_btn = QtWidgets.QPushButton("Browse...")
-        self._browse_btn.setFixedWidth(80)
+        self._browse_btn.setMinimumWidth(88)
         hbox.addWidget(self._line_edit)
         hbox.addWidget(self._browse_btn)
         self._line_edit.textChanged.connect(self.textChanged)
@@ -249,18 +249,17 @@ class ParameterWidgetGenerator:
             log.warning(f"Unknown parameter type '{param_type}' for {name}")
             return
 
-        # Add tooltip if provided, falling back to description if no tooltip key
+        self.layout.addRow(label, widget)
+        self.widgets[name] = widget
+
+        # Add tooltip AFTER addRow so labelForField resolves the created QLabel
         tooltip = param.get("tooltip", param.get("description", ""))
         if tooltip:
             widget.setToolTip(tooltip)
-            # Also add tooltip to label if it's a string
-            if isinstance(label, str):
+            if isinstance(label, str) and isinstance(self.layout, QtWidgets.QFormLayout):
                 label_widget = self.layout.labelForField(widget)
                 if label_widget:
                     label_widget.setToolTip(tooltip)
-
-        self.layout.addRow(label, widget)
-        self.widgets[name] = widget
 
         # Record a clamp-mode-dependent default, applied by apply_context_defaults()
         # once the recording's channel units are known.
@@ -388,14 +387,9 @@ class ParameterWidgetGenerator:
                 continue
 
     def _validate_and_update(self, widget, value, min_val, max_val):
-        """Validate parameter and provide visual feedback (MEDIUM-6)."""
-        # Check if value is out of range
-        if value < min_val or value > max_val:
-            # Red border for out-of-range
-            widget.setStyleSheet("border: 2px solid red;")
-        else:
-            # Clear styling for valid values
-            widget.setStyleSheet("")
+        """Validate parameter range without applying QSS borders that break QSpinBox subcontrols."""
+        out_of_range = value < min_val or value > max_val
+        widget.setProperty("invalidRange", out_of_range)
 
     def _on_param_changed(self):
         """Trigger registered callbacks."""

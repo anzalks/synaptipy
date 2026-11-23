@@ -36,11 +36,15 @@ For each tier the search order is:
 """
 
 import logging
+import re
 import sys
 from pathlib import Path
 from typing import Optional
 
+import shiboken6
 from PySide6 import QtCore, QtGui, QtHelp, QtWidgets
+
+from synaptipy.shared.theme_manager import get_theme_signals, is_dark_mode
 
 log = logging.getLogger(__name__)
 
@@ -135,26 +139,106 @@ def resolve_html_path() -> Optional[Path]:
 # ---------------------------------------------------------------------------
 
 
-class _HelpBrowser(QtWidgets.QTextBrowser):
-    """``QTextBrowser`` subclass that can render ``qthelp://`` URLs.
+def _build_help_css(dark: bool) -> str:
+    """Return theme-aware RichText CSS for QTextBrowser offline help pages."""
+    if dark:
+        bg = "#232323"
+        fg = "#e6edf3"
+        link = "#58a6ff"
+        code_bg = "#2f353d"
+        code_fg = "#f0f6fc"
+        pre_bg = "#1b1f24"
+        border = "#444c56"
+        th_bg = "#2d333b"
+        note_bg = "#2b313a"
+    else:
+        bg = "#ffffff"
+        fg = "#1f2328"
+        link = "#0969da"
+        code_bg = "#f0f3f6"
+        code_fg = "#1f2328"
+        pre_bg = "#f6f8fa"
+        border = "#d0d7de"
+        th_bg = "#f0f3f6"
+        note_bg = "#f6f8fa"
 
-    ``QHelpEngine`` serves page content via ``fileData(QUrl)``.  Standard
-    ``QTextBrowser`` only handles ``file://`` and ``qrc://``; we override
-    ``loadResource`` so that any request for a ``qthelp://`` resource is
-    satisfied by the engine instead.
+    return f"""
+        body {{ background-color: {bg}; color: {fg}; font-size: 11pt; line-height: 1.45; margin: 12px; }}
+        h1, h2, h3, h4 {{ color: {fg}; margin-top: 16px; margin-bottom: 6px; }}
+        a, a:link, a:visited {{ color: {link}; text-decoration: none; }}
+        code, tt {{ background-color: {code_bg}; color: {code_fg}; padding: 1px 4px; font-family: monospace; }}
+        pre, div.highlight {{
+            background-color: {pre_bg}; color: {code_fg}; padding: 10px; border: 1px solid {border};
+        }}
+        table {{ border-collapse: collapse; margin: 10px 0; }}
+        th {{
+            background-color: {th_bg}; color: {fg}; padding: 6px 10px;
+            border: 1px solid {border}; font-weight: bold;
+        }}
+        td {{ background-color: {bg}; color: {fg}; padding: 6px 10px; border: 1px solid {border}; }}
+        div.admonition, div.note, div.warning, div.tip, div.important, div.sidebar {{
+            background-color: {note_bg}; color: {fg}; border: 1px solid {border}; padding: 8px 12px; margin: 10px 0;
+        }}
     """
+
+
+_RE_LINK_STYLESHEET = re.compile(r"<link\b[^>]*rel=[\"']?stylesheet[\"']?[^>]*>", re.IGNORECASE)
+_RE_SCRIPT_BLOCK = re.compile(r"<script\b[^>]*>.*?</script>", re.IGNORECASE | re.DOTALL)
+_RE_STYLE_BLOCK = re.compile(r"<style\b[^>]*>.*?</style>", re.IGNORECASE | re.DOTALL)
+_RE_RTD_NAV = re.compile(
+    r"<nav\b[^>]*class=[\"'][^\"']*wy-nav-side[^\"']*[\"'][^>]*>.*?</nav>", re.IGNORECASE | re.DOTALL
+)
+_RE_RTD_HEADER = re.compile(
+    r"<nav\b[^>]*class=[\"'][^\"']*wy-nav-top[^\"']*[\"'][^>]*>.*?</nav>", re.IGNORECASE | re.DOTALL
+)
+_RE_BREADCRUMBS = re.compile(
+    r"<div\b[^>]*role=[\"']navigation[\"'][^>]*aria-label=[\"']Page navigation[\"'][^>]*>.*?</div>",
+    re.IGNORECASE | re.DOTALL,
+)
+_RE_FOOTER = re.compile(r"<footer\b[^>]*>.*?</footer>", re.IGNORECASE | re.DOTALL)
+
+
+def _sanitize_sphinx_html(raw_html: str) -> str:
+    """Strip Sphinx ReadTheDocs sidebar/stylesheets so QTextBrowser renders clean themed content."""
+    cleaned = _RE_LINK_STYLESHEET.sub("", raw_html)
+    cleaned = _RE_SCRIPT_BLOCK.sub("", cleaned)
+    cleaned = _RE_STYLE_BLOCK.sub("", cleaned)
+    cleaned = _RE_RTD_NAV.sub("", cleaned)
+    cleaned = _RE_RTD_HEADER.sub("", cleaned)
+    cleaned = _RE_BREADCRUMBS.sub("", cleaned)
+    cleaned = _RE_FOOTER.sub("", cleaned)
+    # Remove inline Pygments light-mode token styles if dark mode is active so code stays legible
+    if is_dark_mode():
+        cleaned = re.sub(r'<span\s+class="[^"]*"[^>]*>', "<span>", cleaned)
+    return cleaned
+
+
+class _HelpBrowser(QtWidgets.QTextBrowser):
+    """``QTextBrowser`` subclass that can render ``qthelp://`` URLs."""
 
     def __init__(self, help_engine: QtHelp.QHelpEngine, parent: Optional[QtWidgets.QWidget] = None) -> None:
         super().__init__(parent)
         self._engine = help_engine
         self.setOpenLinks(False)
         self.anchorClicked.connect(self._navigate)
+        self.apply_theme_css()
+
+    def apply_theme_css(self) -> None:
+        """Refresh RichText CSS for current Light/Dark mode."""
+        self.document().setDefaultStyleSheet(_build_help_css(is_dark_mode()))
+        if not self.source().isEmpty():
+            self.reload()
 
     def loadResource(self, resource_type: int, url: QtCore.QUrl) -> object:  # noqa: N802
-        """Intercept ``qthelp://`` requests and serve them from the engine."""
+        """Intercept ``qthelp://`` requests and serve sanitized HTML/assets from the engine."""
         if url.scheme() == "qthelp":
+            if url.path().lower().endswith(".css"):
+                return QtCore.QByteArray(b"")
             data = self._engine.fileData(url)
             if data:
+                if url.path().lower().endswith((".html", ".htm")):
+                    text = bytes(data).decode("utf-8", errors="replace")
+                    return _sanitize_sphinx_html(text).encode("utf-8")
                 return data
         return super().loadResource(resource_type, url)
 
@@ -172,31 +256,53 @@ class _HelpBrowser(QtWidgets.QTextBrowser):
 
 
 class _LocalHtmlBrowser(QtWidgets.QTextBrowser):
-    """``QTextBrowser`` that serves a local Sphinx HTML tree.
-
-    Configuring ``searchPaths`` lets Qt resolve relative URLs (images, CSS)
-    relative to the HTML root directory.  External links are delegated to the
-    system browser so the user is never silently dropped into an unusable page.
-    """
+    """``QTextBrowser`` that serves a local Sphinx HTML tree with theme-aware sanitization."""
 
     def __init__(self, html_root: Path, parent: Optional[QtWidgets.QWidget] = None) -> None:
         super().__init__(parent)
-        self._home = QtCore.QUrl.fromLocalFile(str(html_root / "index.html"))
-        # Add root so relative paths resolve correctly
-        self.setSearchPaths([str(html_root)])
+        self._html_root = html_root.resolve()
+        self._home = QtCore.QUrl.fromLocalFile(str(self._html_root / "index.html"))
+        self.setSearchPaths([str(self._html_root)])
         self.setOpenLinks(False)
         self.anchorClicked.connect(self._navigate)
+        self.apply_theme_css()
+
+    def apply_theme_css(self) -> None:
+        """Refresh RichText CSS for current Light/Dark mode."""
+        self.document().setDefaultStyleSheet(_build_help_css(is_dark_mode()))
+        if not self.source().isEmpty():
+            self.reload()
+
+    def loadResource(self, resource_type: int, url: QtCore.QUrl) -> object:  # noqa: N802
+        """Serve sanitized local HTML files and suppress conflicting Sphinx RTD CSS."""
+        path_str = url.toLocalFile() if url.isLocalFile() else url.path()
+        if path_str.lower().endswith(".css"):
+            return ""
+        if path_str.lower().endswith((".html", ".htm")):
+            candidate = Path(path_str)
+            if not candidate.is_absolute():
+                candidate = (self._html_root / path_str.lstrip("/")).resolve()
+            if candidate.is_file():
+                try:
+                    raw = candidate.read_text(encoding="utf-8", errors="replace")
+                    return _sanitize_sphinx_html(raw)
+                except OSError:
+                    pass
+        return super().loadResource(resource_type, url)
 
     def go_home(self) -> None:
         """Navigate to the documentation index page."""
         self.setSource(self._home)
 
     def _navigate(self, url: QtCore.QUrl) -> None:
-        """Delegate external URLs to the system browser; load local ones inline."""
+        """Delegate external URLs to the system browser; resolve relative local links cleanly."""
         if url.scheme() in ("http", "https"):
             QtGui.QDesktopServices.openUrl(url)
-        else:
-            self.setSource(url)
+            return
+        if not url.isLocalFile() and not url.scheme():
+            base = self.source() if not self.source().isEmpty() else self._home
+            url = base.resolved(url)
+        self.setSource(url)
 
 
 # ---------------------------------------------------------------------------
@@ -224,6 +330,8 @@ class HelpWindow(QtWidgets.QMainWindow):
         super().__init__(parent)
         self.setWindowTitle("Synaptipy - Offline Documentation")
         self.resize(1100, 700)
+        self._browser: Optional[QtWidgets.QTextBrowser] = None
+        get_theme_signals().theme_changed.connect(self._on_theme_changed)
 
         # --- Tier 1: QHelpEngine ---
         qhc_path = resolve_qhc_path()
@@ -243,6 +351,12 @@ class HelpWindow(QtWidgets.QMainWindow):
 
         # --- Tier 3: graceful message ---
         self._build_no_docs_ui()
+
+    @QtCore.Slot(str)
+    def _on_theme_changed(self, _mode: str) -> None:
+        """Refresh document CSS when application theme changes."""
+        if self._browser is not None and hasattr(self._browser, "apply_theme_css"):
+            self._browser.apply_theme_css()
 
     # ------------------------------------------------------------------
     # UI construction helpers
@@ -328,6 +442,7 @@ class HelpWindow(QtWidgets.QMainWindow):
         displays the current page title.
         """
         browser = _LocalHtmlBrowser(html_root, self)
+        self._browser = browser
 
         # --- Toolbar ---
         toolbar = self.addToolBar("Navigation")
@@ -409,19 +524,9 @@ _instance: Optional[HelpWindow] = None
 
 
 def show_help_window(parent: Optional[QtWidgets.QWidget] = None) -> HelpWindow:
-    """Return (and show/raise) the singleton :class:`HelpWindow`.
-
-    The window is created lazily on first call.  Subsequent calls bring the
-    existing window to the front without constructing a new one.
-
-    Args:
-        parent: Widget to use as parent on first creation only.
-
-    Returns:
-        The :class:`HelpWindow` instance.
-    """
+    """Return (and show/raise) the singleton :class:`HelpWindow`."""
     global _instance
-    if _instance is None or not _instance.isVisible():
+    if _instance is None or not shiboken6.isValid(_instance):
         _instance = HelpWindow(parent)
     _instance.show()
     _instance.raise_()

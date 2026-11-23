@@ -956,8 +956,16 @@ def detect_threshold_kink(
         },
     ],
     plots=[
-        {"type": "hlines", "data": ["threshold"], "color": "r", "styles": ["dash"]},
-        {"type": "markers", "x": "spike_times", "y": "spike_voltages", "color": "r"},
+        {"type": "hlines", "data": ["_plot_threshold"], "color": "r", "styles": ["dash"]},
+        {"type": "markers", "x": "spike_times", "y": "_plot_spike_voltages", "role": "primary"},
+        {
+            "type": "markers",
+            "x": "_threshold_times",
+            "y": "_plot_threshold_voltages",
+            "color": "#ff7f00",
+            "symbol": "t",
+        },
+        {"type": "markers", "x": "_ahp_times", "y": "_plot_ahp_voltages", "color": "#1f78b4", "symbol": "d"},
     ],
 )
 def run_spike_detection_wrapper(
@@ -1066,6 +1074,22 @@ def run_spike_detection_wrapper(
             else:
                 win_freq_hz = (n_spk / trace_dur) if trace_dur > 0 else 0.0
             first_lat_s = float(result.spike_times[0] - stim_onset_s) if n_spk > 0 else np.nan
+            thresh_times = [
+                float(f.ap_delay) for f in features_list if f.ap_delay is not None and np.isfinite(f.ap_delay)
+            ]
+            thresh_volts = [
+                float(f.ap_threshold) + ljp_mv
+                for f in features_list
+                if f.ap_delay is not None and np.isfinite(f.ap_delay) and f.ap_threshold is not None
+            ]
+            ahp_t_list = [
+                float(f.ahp_time) for f in features_list if f.ahp_time is not None and np.isfinite(f.ahp_time)
+            ]
+            ahp_v_list = [
+                float(f.trough_v) + ljp_mv
+                for f in features_list
+                if f.ahp_time is not None and np.isfinite(f.ahp_time) and f.trough_v is not None
+            ]
             metrics: Dict[str, Any] = {
                 "spike_count": n_spk,
                 "mean_freq_hz": result.mean_frequency if result.mean_frequency is not None else 0.0,
@@ -1075,6 +1099,12 @@ def run_spike_detection_wrapper(
                 "spike_indices": result.spike_indices,
                 "spike_voltages": v_data,
                 "threshold": threshold,
+                "_plot_threshold": threshold + ljp_mv,
+                "_plot_spike_voltages": v_data + ljp_mv if len(v_data) > 0 else v_data,
+                "_threshold_times": thresh_times,
+                "_plot_threshold_voltages": thresh_volts,
+                "_ahp_times": ahp_t_list,
+                "_plot_ahp_voltages": ahp_v_list,
                 "parameters": params,
             }
             metrics.update(stats)
@@ -1083,6 +1113,7 @@ def run_spike_detection_wrapper(
                 "spike_count": 0,
                 "mean_freq_hz": 0.0,
                 "threshold": threshold,
+                "_plot_threshold": threshold + ljp_mv,
                 "spike_error": result.error_message or "Unknown error",
                 "parameters": params,
             }
@@ -1197,6 +1228,7 @@ def phase_plane_analysis_wrapper(
         "threshold_indices": thresh_indices,
         "threshold_vals": threshold_vals,
         "threshold_v": float(np.mean(threshold_vals)) if len(threshold_vals) > 0 else np.nan,
+        "_plot_threshold_v": float(np.mean(threshold_vals)) + ljp_mv if len(threshold_vals) > 0 else np.nan,
         "threshold_dvdt": float(dvdt_threshold),
         "max_dvdt": max_dvdt_val,
         "trace_max_dvdt": float(np.max(dvdt)) if len(dvdt) > 0 else 0.0,

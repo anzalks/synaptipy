@@ -129,10 +129,29 @@ class SynaptipyPlotCanvas(QtCore.QObject):
 
         return plot_item
 
-    def _configure_plot_item(self, plot_item: pg.PlotItem, plot_id: str):
+    def _configure_plot_item(self, plot_item: pg.PlotItem, plot_id: str):  # noqa: C901
         """Apply standard configuration to a plot item."""
-        # Grid
-        plot_item.showGrid(x=True, y=True, alpha=0.3)
+        # Respect saved user grid customization (enabled state + opacity)
+        try:
+            from synaptipy.shared.plot_customization import get_grid_pen, is_grid_enabled
+
+            if is_grid_enabled():
+                g_pen = get_grid_pen()
+                g_alpha = (g_pen.color().alpha() / 255.0) if (g_pen is not None and hasattr(g_pen, "color")) else 0.3
+                plot_item.showGrid(x=True, y=True, alpha=g_alpha)
+            else:
+                plot_item.showGrid(x=False, y=False)
+        except Exception:
+            plot_item.showGrid(x=True, y=True, alpha=0.3)
+
+        # Disable automatic SI double-prefixing (e.g. 'kpA', 'mmV') on pre-scaled channel units
+        for _ax_name in ("left", "right"):
+            try:
+                _ax = plot_item.getAxis(_ax_name)
+                if _ax is not None and hasattr(_ax, "enableAutoSIPrefix"):
+                    _ax.enableAutoSIPrefix(False)
+            except Exception:
+                pass
 
         # White background for ViewBox
         if plot_item.getViewBox():
@@ -268,14 +287,23 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         except (RuntimeError, TypeError, AttributeError):
             pass
 
-    def _close_all_plots(self):
-        """Disconnect ctrl signals and call PlotItem.close() for every plot.
+    def _close_all_plots(self):  # noqa: C901
+        """Disconnect ctrl/ViewBox signals and call PlotItem.close() for every plot.
 
         Must be called while items still have a valid scene() because
         PlotItem.close() internally calls scene().removeItem(self.vb).
         """
         for plot_item in list(self.plot_items.values()):
             try:
+                vb = plot_item.getViewBox()
+                if vb is not None:
+                    for sig_name in ("sigXRangeChanged", "sigYRangeChanged", "sigResized", "sigStateChanged"):
+                        sig = getattr(vb, sig_name, None)
+                        if sig is not None:
+                            try:
+                                sig.disconnect()
+                            except (TypeError, RuntimeError):
+                                pass
                 self._disconnect_ctrl_signals(plot_item)
                 plot_item.close()
             except Exception:

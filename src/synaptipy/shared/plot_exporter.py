@@ -96,11 +96,12 @@ class PlotExporter:
         The original background is restored immediately after the capture.
         """
         # Use the central layout item (.ci) if avail, else the widget itself
-        target_item = getattr(self.widget, "ci", self.widget)
-
-        # If it's a PlotWidget, target the PlotItem
-        if hasattr(self.widget, "getPlotItem"):
+        if isinstance(self.widget, pg.PlotItem):
+            target_item = self.widget
+        elif hasattr(self.widget, "getPlotItem"):
             target_item = self.widget.getPlotItem()
+        else:
+            target_item = getattr(self.widget, "ci", self.widget)
 
         # --- Force opaque white background for PNG export ---
         # Issue 2 fix: prevents OS dark-mode from compositing a dark canvas
@@ -125,8 +126,8 @@ class PlotExporter:
                 exporter = pg.exporters.ImageExporter(target_item)
 
                 # Scale for DPI (Screen DPI is usually ~96)
-                scale_factor = dpi / 96.0
-                exporter.parameters()["width"] = int(target_item.width() * scale_factor)
+                scale_factor = max(0.5, float(dpi or 300) / 96.0)
+                exporter.parameters()["width"] = max(64, int(float(target_item.width()) * scale_factor))
 
                 exporter.export(filename)
                 log.info(f"Exported raster plot to {filename}")
@@ -178,193 +179,346 @@ class PlotExporter:
             matplotlib.rcParams["pdf.fonttype"] = 42
             matplotlib.rcParams["ps.fonttype"] = 42
 
-        # 1. Setup Figure
+        # 1. Setup Figure - accept ExplorerPlotCanvas wrapper, PlotWidget, PlotItem, or GraphicsLayoutWidget
         plots_to_export = []
 
-        if self.wrapper:
-            # Explorer Mode: Multiple channels via wrapper
+        if self.wrapper and self.recording and hasattr(self.recording, "channels"):
             for cid in self.recording.channels.keys():
                 plot_item = self.wrapper.get_plot(cid)
                 if plot_item and plot_item.isVisible():
                     plots_to_export.append((cid, plot_item))
-        else:
-            # Analysis Mode: Single PlotWidget
-            if hasattr(self.widget, "getPlotItem"):
-                plot_item = self.widget.getPlotItem()
+        elif isinstance(self.widget, pg.PlotItem):
+            plots_to_export.append(("Analysis", self.widget))
+        elif hasattr(self.widget, "getPlotItem"):
+            plot_item = self.widget.getPlotItem()
+            if plot_item is not None:
                 plots_to_export.append(("Analysis", plot_item))
-            else:
-                # Fallback for generic widgets
-                log.warning("Widget does not have getPlotItem(). Cannot export vector.")
-                return False
+        elif hasattr(self.widget, "ci") and hasattr(self.widget.ci, "items"):
+            for item in self.widget.ci.items.keys():
+                if isinstance(item, pg.PlotItem) and item.isVisible():
+                    plots_to_export.append(("Plot", item))
+        else:
+            log.warning("Widget cannot be resolved to PlotItem(s). Cannot export vector.")
+            return False
 
         if not plots_to_export:
             log.warning("No visible plots to export.")
             return False
 
         n_plots = len(plots_to_export)
-        # Figure size: Match screen aspect ratio
-        screen_width = self.widget.width()
-        screen_height = self.widget.height()
+        try:
+            screen_width = float(self.widget.width())
+            screen_height = float(self.widget.height())
+        except Exception:
+            screen_width, screen_height = 0.0, 0.0
 
         if screen_width > 0 and screen_height > 0:
             aspect_ratio = screen_width / screen_height
-            fig_width = 12
-            fig_height = fig_width / aspect_ratio
+            fig_width = 12.0
+            fig_height = max(2.5, min(36.0, fig_width / aspect_ratio))
         else:
-            fig_width = 10
-            fig_height = 3 * n_plots
+            fig_width = 10.0
+            fig_height = 3.0 * n_plots
 
-        # Always create a FRESH figure — never reuse a previous one.
-        # This is the core guard against alpha-stacking (Issue 2): if the same
-        # Figure object were reused, previously drawn semi-transparent regions
-        # would accumulate on top of the new draw.
+        export_dpi = max(72, int(dpi or _RASTER_DPI))
+        share_x = n_plots > 1 and bool(self.wrapper)
+
         fig, axes = plt.subplots(
             n_plots,
             1,
-            sharex=True,
+            sharex=share_x,
             figsize=(fig_width, fig_height),
-            dpi=_RASTER_DPI,  # Use high DPI so rasterized layers are sharp in print
-            facecolor="white",  # Solid white canvas — blocks OS dark-mode bleed
+            dpi=export_dpi,
+            facecolor="white",
         )
         if n_plots == 1:
             axes = [axes]
 
-        # Get styling from customization manager
+        import numpy as np
+        import PySide6.QtCore as QtCore
+        import PySide6.QtGui as QtGui
+
+        from synaptipy.shared.plot_customization import get_grid_pen, is_grid_enabled
+
         avg_pen = get_average_pen()
         trial_pen = get_single_trial_pen()
+        grid_on = is_grid_enabled()
+        grid_pen = get_grid_pen()
+        grid_alpha = (
+            (grid_pen.color().alpha() / 255.0) if (grid_pen is not None and hasattr(grid_pen, "color")) else 0.3
+        )
 
-        # Helper to extract color/alpha from QPen
         def pen_to_mpl(pen):
             c = pen.color()
+            w = max(0.5, float(pen.widthF() or pen.width() or 1.0))
+            st = pen.style()
+            ls = "--" if st == QtCore.Qt.PenStyle.DashLine else (":" if st == QtCore.Qt.PenStyle.DotLine else "-")
+            return (c.redF(), c.greenF(), c.blueF()), c.alphaF(), w, ls
+
+        def brush_to_mpl(brush):
+            if brush is None:
+                return (0.2, 0.4, 0.8), 0.3
+            c = pg.mkBrush(brush).color()
             return (c.redF(), c.greenF(), c.blueF()), c.alphaF()
 
-        avg_color, avg_alpha = pen_to_mpl(avg_pen)
-        trial_color, trial_alpha = pen_to_mpl(trial_pen)
+        pg_sym_map = {"o": "o", "s": "s", "t": "^", "t1": "v", "d": "D", "+": "+", "x": "x", "star": "*"}
+
+        avg_color, avg_alpha, avg_w, _ = pen_to_mpl(avg_pen)
+        trial_color, trial_alpha, trial_w, _ = pen_to_mpl(trial_pen)
 
         if get_force_opaque_trials():
             trial_alpha = 1.0
 
-        # Determine whether to rasterize data layers (always True for PDF/SVG).
-        # For PNG output coming through this path (unusual but possible), rasterizing
-        # is still harmless since the whole file is a bitmap anyway.
         use_rasterized = fmt in ("pdf", "svg")
 
-        # 2. Iterate and extract data DIRECTLY from pyqtgraph PlotDataItems
+        def _axis_label_text(pi: pg.PlotItem, side: str) -> str:
+            try:
+                ax_item = pi.getAxis(side)
+                if ax_item is None:
+                    return ""
+                txt = (getattr(ax_item, "labelText", "") or "").strip()
+                units = (getattr(ax_item, "labelUnits", "") or "").strip()
+                if txt and units and f"({units})" not in txt and f"[{units}]" not in txt:
+                    return f"{txt} ({units})"
+                return txt
+            except Exception:
+                return ""
+
         for i, (label, plot_item) in enumerate(plots_to_export):
             ax = axes[i]
-
-            # Issue 2 fix: always set a white axes face so that OS themes cannot
-            # composite a dark colour through transparent Matplotlib patch regions.
             ax.set_facecolor("white")
 
-            # Get current view range to match screen
             vb = plot_item.getViewBox()
             x_range = vb.viewRange()[0]
             y_range = vb.viewRange()[1]
 
-            # Extract all PlotDataItems from this plot
-            plotted_items = []
-            if hasattr(plot_item, "listDataItems"):
-                plotted_items = plot_item.listDataItems()
-            else:
-                for item in plot_item.items:
-                    if isinstance(item, pg.PlotDataItem):
-                        plotted_items.append(item)
+            # 2a. PlotDataItems (skip hidden pooled sweeps, prefer full-resolution raw data)
+            plotted_items = (
+                plot_item.listDataItems()
+                if hasattr(plot_item, "listDataItems")
+                else [it for it in plot_item.items if isinstance(it, pg.PlotDataItem)]
+            )
 
-            # Plot each data item
             for item in plotted_items:
                 try:
-                    # Get the actual data from the PlotDataItem
-                    x_data, y_data = item.getData()
-
-                    if x_data is None or y_data is None:
+                    if hasattr(item, "isVisible") and not item.isVisible():
                         continue
-                    if len(x_data) == 0 or len(y_data) == 0:
-                        continue
-
-                    # Ensure arrays have same length
-                    min_len = min(len(x_data), len(y_data))
-                    x_data = x_data[:min_len]
-                    y_data = y_data[:min_len]
-
-                    # Determine if this is an average or trial line
-                    item_name = item.name() if item.name() else ""
-                    is_average = "Average" in item_name or "average" in item_name
-
-                    # Respect the item's own pen if possible; fall back to global pens
-                    item_pen = item.opts.get("pen")
-                    if item_pen:
-                        import PySide6.QtGui
-
-                        if isinstance(item_pen, PySide6.QtGui.QPen):
-                            c, a = pen_to_mpl(item_pen)
-                            mp_color, mp_alpha = c, a
-                        else:
-                            mp_color, mp_alpha = trial_color, trial_alpha
+                    raw_xy = getattr(item, "_synaptipy_raw_xy", None)
+                    if (
+                        isinstance(raw_xy, tuple)
+                        and len(raw_xy) == 2
+                        and raw_xy[0] is not None
+                        and raw_xy[1] is not None
+                    ):
+                        x_data, y_data = raw_xy
+                    elif getattr(item, "xData", None) is not None and getattr(item, "yData", None) is not None:
+                        x_data, y_data = item.xData, item.yData
                     else:
-                        mp_color, mp_alpha = trial_color, trial_alpha
+                        x_data, y_data = item.getData()
 
-                    if is_average:
-                        ax.plot(
+                    if x_data is None or y_data is None or len(x_data) == 0 or len(y_data) == 0:
+                        continue
+
+                    min_len = min(len(x_data), len(y_data))
+                    x_data = np.asarray(x_data[:min_len], dtype=float)
+                    y_data = np.asarray(y_data[:min_len], dtype=float)
+
+                    opts = getattr(item, "opts", {}) or {}
+                    item_name = str(opts.get("name") or (item.name() if hasattr(item, "name") else "") or "")
+                    is_average = "average" in item_name.lower() or "avg" in item_name.lower()
+
+                    item_pen = opts.get("pen")
+                    symbol = opts.get("symbol")
+
+                    # Symbol-only PlotDataItem (e.g. popup scatter points / Phase Plane markers)
+                    if item_pen is None and symbol is not None:
+                        sym_brush = opts.get("symbolBrush")
+                        mc, ma = brush_to_mpl(sym_brush)
+                        ms = float(opts.get("symbolSize", 8))
+                        ax.scatter(
                             x_data,
                             y_data,
-                            color=mp_color if self.wrapper else avg_color,
-                            alpha=mp_alpha if self.wrapper else avg_alpha,
-                            linewidth=1.5,
-                            zorder=10,
-                            # Averages are thinner datasets — keep as vectors for crispness.
-                            rasterized=False,
+                            s=ms * ms * 0.6,
+                            color=[(*mc, max(0.2, ma))],
+                            marker=pg_sym_map.get(str(symbol), "o"),
+                            edgecolors="#222222",
+                            linewidths=0.6,
+                            zorder=15,
                         )
+                        continue
+
+                    ls = "-"
+                    lw = avg_w if is_average else trial_w
+                    if item_pen is not None:
+                        qpen = item_pen if isinstance(item_pen, QtGui.QPen) else pg.mkPen(item_pen)
+                        if qpen.style() == QtCore.Qt.PenStyle.NoPen:
+                            mp_color, mp_alpha = None, 0.0
+                        else:
+                            mp_color, mp_alpha, lw, ls = pen_to_mpl(qpen)
                     else:
-                        # Issue 1b — Hybrid rendering:
-                        # Raw trial traces can have tens of thousands of points. Rasterizing
-                        # them prevents PDF/SVG bloat and compositing artefacts while the axes
-                        # frame, labels, and average line stay as clean vectors.
+                        mp_color, mp_alpha = (avg_color, avg_alpha) if is_average else (trial_color, trial_alpha)
+
+                    if mp_color is not None and mp_alpha > 0:
                         ax.plot(
                             x_data,
                             y_data,
                             color=mp_color,
-                            alpha=mp_alpha,
-                            linewidth=0.8,
-                            rasterized=use_rasterized,
+                            alpha=1.0 if (not is_average and get_force_opaque_trials()) else mp_alpha,
+                            linewidth=max(0.6, lw * 0.85),
+                            linestyle=ls,
+                            zorder=10 if is_average else 2,
+                            rasterized=(False if (is_average or len(x_data) < 2000) else use_rasterized),
                         )
 
+                    if symbol is not None:
+                        sym_brush = opts.get("symbolBrush")
+                        mc, ma = brush_to_mpl(sym_brush) if sym_brush is not None else (mp_color or (0, 0, 0), 1.0)
+                        ms = float(opts.get("symbolSize", 7))
+                        ax.scatter(
+                            x_data,
+                            y_data,
+                            s=ms * ms * 0.55,
+                            color=[(*mc, max(0.25, ma))],
+                            marker=pg_sym_map.get(str(symbol), "o"),
+                            edgecolors="#222222",
+                            linewidths=0.5,
+                            zorder=14,
+                        )
                 except Exception as e:
-                    log.warning(f"Failed to extract data from plot item: {e}")
-                    continue
+                    log.warning(f"Failed to extract data from PlotDataItem: {e}")
 
-            # Styling Axes
+            # 2b. Analysis overlays: curves, scatters, lines, regions, fills, text
+            for item in getattr(plot_item, "items", []):
+                try:
+                    if isinstance(item, pg.PlotDataItem):
+                        continue
+                    if hasattr(item, "isVisible") and not item.isVisible():
+                        continue
+
+                    if isinstance(item, pg.FillBetweenItem):
+                        curves = getattr(item, "curves", None)
+                        if curves and len(curves) >= 2:
+                            x1, y1 = curves[0].getData()
+                            x2, y2 = curves[1].getData()
+                            if x1 is not None and y1 is not None and y2 is not None and len(x1) == len(y1) == len(y2):
+                                fc, fa = brush_to_mpl(getattr(item, "brush", None))
+                                ax.fill_between(x1, y1, y2, color=fc, alpha=fa, zorder=3, rasterized=use_rasterized)
+
+                    elif isinstance(item, pg.PlotCurveItem):
+                        xc, yc = item.getData()
+                        if xc is not None and yc is not None and len(xc) >= 2:
+                            qpen = pg.mkPen(item.opts.get("pen"))
+                            if qpen.style() != QtCore.Qt.PenStyle.NoPen:
+                                cc, ca, cw, cls = pen_to_mpl(qpen)
+                                ax.plot(
+                                    xc,
+                                    yc,
+                                    color=cc,
+                                    alpha=ca,
+                                    linewidth=max(0.8, cw * 0.85),
+                                    linestyle=cls,
+                                    zorder=12,
+                                )
+
+                    elif isinstance(item, pg.ScatterPlotItem):
+                        xs, ys = item.getData()
+                        if xs is not None and ys is not None and len(xs) > 0:
+                            fc, fa = brush_to_mpl(item.opts.get("brush"))
+                            sz = float(item.opts.get("size", 9))
+                            sym = pg_sym_map.get(str(item.opts.get("symbol", "o")), "o")
+                            ax.scatter(
+                                xs,
+                                ys,
+                                s=sz * sz * 0.6,
+                                color=[(*fc, max(0.3, fa))],
+                                marker=sym,
+                                edgecolors="#222222",
+                                linewidths=0.6,
+                                zorder=16,
+                            )
+
+                    elif isinstance(item, pg.InfiniteLine):
+                        pos_val = float(item.value())
+                        qpen = pg.mkPen(item.pen)
+                        lc, la, lw, lls = pen_to_mpl(qpen)
+                        if abs(float(item.angle) - 90.0) < 1e-3:
+                            ax.axvline(pos_val, color=lc, alpha=la, linewidth=lw, linestyle=lls, zorder=11)
+                        elif abs(float(item.angle)) < 1e-3:
+                            ax.axhline(pos_val, color=lc, alpha=la, linewidth=lw, linestyle=lls, zorder=11)
+
+                    elif isinstance(item, pg.LinearRegionItem):
+                        r0, r1 = item.getRegion()
+                        rc, ra = brush_to_mpl(getattr(item, "brush", None))
+                        ax.axvspan(r0, r1, color=rc, alpha=ra, zorder=1)
+
+                    elif isinstance(item, pg.TextItem):
+                        txt = item.toPlainText().strip()
+                        if txt:
+                            pos = item.pos()
+                            ax.text(
+                                float(pos.x()),
+                                float(pos.y()),
+                                txt,
+                                fontsize=8.5,
+                                color="#111111",
+                                bbox={
+                                    "boxstyle": "round,pad=0.25",
+                                    "facecolor": "white",
+                                    "edgecolor": "#666666",
+                                    "alpha": 0.88,
+                                },
+                                zorder=20,
+                            )
+                except Exception as exc:
+                    log.debug("Skipped overlay item during Matplotlib export: %s", exc)
+
             ax.set_xlim(x_range)
             ax.set_ylim(y_range)
 
-            # Label
-            if self.wrapper and hasattr(self.recording, "channels") and label in self.recording.channels:
+            # Axis labels & title: preserve PlotItem labels first, fall back to Recording channel metadata
+            y_lbl = _axis_label_text(plot_item, "left")
+            has_rec_chan = (
+                self.wrapper
+                and self.recording
+                and hasattr(self.recording, "channels")
+                and label in self.recording.channels
+            )
+            if not y_lbl and has_rec_chan:
                 chan = self.recording.channels[label]
-                ax.set_ylabel(f"{chan.get_primary_data_label()} ({chan.units})")
-            else:
-                ax.set_ylabel(label)
+                y_lbl = f"{chan.get_primary_data_label()} ({chan.units})"
+            ax.set_ylabel(y_lbl or label)
 
-            # Remove top/right spines (publication style)
+            x_lbl = _axis_label_text(plot_item, "bottom")
+            if x_lbl and (not share_x or i == n_plots - 1):
+                ax.set_xlabel(x_lbl)
+
+            try:
+                title_txt = (plot_item.titleLabel.text or "").strip() if getattr(plot_item, "titleLabel", None) else ""
+                if title_txt:
+                    ax.set_title(title_txt, fontsize=10)
+            except Exception:
+                pass
+
             ax.spines["right"].set_visible(False)
             ax.spines["top"].set_visible(False)
-            ax.grid(True, alpha=0.3)
+            if grid_on and grid_pen is not None:
+                ax.grid(True, alpha=grid_alpha)
+            else:
+                ax.grid(False)
 
-        # Bottom Label
-        axes[-1].set_xlabel("Time (s)")
+        if not axes[-1].get_xlabel():
+            bot_lbl = _axis_label_text(plots_to_export[-1][1], "bottom")
+            axes[-1].set_xlabel(bot_lbl or "Time (s)")
 
         plt.tight_layout()
 
-        # Issue 2 fix: always save with a solid white background.
-        # ``transparent=False`` + ``facecolor='white'`` ensures that macOS Dark Mode
-        # and any other OS theme cannot composite a dark canvas colour through the
-        # transparent alpha channel of PNG files opened in Preview / Finder / browsers.
         fig.savefig(
             filename,
             format=fmt,
-            dpi=_RASTER_DPI,
+            dpi=export_dpi,
             facecolor="white",
             transparent=False,
         )
         plt.close(fig)
-        log.info(f"Exported vector plot to {filename} (hybrid rendering, dpi={_RASTER_DPI})")
+        log.info(f"Exported vector plot to {filename} (hybrid rendering, dpi={export_dpi})")
         return True

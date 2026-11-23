@@ -77,6 +77,10 @@ class SynaptipyViewBox(pg.ViewBox):
                     self.rbScaleBox.hide()
                     ax = QtCore.QRectF(Point(down_pos), Point(ev.pos()))
                     ax = self.childGroup.mapRectFromParent(ax)
+                    # Lock manual Y before showAxRect / sigXRangeChanged so Explorer's
+                    # visible-X Y-autoscale handler preserves the 2D box zoom's Y span.
+                    self._synaptipy_manual_y = True
+                    self.enableAutoRange(x=False, y=False)
                     self.showAxRect(ax)  # calls setRange -> emits sigRangeChanged
                     self.axHistoryPointer += 1
                     self.axHistory = self.axHistory[: self.axHistoryPointer] + [ax]
@@ -110,7 +114,39 @@ class SynaptipyViewBox(pg.ViewBox):
                 x = s[0] if mouse_enabled[0] == 1 else None
                 y = s[1] if mouse_enabled[1] == 1 else None
 
+                if axis == 1 and y is not None:
+                    self._synaptipy_manual_y = True
+                    self.enableAutoRange(y=False)
+
                 center = Point(tr.map(ev.buttonDownPos(QtCore.Qt.MouseButton.RightButton)))
                 self._resetTarget()
                 self.scaleBy(x=x, y=y, center=center)
                 self.sigRangeChangedManually.emit(self.state["mouseEnabled"])
+
+    def wheelEvent(self, ev, axis=None):
+        """Apply user Scroll Behavior preference (Natural vs Inverted) to wheel/trackpad zoom."""
+        if (axis is None or axis == 1) and self.state["mouseEnabled"][1]:
+            self._synaptipy_manual_y = True
+            self.enableAutoRange(y=False)
+
+        try:
+            from synaptipy.shared.scroll_settings import get_scroll_multiplier
+
+            mult = get_scroll_multiplier()
+        except Exception:
+            mult = 1
+
+        if mult < 0:
+            mask = np.array(self.state["mouseEnabled"], dtype=np.float64)
+            if axis is not None and 0 <= axis < 2:
+                mask[1 - axis] = 0.0
+            s = (mask * 0.02) + 1
+            s = [val ** (ev.delta() * (1.0 / 8.0) * 0.1) if m == 1.0 else None for val, m in zip(s, mask)]
+            center = Point(fn.invertQTransform(self.childGroup.transform()).map(ev.pos()))
+            self._resetTarget()
+            self.scaleBy(x=s[0], y=s[1], center=center)
+            ev.accept()
+            self.sigRangeChangedManually.emit(self.state["mouseEnabled"])
+            return
+
+        super().wheelEvent(ev, axis=axis)

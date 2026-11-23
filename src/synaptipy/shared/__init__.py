@@ -44,8 +44,15 @@ _LAZY_EXPORTS = {
     "style_error_message": ("styling", "style_error_message"),
     "get_system_theme_mode": ("styling", "get_system_theme_mode"),
     "SynaptipyPlotFactory": ("plot_factory", "SynaptipyPlotFactory"),
+    "ThemeMode": ("theme_manager", "ThemeMode"),
+    "apply_theme": ("theme_manager", "apply_theme"),
+    "get_theme_mode": ("theme_manager", "get_theme_mode"),
+    "set_theme_mode": ("theme_manager", "set_theme_mode"),
+    "is_dark_mode": ("theme_manager", "is_dark_mode"),
+    "get_theme_signals": ("theme_manager", "get_theme_signals"),
     "styling": ("styling", None),
     "plot_factory": ("plot_factory", None),
+    "theme_manager": ("theme_manager", None),
 }
 
 

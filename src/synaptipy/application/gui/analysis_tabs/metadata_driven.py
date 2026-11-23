@@ -80,11 +80,19 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         # --- Result h-lines ---
         self._result_hlines: Dict[str, pg.InfiniteLine] = {}
 
-        # --- Popup plot handles ---
+        # --- Popup plot handles (keyed per sub-method + plot title) ---
         self._popup_plot: Optional[pg.PlotItem] = None
         self._popup_curves: Dict[str, Any] = {}
+        self._popup_plots_by_method: Dict[str, Any] = {}
+        self._method_param_cache: Dict[str, Dict[str, Any]] = {}
+        self._active_method_label: Optional[str] = None
+        self._ctrl_click_connected: bool = False
+        self._last_message_state: tuple = ([], [])
 
         super().__init__(neo_adapter, settings_ref, parent)
+        from synaptipy.shared.theme_manager import get_theme_signals
+
+        get_theme_signals().theme_changed.connect(self._on_theme_changed)
         self._setup_ui()
         self._setup_interactive_regions()
         # Module-level aggregator entries have no ui_params of their own;
@@ -240,7 +248,8 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         self.results_table = QtWidgets.QTableWidget()
         self.results_table.setColumnCount(2)
         self.results_table.setHorizontalHeaderLabels(["Metric", "Value"])
-        self.results_table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Stretch)
+        self.results_table.horizontalHeader().setSectionResizeMode(0, QtWidgets.QHeaderView.ResizeMode.Stretch)
+        self.results_table.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeMode.ResizeToContents)
         self.results_table.verticalHeader().setVisible(False)
         self.results_table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
         self.results_table.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.SingleSelection)
@@ -275,17 +284,19 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         self._setup_plot_area(plot_layout, stretch_factor=0)  # Stretch handled by splitter
         splitter.addWidget(plot_container)
 
-        # Set Splitter Sizes (1/3 Left, 2/3 Right)
+        # Set Splitter Sizes (1/3 Left, 2/3 Right) and prevent collapsing panels to 0 px
+        splitter.setCollapsible(0, False)
+        splitter.setCollapsible(1, False)
         splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 3)
 
         # Basic plot setup
         if self.plot_widget:
-            self.plot_widget.showGrid(x=True, y=True)
             self._setup_custom_plot_items()
 
     def reset_parameters(self):
         """Reset generated parameters to defaults defined in metadata."""
+        self._method_param_cache.pop(self.analysis_name, None)
         if hasattr(self, "param_generator") and self.metadata:
             ui_params = self.metadata.get("ui_params", [])
             # Re-generating widgets will reset them to defaults
@@ -354,8 +365,8 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             layout.addRow(label, self._secondary_channel_combobox)
 
         # --- Region selection mode (Interactive / Manual) ---
-        # Auto-detect: if this analysis has paired start/end region params,
-        # offer a mode selector so the user can toggle draggable regions.
+        # Always construct the combo so method_selector tabs can reveal/hide it dynamically
+        # when switching between sub-analyses with and without paired start/end windows.
         region_param_names = [
             ("baseline_start", "baseline_end"),
             ("baseline_start_s", "baseline_end_s"),
@@ -363,18 +374,23 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             ("response_start_s", "response_end_s"),
             ("response_peak_start_s", "response_peak_end_s"),
             ("response_steady_start_s", "response_steady_end_s"),
+            ("peak_window_start", "peak_window_end"),
+            ("ss_window_start", "ss_window_end"),
         ]
         ui_param_names = {p.get("name") for p in self.metadata.get("ui_params", [])}
         has_regions = any(s in ui_param_names and e in ui_param_names for s, e in region_param_names)
-        if has_regions:
-            self._region_mode_combo = QtWidgets.QComboBox()
-            self._region_mode_combo.addItems(["Interactive", "Manual"])
-            self._region_mode_combo.setToolTip(
-                "Interactive: drag regions on the plot to set windows.\n"
-                "Manual: type start/end values in the spinboxes directly."
-            )
-            self._region_mode_combo.currentIndexChanged.connect(self._on_region_mode_changed)
-            layout.addRow("Region Mode:", self._region_mode_combo)
+        self._region_mode_combo = QtWidgets.QComboBox()
+        self._region_mode_combo.addItems(["Interactive", "Manual"])
+        self._region_mode_combo.setToolTip(
+            "Interactive: drag regions on the plot to set windows.\n"
+            "Manual: type start/end values in the spinboxes directly."
+        )
+        self._region_mode_combo.currentIndexChanged.connect(self._on_region_mode_changed)
+        layout.addRow("Region Mode:", self._region_mode_combo)
+        try:
+            layout.setRowVisible(self._region_mode_combo, has_regions)
+        except RuntimeError:
+            pass
 
     def _on_method_selector_changed(self):  # noqa: C901
         """Handle switching between analysis methods via the method combo box."""
@@ -385,22 +401,62 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         if not registry_key:
             return
 
+        # Cache outgoing sub-method's parameter edits before rebuilding widgets
+        if hasattr(self, "param_generator") and self.param_generator.widgets and self.analysis_name:
+            try:
+                self._method_param_cache[self.analysis_name] = dict(self.param_generator.gather_params())
+            except Exception:
+                pass
+
         log.debug(f"Switching analysis method to: {registry_key}")
         self.analysis_name = registry_key
+        self._active_method_label = display_label
         self.metadata = AnalysisRegistry.get_metadata(registry_key)
 
-        # Rebuild generated parameter widgets
+        # Hide popup windows belonging to other sub-methods so stale I-V / RMP / F-I
+        # popups never stay behind or receive incompatible curve updates.
+        for p_key, p_entry in list(self._popup_plots_by_method.items()):
+            if not p_key.startswith(f"{registry_key}:"):
+                try:
+                    p_entry[0].hide()
+                except Exception:
+                    pass
+        self._popup_plot = None
+        self._popup_curves = {}
+
+        # Rebuild generated parameter widgets and restore cached values if available
         if hasattr(self, "param_generator"):
             ui_params = self.metadata.get("ui_params", [])
             self.param_generator.generate_widgets(ui_params, self._on_param_changed)
+            cached = self._method_param_cache.get(registry_key, {})
+            for k, val in cached.items():
+                w = self.param_generator.widgets.get(k)
+                if w is None or val is None:
+                    continue
+                blocked = w.blockSignals(True)
+                try:
+                    if isinstance(w, (QtWidgets.QDoubleSpinBox, QtWidgets.QSpinBox)):
+                        w.setValue(val)
+                    elif isinstance(w, QtWidgets.QCheckBox):
+                        w.setChecked(bool(val))
+                    elif isinstance(w, QtWidgets.QComboBox):
+                        idx = w.findText(str(val))
+                        if idx >= 0:
+                            w.setCurrentIndex(idx)
+                    elif isinstance(w, QtWidgets.QLineEdit):
+                        w.setText(str(val))
+                except Exception:
+                    pass
+                finally:
+                    w.blockSignals(blocked)
 
-        # Re-setup interactive regions for the new parameter set
+        # Remove previous method's persistent plot items & result h-lines, then set up new ones
+        self._teardown_custom_plot_items()
+        self._interactive_region_created = False
+        self._setup_custom_plot_items()
         self._setup_interactive_regions()
 
         # Show/hide the secondary channel row based on the new sub-analysis metadata.
-        # The parameter name is re-read as well: sub-analyses within one module are
-        # free to name their secondary input differently, and keeping the old name
-        # would inject the channel data under a key the new function ignores.
         if hasattr(self, "_secondary_channel_combobox") and self._secondary_channel_combobox is not None:
             sec_cfg = self.metadata.get("requires_secondary_channel")
             show_sec = bool(sec_cfg and isinstance(sec_cfg, dict))
@@ -412,26 +468,20 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             except RuntimeError:
                 pass
 
-        # Clear previous results
+        # Clear previous results and disable Save until new analysis finishes
+        self._last_analysis_result = None
+        self._set_save_button_enabled(False)
+        self._update_accumulation_ui_state()
         if self.results_table:
             self.results_table.setRowCount(0)
         self._show_analysis_messages({})
         self._current_event_indices = []
-        if self._event_markers_item:
-            self._event_markers_item.setData(x=[], y=[])
-            self._event_markers_item.setVisible(False)
-        if self._artifact_curve_item:
-            self._artifact_curve_item.setData([], [])
-            self._artifact_curve_item.setVisible(False)
 
-        # Drop the previous method's overlays.  These are keyed off the old
-        # metadata's ``plots`` list, so leaving them on the canvas draws stimulus
-        # lines and fits from an analysis that is no longer selected.
+        # Drop the previous method's dynamic overlays.
         self._clear_dynamic_plot_items()
 
         # Apply channel-aware defaults for the newly generated widgets, then
-        # re-run so the tab shows results for the method that is now selected
-        # instead of an empty table.
+        # re-run so the tab shows results for the method that is now selected.
         self._update_parameter_visibility()
         if self._current_plot_data and self._analysis_debounce_timer:
             self._analysis_debounce_timer.start(self._debounce_delay_ms)
@@ -457,14 +507,35 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         if hasattr(self, "_left_scroll_area") and hasattr(self, "_params_group"):
             self._left_scroll_area.ensureWidgetVisible(self._params_group)
 
+    def _teardown_custom_plot_items(self):
+        """Remove persistent plot items and result h-lines when switching methods."""
+        if self.plot_widget:
+            for item in (self._event_markers_item, self._threshold_line, self._artifact_curve_item):
+                if item is not None:
+                    try:
+                        if item in self.plot_widget.items:
+                            self.plot_widget.removeItem(item)
+                    except RuntimeError:
+                        pass
+            for line in list(self._result_hlines.values()):
+                try:
+                    if line in self.plot_widget.items:
+                        self.plot_widget.removeItem(line)
+                except RuntimeError:
+                    pass
+        self._event_markers_item = None
+        self._threshold_line = None
+        self._artifact_curve_item = None
+        self._result_hlines.clear()
+
     def _setup_custom_plot_items(self):
         """
         Create persistent plot items based on metadata ``plots`` list.
 
         Recognised persistent types (created once, updated per-analysis):
-        * ``event_markers`` — interactive scatter (click remove / ctrl-click add)
-        * ``threshold_line`` — draggable horizontal line synced w/ a param widget
-        * ``artifact_overlay`` — curve item for artifact mask visualisation
+        * ``event_markers`` - interactive scatter (click remove / ctrl-click add)
+        * ``threshold_line`` - draggable horizontal line synced w/ a param widget
+        * ``artifact_overlay`` - curve item for artifact mask visualisation
         """
         if not self.plot_widget:
             return
@@ -475,24 +546,28 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             ptype = pcfg.get("type")
 
             if ptype == "event_markers":
-                self._event_markers_item = pg.ScatterPlotItem(
-                    size=10, pen=pg.mkPen(None), brush=pg.mkBrush(255, 0, 0, 150)
-                )
+                s_pen, s_brush = get_scatter_pen_and_brush()
+                self._event_markers_item = pg.ScatterPlotItem(size=10, pen=s_pen, brush=s_brush)
+                self._event_markers_item._synaptipy_role = "scatter_markers"
                 self.plot_widget.addItem(self._event_markers_item)
                 self._event_markers_item.setVisible(False)
                 self._event_markers_item.setZValue(100)
                 self._event_markers_item.sigClicked.connect(self._on_event_marker_clicked)
-                self.plot_widget.scene().sigMouseClicked.connect(self._on_plot_ctrl_clicked)
+                if not self._ctrl_click_connected and self.plot_widget.scene() is not None:
+                    self.plot_widget.scene().sigMouseClicked.connect(self._on_plot_ctrl_clicked)
+                    self._ctrl_click_connected = True
 
             elif ptype == "threshold_line":
                 param_key = pcfg.get("param", "threshold")
-                self._threshold_line = pg.InfiniteLine(
-                    angle=0, movable=True, pen=pg.mkPen("b", style=QtCore.Qt.PenStyle.DashLine)
-                )
+                self._threshold_line = pg.InfiniteLine(angle=0, movable=True, pen=get_hv_line_pen())
+                self._threshold_line._synaptipy_role = "hv_line"
+                self._threshold_line.setVisible(False)
                 self.plot_widget.addItem(self._threshold_line)
                 self._threshold_line.setZValue(90)
 
                 def _on_threshold_dragged(pk=param_key):
+                    if self._threshold_line is None:
+                        return
                     val = self._threshold_line.value()
                     if hasattr(self, "param_generator") and pk in self.param_generator.widgets:
                         w = self.param_generator.widgets[pk]
@@ -545,12 +620,19 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                     if self._syncing_regions:
                         return
                     self._syncing_regions = True
-                    minX, maxX = region.getRegion()
-                    start_w.setValue(minX)
-                    end_w.setValue(maxX)
-                    # Manually trigger param change since setValue blocks signal if unchanged?
-                    # valueChanged will fire, which triggers _on_param_changed via param_generator
-                    self._syncing_regions = False
+                    try:
+                        # If auto_detect_pulse is active, uncheck it when user manually drags a region
+                        auto_w = widgets.get("auto_detect_pulse")
+                        if isinstance(auto_w, QtWidgets.QCheckBox) and auto_w.isChecked():
+                            b_auto = auto_w.blockSignals(True)
+                            auto_w.setChecked(False)
+                            auto_w.blockSignals(b_auto)
+                        minX, maxX = region.getRegion()
+                        start_w.setValue(minX)
+                        end_w.setValue(maxX)
+                    finally:
+                        self._syncing_regions = False
+                    self._on_param_changed()
 
                 region.sigRegionChangeFinished.connect(update_spinboxes)
 
@@ -577,9 +659,17 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         bind_region_tracked("response_peak_start_s", "response_peak_end_s", (255, 165, 0))  # Orange
         bind_region_tracked("response_steady_start_s", "response_steady_end_s", (0, 255, 0))  # Green
 
-        # Also bind Rin-style param names (without _s suffix)
+        # Also bind Rin-style param names (without _s suffix) and Sag Ratio windows
         bind_region_tracked("baseline_start", "baseline_end", (0, 0, 255))
         bind_region_tracked("response_start", "response_end", (255, 0, 0))
+        bind_region_tracked("peak_window_start", "peak_window_end", (255, 165, 0))
+        bind_region_tracked("ss_window_start", "ss_window_end", (0, 200, 80))
+
+        if self._region_mode_combo is not None and hasattr(self, "permanent_params_layout"):
+            try:
+                self.permanent_params_layout.setRowVisible(self._region_mode_combo, bool(self._region_spinbox_keys))
+            except RuntimeError:
+                pass
 
         # Apply region mode visibility
         self._apply_region_mode()
@@ -662,10 +752,17 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         """Add event marker on Ctrl+click."""
         if not ev.modifiers() & QtCore.Qt.KeyboardModifier.ControlModifier:
             return
-        if not self._current_plot_data or self._event_markers_item is None:
+        if not self._current_plot_data or self._event_markers_item is None or not self.plot_widget:
             return
 
-        pos = self.plot_widget.plotItem.vb.mapSceneToView(ev.scenePos())
+        vb = (
+            self.plot_widget.getViewBox()
+            if hasattr(self.plot_widget, "getViewBox")
+            else getattr(self.plot_widget, "vb", None)
+        )
+        if vb is None:
+            return
+        pos = vb.mapSceneToView(ev.scenePos())
         clicked_time = pos.x()
         times = self._current_plot_data["time"]
         if clicked_time < times[0] or clicked_time > times[-1]:
@@ -718,10 +815,16 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             # Fallback for simple types
             result = {"result": self._last_analysis_result}
 
-        # CRITICAL: Add data_source key which is required by _request_save_result
+        # CRITICAL: Add data_source key and concrete sub-analysis label for saving
         if self.data_source_combobox and self.data_source_combobox.isEnabled():
             data_source = self.data_source_combobox.currentData()
             result["data_source"] = data_source
+        specific_label = (
+            self._active_method_label
+            or (self.metadata.get("label") if isinstance(self.metadata, dict) else None)
+            or self.get_display_name()
+        )
+        result["_analysis_type_override"] = specific_label
 
         return result
 
@@ -824,8 +927,9 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             if isinstance(ds, int):
                 trial_index = ds
             elif ds == "average":
-                # Use average of the secondary channel if available
-                avg = getattr(channel, "average_data", None)
+                # Use average of the secondary channel (respecting filtered trial selection)
+                sel_trials = sorted(self._filtered_indices) if getattr(self, "_filtered_indices", None) else None
+                avg = channel.get_averaged_data(trial_indices=sel_trials)
                 if avg is not None:
                     params[self._secondary_channel_param_name] = avg
                     return
@@ -1058,8 +1162,16 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 data_list = []
                 time_list = []
                 fs = data.get("sampling_rate", 10000.0)
+                trial_iter = (
+                    sorted(i for i in self._filtered_indices if 0 <= i < num_trials)
+                    if getattr(self, "_filtered_indices", None)
+                    else list(range(num_trials))
+                )
+                win_start = params.get("t_start")
+                win_end = params.get("t_end")
+                has_win = win_start is not None and win_end is not None and float(win_end) > float(win_start)
 
-                for i in range(num_trials):
+                for i in trial_iter:
                     trial_data = channel.get_data(i)
                     trial_time = channel.get_relative_time_vector(i)
 
@@ -1070,6 +1182,11 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                                 processed = self.pipeline.process(trial_data, fs, trial_time)
                                 if processed is not None:
                                     trial_data = processed
+                        if has_win:
+                            w_mask = (trial_time >= float(win_start)) & (trial_time <= float(win_end))
+                            if np.sum(w_mask) >= 2:
+                                trial_data = trial_data[w_mask]
+                                trial_time = trial_time[w_mask]
 
                         data_list.append(trial_data)
                         time_list.append(trial_time)
@@ -1084,9 +1201,41 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 voltage = data["data"]
                 time = data["time"]
                 fs = data["sampling_rate"]
+                win_offset = int(data.get("_window_offset_idx", 0) or 0)
+
+                # Guard secondary channel array slicing when primary trace was restricted
+                sec_key = self._secondary_channel_param_name
+                if (
+                    win_offset >= 0
+                    and sec_key
+                    and sec_key in params
+                    and isinstance(params[sec_key], np.ndarray)
+                    and self._current_plot_data
+                    and len(params[sec_key]) == len(self._current_plot_data.get("time", []))
+                    and len(time) < len(params[sec_key])
+                ):
+                    params[sec_key] = params[sec_key][win_offset : win_offset + len(time)]
 
                 # Call the function with single arrays
                 results = AnalysisRegistry.execute(self.analysis_name, voltage, time, fs, **params)
+                res_dict = results.as_dict()
+                if win_offset > 0 and isinstance(res_dict.get("metrics"), dict):
+                    m = res_dict["metrics"]
+                    for idx_k in ("spike_indices", "event_indices", "threshold_indices"):
+                        if idx_k in m and m[idx_k] is not None:
+                            try:
+                                m[idx_k] = np.asarray(m[idx_k], dtype=int) + win_offset
+                            except Exception:
+                                pass
+                    if "_result_obj" in m and hasattr(m["_result_obj"], "event_indices"):
+                        try:
+                            if m["_result_obj"].event_indices is not None:
+                                m["_result_obj"].event_indices = (
+                                    np.asarray(m["_result_obj"].event_indices, dtype=int) + win_offset
+                                )
+                        except Exception:
+                            pass
+                return res_dict
 
             return results.as_dict()
 
@@ -1163,13 +1312,43 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         self.protocol_readiness_label.setText(f"Protocol: {families} ({state})")
         return contexts
 
-    def _report_analysis_blocked(self, message: str) -> None:
-        """Render a blocked/unconfigured run in the tab's message area.
+    @QtCore.Slot(str)
+    def _on_theme_changed(self, _mode: str = "") -> None:
+        """Re-render status/warning messages with WCAG-compliant palette colors on theme switch."""
+        try:
+            errors, warnings = getattr(self, "_last_message_state", ([], []))
+            if errors or warnings:
+                self._render_message_banner(errors, warnings)
+        except RuntimeError:
+            pass
 
-        Any stale results are cleared with it, so a "select a channel" hint is
-        never left sitting above numbers, or beside stimulus lines, left over
-        from a run that did happen.
-        """
+    def _render_message_banner(self, errors: List[str], warnings: List[str]) -> None:
+        import html as _html
+
+        from synaptipy.shared.theme_manager import status_html_colors
+
+        label = getattr(self, "analysis_message_label", None)
+        if label is None:
+            return
+        self._last_message_state = (list(errors), list(warnings))
+        colors = status_html_colors()
+        try:
+            if errors:
+                body = "<br>".join(f"[!] {_html.escape(text, quote=False)}" for text in errors + warnings)
+                label.setText(f"<span style='color:{colors['error']};'>{body}</span>")
+                label.setVisible(True)
+            elif warnings:
+                body = "<br>".join(f"[!] {_html.escape(text, quote=False)}" for text in warnings)
+                label.setText(f"<span style='color:{colors['warning']};'>{body}</span>")
+                label.setVisible(True)
+            else:
+                label.clear()
+                label.setVisible(False)
+        except RuntimeError:
+            pass
+
+    def _report_analysis_blocked(self, message: str) -> None:
+        """Render a blocked/unconfigured run in the tab's message area."""
         if self.results_table:
             try:
                 self.results_table.setRowCount(0)
@@ -1180,20 +1359,10 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         if label is None:
             super()._report_analysis_blocked(message)
             return
-        try:
-            label.setText(f"<span style='color:#b8860b;'>&#9888; {message}</span>")
-            label.setVisible(True)
-        except RuntimeError:
-            pass
+        self._render_message_banner([], [message])
 
     def _show_analysis_messages(self, results: Dict[str, Any]):
-        """Surface the analysis's own errors and warnings above the results table.
-
-        ``AnalysisResult.warnings`` and any ``error`` / ``*_error`` metric are
-        reported by analyses that ran but could not use the inputs the user
-        asked for.  Without this they were carried all the way to CSV export and
-        never shown in the GUI.
-        """
+        """Surface the analysis's own errors and warnings above the results table."""
         label = getattr(self, "analysis_message_label", None)
         if label is None:
             return
@@ -1210,24 +1379,67 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                     if (key_str == "error" or key_str.endswith("_error")) and value:
                         errors.append(str(value))
 
-        try:
-            if errors:
-                body = "<br>".join(f"&#9888; {text}" for text in errors + warnings)
-                label.setText(f"<span style='color:#c0392b;'>{body}</span>")
-                label.setVisible(True)
-            elif warnings:
-                body = "<br>".join(f"&#9888; {text}" for text in warnings)
-                label.setText(f"<span style='color:#b8860b;'>{body}</span>")
-                label.setVisible(True)
+        self._render_message_banner(errors, warnings)
+
+    _METRIC_UNIT_TOKENS = {
+        "rmp": "RMP",
+        "rin": "Rin",
+        "mohm": "(MOhm)",
+        "kohm": "(kOhm)",
+        "mv": "(mV)",
+        "pa": "(pA)",
+        "na": "(nA)",
+        "pf": "(pF)",
+        "us": "(uS)",
+        "ms": "(ms)",
+        "hz": "(Hz)",
+        "pct": "(%)",
+        "dvdt": "dV/dt",
+        "ppr": "PPR",
+        "stp": "STP",
+        "cv": "CV",
+        "cv2": "CV2",
+        "lv": "LV",
+        "iei": "IEI",
+        "isi": "ISI",
+        "fwhm": "FWHM",
+        "fahp": "fAHP",
+        "mahp": "mAHP",
+        "ahp": "AHP",
+        "adp": "ADP",
+        "ap": "AP",
+        "auc": "AUC",
+        "snr": "SNR",
+        "sd": "SD",
+        "std": "SD",
+        "se": "SE",
+        "ci": "CI",
+        "iv": "I-V",
+        "fi": "F-I",
+        "cc": "(CC)",
+        "vc": "(VC)",
+        "ss": "Steady-State",
+    }
+
+    @classmethod
+    def _format_metric_label(cls, raw_key: str) -> str:
+        if " " in raw_key:
+            return raw_key
+        tokens = str(raw_key).split("_")
+        out = []
+        for idx, tok in enumerate(tokens):
+            low = tok.lower()
+            if idx == len(tokens) - 1 and low == "s" and len(tokens) > 1:
+                out.append("(s)")
+            elif low in cls._METRIC_UNIT_TOKENS:
+                out.append(cls._METRIC_UNIT_TOKENS[low])
             else:
-                label.clear()
-                label.setVisible(False)
-        except RuntimeError:
-            pass  # label destroyed during a tab rebuild
+                out.append(tok.capitalize())
+        return " ".join(out)
 
     def _display_analysis_results(self, results: Dict[str, Any]):  # noqa: C901
         """
-        Display analysis results in text area.
+        Display analysis results in table widget.
         Implements abstract method from BaseAnalysisTab.
         """
         if not self.results_table:
@@ -1245,38 +1457,35 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             elif hasattr(display_source, "__dict__"):
                 items = [(k, v) for k, v in display_source.__dict__.items() if not k.startswith("_")]
             else:
-                # Fallback
                 items = [("Result", str(display_source))]
 
-            # Filter out complex objects like arrays for the simple table view
             display_items = []
             for k, v in items:
                 try:
-                    # Skip internal/private keys (prefixed with _)
-                    if str(k).startswith("_"):
+                    k_raw = str(k)
+                    if k_raw.startswith("_") or k_raw == "error" or k_raw.endswith("_error"):
                         continue
 
-                    # Skip complex iterables entirely
-                    if isinstance(v, (list, np.ndarray, dict)):
+                    if isinstance(v, (list, np.ndarray, dict)) or v is None:
                         continue
 
-                    # Sanitize Key
-                    key_str = str(k).replace("_", " ").title()
+                    key_str = self._format_metric_label(k_raw)
 
-                    # Sanitize Value: format floats to 3 decimal places
-                    if isinstance(v, float):
-                        if np.isnan(v) or np.isinf(v):
-                            val_str = str(v)
+                    if isinstance(v, bool):
+                        val_str = "Yes" if v else "No"
+                    elif isinstance(v, (int, np.integer)):
+                        val_str = str(int(v))
+                    elif isinstance(v, (float, np.floating)):
+                        vf = float(v)
+                        if np.isnan(vf) or np.isinf(vf):
+                            val_str = "N/A"
+                        elif 0.0 < abs(vf) < 0.01 or abs(vf) >= 1e5:
+                            val_str = f"{vf:.4g}"
                         else:
-                            val_str = f"{v:.3f}"
-                    elif isinstance(v, bool):
-                        val_str = str(v)
-                    elif isinstance(v, int):
-                        val_str = str(v)
+                            val_str = f"{vf:.3f}"
                     elif isinstance(v, str):
                         val_str = v
                     else:
-                        # Unknown scalar type — stringify
                         val_str = str(v)
 
                     display_items.append((key_str, val_str))
@@ -1285,10 +1494,11 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                     continue
 
             self.results_table.setRowCount(len(display_items))
-            self.results_table.setColumnCount(2)  # Ensure column count
+            self.results_table.setColumnCount(2)
 
             for row, (k, v) in enumerate(display_items):
                 key_item = QtWidgets.QTableWidgetItem(k)
+                key_item.setToolTip(k)
                 val_item = QtWidgets.QTableWidgetItem(v)
 
                 self.results_table.setItem(row, 0, key_item)
@@ -1296,11 +1506,9 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
         except Exception as e:
             log.error(f"Error displaying results: {e}")
-            # Fallback to simple popup if table fails
             self.results_table.setRowCount(1)
 
-        # --- Sync Rin spinboxes if auto-detect was used and returned window values ---
-        # Check both flat and nested metrics format
+        # --- Sync Rin spinboxes AND interactive plot regions when auto-detect runs ---
         _results_flat = results.get("metrics", results) if isinstance(results, dict) else results
         if isinstance(_results_flat, dict) and _results_flat.get("auto_detected") and hasattr(self, "param_generator"):
             spinbox_map = {
@@ -1322,6 +1530,15 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                     w.blockSignals(blocked)
                     if was_read_only and hasattr(w, "setReadOnly"):
                         w.setReadOnly(True)
+            # Sync interactive LinearRegionItems so shaded regions match auto-detected windows
+            self._syncing_regions = True
+            try:
+                for s_key, e_key in (("baseline_start", "baseline_end"), ("response_start", "response_end")):
+                    reg = self._interactive_regions.get(s_key)
+                    if reg is not None and s_key in widgets and e_key in widgets:
+                        reg.setRegion([widgets[s_key].value(), widgets[e_key].value()])
+            finally:
+                self._syncing_regions = False
 
     def _plot_analysis_visualizations(self, results: Dict[str, Any]):  # noqa: C901
         """
@@ -1421,8 +1638,10 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             elif plot_type == "fill_between":
                 self._viz_fill_between(plot_cfg, results)
 
-            # trace — optional spike markers overlay
+            # trace - optional spike/event markers overlay
             elif plot_type == "trace":
+                from synaptipy.shared.plot_customization import get_scatter_size, get_scatter_symbol
+
                 if plot_cfg.get("show_spikes") and self._current_plot_data:
                     spike_idx = self._val(result_item, "spike_indices")
                     if spike_idx is not None and len(spike_idx) > 0:
@@ -1431,13 +1650,16 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                         valid = np.array(spike_idx, dtype=int)
                         valid = valid[(valid >= 0) & (valid < len(data_arr))]
                         if len(valid) > 0:
+                            s_pen, s_brush = get_scatter_pen_and_brush()
                             scatter = pg.ScatterPlotItem(
                                 x=time_arr[valid],
                                 y=data_arr[valid],
-                                size=8,
-                                pen=pg.mkPen(None),
-                                brush=pg.mkBrush(255, 0, 0, 180),
+                                size=get_scatter_size(),
+                                symbol=get_scatter_symbol(),
+                                pen=s_pen,
+                                brush=s_brush,
                             )
+                            scatter._synaptipy_role = "scatter_markers"
                             scatter.setZValue(50)
                             self.plot_widget.addItem(scatter)
                             self._dynamic_plot_items.append(scatter)
@@ -1447,12 +1669,9 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                     if ev_times is not None and len(ev_times) > 0:
                         time_arr = self._current_plot_data["time"]
                         data_arr = self._current_plot_data["data"]
-                        # Map float times → nearest sample indices
                         ev_arr = np.asarray(ev_times)
                         idx = np.searchsorted(time_arr, ev_arr, side="left")
                         idx = np.clip(idx, 0, len(time_arr) - 1)
-                        # For each insertion point, also check the element to
-                        # the left and keep whichever is closer in time.
                         prev = np.clip(idx - 1, 0, len(time_arr) - 1)
                         idx = np.where(
                             np.abs(time_arr[prev] - ev_arr) < np.abs(time_arr[idx] - ev_arr),
@@ -1462,9 +1681,9 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                         scatter = pg.ScatterPlotItem(
                             x=time_arr[idx],
                             y=data_arr[idx],
-                            size=10,
-                            pen=pg.mkPen(None),
-                            brush=pg.mkBrush(255, 165, 0, 200),
+                            size=get_scatter_size(),
+                            pen=pg.mkPen("#222222", width=0.8),
+                            brush=pg.mkBrush(255, 165, 0, 210),
                             symbol="t",
                         )
                         scatter.setZValue(50)
@@ -1508,18 +1727,25 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                     return
             except (ValueError, TypeError):
                 return
+            from synaptipy.shared.plot_customization import get_scatter_size, get_scatter_symbol
+
             color = cfg.get("color")
-            symbol = cfg.get("symbol", "o")
-            if color is None:
+            use_custom_primary = color is None or cfg.get("role") == "primary"
+            scatter_size = get_scatter_size()
+            if use_custom_primary:
                 scatter_pen, scatter_brush = get_scatter_pen_and_brush()
-                scatter_size = 10
+                symbol = cfg.get("symbol") or get_scatter_symbol()
             else:
-                scatter_pen = pg.mkPen(None)
+                scatter_pen = pg.mkPen("#222222", width=0.8)
                 scatter_brush = pg.mkBrush(color)
-                scatter_size = 10
+                symbol = cfg.get("symbol", "o")
             scatter = pg.ScatterPlotItem(
                 x=x_arr, y=y_arr, size=scatter_size, symbol=symbol, pen=scatter_pen, brush=scatter_brush
             )
+            if use_custom_primary:
+                scatter._synaptipy_role = "scatter_markers"
+                scatter._synaptipy_fixed_symbol = "symbol" in cfg
+            scatter.setZValue(75)
             self.plot_widget.addItem(scatter)
             self._dynamic_plot_items.append(scatter)
 
@@ -1528,37 +1754,45 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         bursts = self._val(result, data_key, [])
         if not bursts:
             return
-        y_offset = 0
+        y_offset = 0.0
         if self._current_plot_data:
             try:
-                y_offset = float(np.max(self._current_plot_data["data"])) + 10
+                d_arr = np.asarray(self._current_plot_data["data"], dtype=float)
+                y_max = float(np.nanmax(d_arr))
+                y_span = float(np.nanmax(d_arr) - np.nanmin(d_arr))
+                if not np.isfinite(y_span) or y_span <= 0:
+                    y_span = max(abs(y_max) * 0.1, 1.0)
+                y_offset = y_max + 0.08 * y_span
             except Exception:
-                y_offset = 50
+                y_offset = 0.0
         color = cfg.get("color", "r")
         for burst_spikes in bursts:
             if len(burst_spikes) >= 2:
                 item = pg.PlotCurveItem(
                     [burst_spikes[0], burst_spikes[-1]], [y_offset, y_offset], pen=pg.mkPen(color, width=3)
                 )
+                item._synaptipy_role = "bracket"
                 self.plot_widget.addItem(item)
                 self._dynamic_plot_items.append(item)
                 if self._current_plot_data:
                     tv = self._current_plot_data["time"]
                     vv = self._current_plot_data["data"]
                     si = np.clip(np.searchsorted(tv, burst_spikes), 0, len(vv) - 1)
-                    scatter = pg.ScatterPlotItem(
-                        x=burst_spikes, y=vv[si], size=8, pen=pg.mkPen(None), brush=pg.mkBrush(color)
-                    )
+                    s_pen, s_brush = get_scatter_pen_and_brush()
+                    scatter = pg.ScatterPlotItem(x=burst_spikes, y=vv[si], size=8, pen=s_pen, brush=s_brush)
+                    scatter._synaptipy_role = "scatter_markers"
                     self.plot_widget.addItem(scatter)
                     self._dynamic_plot_items.append(scatter)
 
     def _viz_vlines(self, cfg, result):
         data_key = cfg.get("data")
         vals = self._val(result, data_key, [])
+        if vals is None and isinstance(result, dict) and "metrics" in result:
+            vals = result["metrics"].get(data_key, [])
         color = cfg.get("color")
         if isinstance(vals, (int, float)):
             vals = [vals]
-        for x in vals:
+        for x in vals or []:
             try:
                 if x is None or not np.isfinite(float(x)):
                     continue
@@ -1569,6 +1803,8 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             else:
                 pen = pg.mkPen(color, width=2, style=QtCore.Qt.DashLine)
             line = pg.InfiniteLine(pos=float(x), angle=90, pen=pen)
+            if color is None:
+                line._synaptipy_role = "hv_line"
             self.plot_widget.addItem(line)
             self._dynamic_plot_items.append(line)
 
@@ -1641,26 +1877,24 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             self._current_event_indices = list(np.array(event_indices, dtype=int))
             self._refresh_event_markers()
 
-            # Add event count annotation (LOW-5)
-            if len(event_indices) > 0 and "event_count_text" not in self._popup_curves:
-                text_item = pg.TextItem(anchor=(1, 1), color=(255, 255, 255), fill=(0, 0, 0, 150))
+            if len(event_indices) > 0:
+                text_item = pg.TextItem(
+                    text=f"Events: {len(event_indices)}",
+                    anchor=(1, 1),
+                    color=(255, 255, 255),
+                    fill=(0, 0, 0, 170),
+                )
                 self.plot_widget.addItem(text_item)
                 self._dynamic_plot_items.append(text_item)
-                self._popup_curves["event_count_text"] = text_item
-            if len(event_indices) > 0 and "event_count_text" in self._popup_curves:
-                count_text = f"Events: {len(event_indices)}"
-                self._popup_curves["event_count_text"].setText(count_text)
                 if self._current_plot_data:
                     time = self._current_plot_data.get("time", [])
                     data = self._current_plot_data.get("data", [])
                     if len(time) > 0 and len(data) > 0:
-                        self._popup_curves["event_count_text"].setPos(np.nanmax(time), np.nanmax(data))
+                        text_item.setPos(float(np.nanmax(time)), float(np.nanmax(data)))
         else:
             self._current_event_indices = []
             if self._event_markers_item:
                 self._event_markers_item.setVisible(False)
-            if "event_count_text" in self._popup_curves:
-                self._popup_curves["event_count_text"].setText("")
 
     def _viz_threshold_line(self, cfg, result):
         """Update threshold line position from result."""
@@ -1708,6 +1942,8 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
     def _viz_overlay_fit(self, cfg, result):
         """Draw a fit curve overlay on the main plot (e.g. exponential fit for Tau)."""
+        from synaptipy.shared.plot_customization import get_overlay_fit_pen
+
         x_key = cfg.get("x")
         y_key = cfg.get("y")
         x_data = self._val(result, x_key)
@@ -1723,23 +1959,39 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             return
         if np.all(np.isnan(x_arr)) or np.all(np.isnan(y_arr)):
             return
-        color = cfg.get("color", "r")
-        width = cfg.get("width", 2)
-        pen = pg.mkPen(color, width=width, style=QtCore.Qt.PenStyle.SolidLine)
-        curve = pg.PlotCurveItem(x=x_arr, y=y_arr, pen=pen, connect="finite")
+        if cfg.get("role") == "secondary_fit":
+            color = cfg.get("color", "#ff8c00")
+            width = float(cfg.get("width", 2.0))
+            pen = pg.mkPen(color, width=width, style=QtCore.Qt.PenStyle.DashLine)
+            curve = pg.PlotCurveItem(x=x_arr, y=y_arr, pen=pen, connect="finite")
+        else:
+            pen = get_overlay_fit_pen()
+            curve = pg.PlotCurveItem(x=x_arr, y=y_arr, pen=pen, connect="finite")
+            curve._synaptipy_role = "overlay_fit"
+        curve.setZValue(70)
         self.plot_widget.addItem(curve)
         self._dynamic_plot_items.append(curve)
 
-        # Add statistical annotation for fit parameters (LOW-5)
-        tau_key = cfg.get("tau_key", "tau")
-        tau = self._val(result, tau_key)
-        if tau is not None and "fit_stats" not in self._popup_curves:
-            text_item = pg.TextItem(anchor=(0, 0), color=(255, 255, 255), fill=(0, 0, 0, 150))
+        # Statistical annotation positioned cleanly within the fitted span (safe for negative mV)
+        tau_key = cfg.get("tau_key")
+        tau = self._val(result, tau_key) if tau_key else None
+        if tau is None and cfg.get("role") != "secondary_fit":
+            tau = self._val(result, "tau_ms")
+            if tau is None:
+                tau = self._val(result, "tau")
+        if tau is not None and np.isfinite(float(tau)):
+            text_item = pg.TextItem(
+                text=f"tau = {float(tau):.2f} ms",
+                anchor=(0, 1),
+                color=(255, 255, 255),
+                fill=(0, 0, 0, 175),
+            )
+            x_min, x_max = float(np.nanmin(x_arr)), float(np.nanmax(x_arr))
+            y_min, y_max = float(np.nanmin(y_arr)), float(np.nanmax(y_arr))
+            text_item.setPos(x_min + 0.55 * (x_max - x_min), y_min + 0.85 * (y_max - y_min))
+            text_item.setZValue(95)
             self.plot_widget.addItem(text_item)
             self._dynamic_plot_items.append(text_item)
-            stats_text = f"τ = {tau:.2f} ms"
-            text_item.setText(stats_text)
-            text_item.setPos(np.nanmax(x_arr) * 0.7, np.nanmax(y_arr) * 0.9)
 
     # ------------------------------------------------------------------
     # fill_between helpers
@@ -1760,7 +2012,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             return np.zeros(y1_len)
 
     def _resolve_fill_brush(self, cfg):
-        """Return a QBrush from the ``brush`` (RGBA tuple) or ``color`` key in cfg."""
+        """Return a QBrush from ``brush``/``color`` in cfg or user AUC customization."""
         brush_spec = cfg.get("brush")
         color_spec = cfg.get("color")
         if brush_spec is not None:
@@ -1769,7 +2021,9 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             if isinstance(color_spec, (list, tuple)):
                 return pg.mkBrush(*color_spec)
             return pg.mkBrush(color_spec)
-        return pg.mkBrush(0, 100, 255, 100)
+        from synaptipy.shared.plot_customization import get_auc_brush
+
+        return get_auc_brush()
 
     def _prepare_fill_arrays(self, x_data, y1_data, y2_data):
         """Validate, convert, and NaN-filter arrays for fill_between.
@@ -1835,6 +2089,8 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         curve1 = pg.PlotCurveItem(x=x_arr, y=y1_arr, pen=pen_none)
         curve2 = pg.PlotCurveItem(x=x_arr, y=y2_arr, pen=pen_none)
         fill = pg.FillBetweenItem(curve1, curve2, brush=brush)
+        if cfg.get("brush") is None and cfg.get("color") is None:
+            fill._synaptipy_role = "auc_fill"
 
         # Only add fill to the plot; curve1/curve2 are kept alive via
         # _dynamic_plot_items so FillBetweenItem can reference their data.
@@ -1882,42 +2138,17 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         if not np.any(mask):
             return
 
-        from synaptipy.shared.plot_customization import get_plot_customization_manager
+        from synaptipy.shared.plot_customization import get_trace_overlay_pen
 
-        mgr = get_plot_customization_manager()
-        overlay_prefs = mgr.defaults.get("trace_overlay", {})
-
-        color = cfg.get("color") or overlay_prefs.get("color", "#00cfff")
-        width = int(cfg.get("width", overlay_prefs.get("width", 3)))
-        opacity = int(cfg.get("opacity", overlay_prefs.get("opacity", 60)))
-        alpha = max(0, min(255, int(opacity / 100.0 * 255)))
-
-        pen = pg.mkPen(color=pg.mkColor(color), width=width)
-        pen.setColor(pg.mkColor(color))
-        # Apply alpha channel via QColor
-        qcolor = pg.mkColor(color)
-        qcolor.setAlpha(alpha)
-        pen = pg.mkPen(color=qcolor, width=width)
-
+        pen = get_trace_overlay_pen()
         curve = pg.PlotCurveItem(x=time_arr[mask], y=data_arr[mask], pen=pen)
+        curve._synaptipy_role = "trace_overlay"
         curve.setZValue(60)
         self.plot_widget.addItem(curve)
         self._dynamic_plot_items.append(curve)
 
     def _viz_event_fit_overlay(self, cfg, result):
-        """Overlay fitted event curves (e.g. bi-exponential EPSP fits) on the raw trace.
-
-        The result dict must contain arrays of times and fitted values keyed by
-        *times_key* and *values_key* respectively.  Multiple events are supported
-        when both arrays are lists-of-arrays (one per event).
-
-        Config keys:
-            times_key  -- result key for fit time arrays (required).
-            values_key -- result key for fit value arrays (required).
-            color      -- pen colour.  Defaults to ``event_fit_overlay`` theme colour.
-            width      -- pen width in pixels (default 2).
-            opacity    -- opacity 0-100 (default 80).
-        """
+        """Overlay fitted event curves (e.g. bi-exponential EPSP fits) on the raw trace."""
         if not self.plot_widget:
             return
 
@@ -1930,19 +2161,9 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         if fit_times is None or fit_values is None:
             return
 
-        from synaptipy.shared.plot_customization import get_plot_customization_manager
+        from synaptipy.shared.plot_customization import get_event_fit_overlay_pen
 
-        mgr = get_plot_customization_manager()
-        overlay_prefs = mgr.defaults.get("event_fit_overlay", {})
-
-        color = cfg.get("color") or overlay_prefs.get("color", "#ff9900")
-        width = int(cfg.get("width", overlay_prefs.get("width", 2)))
-        opacity = int(cfg.get("opacity", overlay_prefs.get("opacity", 80)))
-        alpha = max(0, min(255, int(opacity / 100.0 * 255)))
-
-        qcolor = pg.mkColor(color)
-        qcolor.setAlpha(alpha)
-        pen = pg.mkPen(color=qcolor, width=width)
+        pen = get_event_fit_overlay_pen()
 
         # Normalise to list of arrays (handle both single and multi-event cases)
         if isinstance(fit_times, np.ndarray) and fit_times.ndim == 1:
@@ -1961,26 +2182,65 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             if t_arr.size < 2:
                 continue
             curve = pg.PlotCurveItem(x=t_arr, y=v_arr, pen=pen)
+            curve._synaptipy_role = "event_fit_overlay"
             curve.setZValue(65)
             self.plot_widget.addItem(curve)
             self._dynamic_plot_items.append(curve)
 
-    def _viz_popup_xy(self, cfg, result):
-        """Show scatter + optional regression line in a popup."""
+    def _get_or_create_method_popup(self, popup_key: str, title: str, x_label: str, y_label: str):
+        """Return (popup_win, plot_widget, curves_dict) keyed per sub-analysis so popups never collide."""
+        entry = self._popup_plots_by_method.get(popup_key)
+        if entry is not None:
+            popup_win, plot_widget, curves = entry
+            plot_widget.setLabel("bottom", x_label)
+            plot_widget.setLabel("left", y_label)
+            popup_win.setWindowTitle(title)
+            if not popup_win.isVisible():
+                popup_win.show()
+            return popup_win, plot_widget, curves
+
+        popup_win, plot_widget = self.export_manager.create_popup_plot(title, x_label, y_label, self)
+        self._popup_windows.append(popup_win)
+        curves: Dict[str, Any] = {}
+        self._popup_plots_by_method[popup_key] = (popup_win, plot_widget, curves)
+        return popup_win, plot_widget, curves
+
+    def _viz_popup_xy(self, cfg, result):  # noqa: C901
+        """Show scatter + optional regression line in a dedicated per-method popup."""
         x_key = cfg.get("x")
         y_key = cfg.get("y")
+        title = cfg.get("title", "Popup Plot")
+        popup_key = f"{self.analysis_name}:{title}"
+
         x_data = self._val(result, x_key)
         y_data = self._val(result, y_key)
-        if x_data is None or y_data is None:
-            return
-        # Filter NaNs
-        valid = [i for i in range(len(y_data)) if not np.isnan(y_data[i])]
-        if not valid:
-            return
-        px = [x_data[i] for i in valid]
-        py = [y_data[i] for i in valid]
+        valid = []
+        if x_data is not None and y_data is not None:
+            min_n = min(len(x_data), len(y_data))
+            valid = [
+                i
+                for i in range(min_n)
+                if x_data[i] is not None
+                and y_data[i] is not None
+                and np.isfinite(float(x_data[i]))
+                and np.isfinite(float(y_data[i]))
+            ]
 
-        title = cfg.get("title", "Popup Plot")
+        if not valid:
+            # Clear stale data if popup already exists for this method
+            existing = self._popup_plots_by_method.get(popup_key)
+            if existing is not None:
+                _, _, curves = existing
+                if "scatter" in curves:
+                    curves["scatter"].setData([], [])
+                if "fit" in curves:
+                    curves["fit"].setData([], [])
+                if "stat_text" in curves:
+                    curves["stat_text"].setText("")
+            return
+
+        px = [float(x_data[i]) for i in valid]
+        py = [float(y_data[i]) for i in valid]
 
         unit = "mV"
         quantity = "Voltage"
@@ -1996,142 +2256,219 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         x_label = cfg.get("x_label", f"{quantity} ({unit})")
         y_label = cfg.get("y_label", "Y")
 
-        # Override hardcoded configs with dynamic units
         if "(mV)" in x_label and unit != "mV":
             x_label = x_label.replace("(mV)", f"({unit})").replace("Voltage", quantity).replace("RMP", "Baseline")
         if "(mV)" in y_label and unit != "mV":
             y_label = y_label.replace("(mV)", f"({unit})").replace("Voltage", quantity).replace("RMP", "Baseline")
 
-        if self._popup_plot is None:
-            self._popup_plot = self.create_popup_plot(title, x_label, y_label)
-            self._popup_curves["scatter"] = self._popup_plot.plot(pen=None, symbol="o", symbolBrush="b")
-            self._popup_curves["fit"] = self._popup_plot.plot(
-                pen=pg.mkPen("r", width=2, style=QtCore.Qt.PenStyle.DashLine)
+        _, popup_plot, curves = self._get_or_create_method_popup(popup_key, title, x_label, y_label)
+        self._popup_plot = popup_plot
+        self._popup_curves = curves
+
+        if "scatter" not in curves:
+            curves["scatter"] = popup_plot.plot(
+                pen=pg.mkPen((31, 119, 180, 140), width=1.2),
+                symbol="o",
+                symbolSize=9,
+                symbolPen=pg.mkPen("#1a1a1a", width=0.8),
+                symbolBrush=pg.mkBrush("#1f77b4"),
+                name="Measured",
+            )
+            curves["fit"] = popup_plot.plot(
+                pen=pg.mkPen("#d62728", width=2.2, style=QtCore.Qt.PenStyle.DashLine),
+                name="Linear Fit",
             )
 
-        self._popup_curves["scatter"].setData(px, py)
+        curves["scatter"].setData(px, py)
 
-        # Optional regression line
         slope_key = cfg.get("slope_key")
         intercept_key = cfg.get("intercept_key")
         slope = self._val(result, slope_key)
         intercept = self._val(result, intercept_key)
 
-        if slope is not None and intercept is not None and px:
-            # slope is in MOhm and currents in pA → convert
-            scale = cfg.get("x_scale", 1.0)
-            y_min = slope * (min(px) * scale) + intercept
-            y_max = slope * (max(px) * scale) + intercept
-            self._popup_curves["fit"].setData([min(px), max(px)], [y_min, y_max])
+        if (
+            slope is not None
+            and intercept is not None
+            and np.isfinite(float(slope))
+            and np.isfinite(float(intercept))
+            and px
+        ):
+            scale = float(cfg.get("x_scale", 1.0))
+            y_min = float(slope) * (min(px) * scale) + float(intercept)
+            y_max = float(slope) * (max(px) * scale) + float(intercept)
+            curves["fit"].setData([min(px), max(px)], [y_min, y_max])
 
-            # Add statistical annotation (LOW-5)
-            r2_key = cfg.get("r2_key", "r_squared")
-            r2 = self._val(result, r2_key)
-            if r2 is not None and "stat_text" not in self._popup_curves:
-                text_item = pg.TextItem(anchor=(0, 1), color=(255, 255, 255), fill=(0, 0, 0, 150))
-                self._popup_plot.addItem(text_item)
-                self._popup_curves["stat_text"] = text_item
-            if r2 is not None and "stat_text" in self._popup_curves:
-                stats_text = f"R² = {r2:.3f}\nSlope = {slope:.2f}"
-                self._popup_curves["stat_text"].setText(stats_text)
-                x_range = max(px) - min(px)
-                y_range = max(py) - min(py)
-                self._popup_curves["stat_text"].setPos(min(px) + 0.05 * x_range, max(py) - 0.05 * y_range)
+            r2 = None
+            for rk in (cfg.get("r2_key"), "r_squared", "iv_r_squared", "fi_r_squared"):
+                if rk:
+                    cand = self._val(result, rk)
+                    if cand is not None and np.isfinite(float(cand)):
+                        r2 = float(cand)
+                        break
+
+            if "stat_text" not in curves:
+                text_item = pg.TextItem(anchor=(0, 1), color=(255, 255, 255), fill=(0, 0, 0, 175))
+                popup_plot.addItem(text_item)
+                curves["stat_text"] = text_item
+            stats_lines = [f"Slope = {float(slope):.3g}"]
+            if r2 is not None:
+                stats_lines.insert(0, f"R^2 = {r2:.3f}")
+            curves["stat_text"].setText("\n".join(stats_lines))
+            x_span = max(px) - min(px) or 1.0
+            y_span = max(py) - min(py) or 1.0
+            curves["stat_text"].setPos(min(px) + 0.04 * x_span, max(py) - 0.04 * y_span)
         else:
-            self._popup_curves["fit"].setData([], [])
-            if "stat_text" in self._popup_curves:
-                self._popup_curves["stat_text"].setText("")
+            curves["fit"].setData([], [])
+            if "stat_text" in curves:
+                curves["stat_text"].setText("")
+        popup_plot.autoRange()
+
+    @staticmethod
+    def _derivative_unit_str(unit: str) -> str:
+        """Map trace amplitude unit to calculate_dvdt's 1000x-scaled derivative unit (e.g. mV -> V/s)."""
+        mapping = {
+            "mv": "V/s",
+            "v": "kV/s",
+            "uv": "mV/s",
+            "pa": "nA/s",
+            "na": "uA/s",
+            "ua": "mA/s",
+            "ma": "A/s",
+        }
+        return mapping.get((unit or "").strip().lower(), f"{unit}/ms" if unit else "V/s")
 
     def _viz_popup_phase(self, cfg, result):  # noqa: C901
-        """Show dV/dt vs V phase-plane in a popup with threshold + max markers."""
+        """Show dV/dt vs V phase-plane in a dedicated popup with threshold + max markers."""
+        title = cfg.get("title", "Phase Plane")
+        popup_key = f"{self.analysis_name}:{title}"
         voltage = self._val(result, "voltage")
         dvdt = self._val(result, "dvdt")
+        valid_arrays = True
         if voltage is None or dvdt is None:
-            return
-        try:
-            voltage = np.asarray(voltage, dtype=float)
-            dvdt = np.asarray(dvdt, dtype=float)
-        except (ValueError, TypeError):
-            return
-        if len(voltage) == 0 or len(dvdt) == 0:
-            return
-        if np.all(np.isnan(voltage)) or np.all(np.isnan(dvdt)):
+            valid_arrays = False
+        else:
+            try:
+                voltage = np.asarray(voltage, dtype=float)
+                dvdt = np.asarray(dvdt, dtype=float)
+                if len(voltage) == 0 or len(dvdt) == 0 or np.all(np.isnan(voltage)) or np.all(np.isnan(dvdt)):
+                    valid_arrays = False
+            except (ValueError, TypeError):
+                valid_arrays = False
+
+        if not valid_arrays:
+            existing = self._popup_plots_by_method.get(popup_key)
+            if existing is not None:
+                _, _, curves = existing
+                for k in ("phase", "thresh_marker", "max_marker"):
+                    if k in curves:
+                        curves[k].setData([], [])
+                if "phase_stats" in curves:
+                    curves["phase_stats"].setText("")
             return
 
-        if self._popup_plot is None:
-            title = cfg.get("title", "Phase Plane")
-
-            unit = "mV"
-            quantity = "Voltage"
-            if self._current_plot_data:
-                unit = self._current_plot_data.get("units", "mV")
-                if unit.lower() in ["pa", "na", "ua", "a"]:
-                    quantity = "Current"
-                elif unit.lower() in ["mv", "v"]:
-                    quantity = "Voltage"
-                else:
-                    quantity = self._current_plot_data.get("channel_name", "Signal")
-
-            x_label = f"{quantity} ({unit})"
-
-            # The derivative is dy/dt so units are unit/s
-            unit_s = unit + "/s"
-            if quantity == "Voltage":
-                y_label = f"dV/dt ({unit_s})"
-            elif quantity == "Current":
-                y_label = f"dI/dt ({unit_s})"
+        unit = "mV"
+        quantity = "Voltage"
+        if self._current_plot_data:
+            unit = self._current_plot_data.get("units", "mV")
+            if unit.lower() in ["pa", "na", "ua", "a"]:
+                quantity = "Current"
+            elif unit.lower() in ["mv", "v"]:
+                quantity = "Voltage"
             else:
-                y_label = f"d({quantity})/dt ({unit_s})"
+                quantity = self._current_plot_data.get("channel_name", "Signal")
 
-            self._popup_plot = self.create_popup_plot(title, x_label, y_label)
-            self._popup_curves["phase"] = self._popup_plot.plot(pen="b", name="Phase Loop")
-            self._popup_curves["thresh_marker"] = self._popup_plot.plot(
-                pen=None, symbol="o", symbolBrush="r", symbolSize=10, name="Threshold"
+        x_label = f"{quantity} ({unit})"
+        unit_s = self._derivative_unit_str(unit)
+        if quantity == "Voltage":
+            y_label = f"dV/dt ({unit_s})"
+        elif quantity == "Current":
+            y_label = f"dI/dt ({unit_s})"
+        else:
+            y_label = f"d({quantity})/dt ({unit_s})"
+
+        _, popup_plot, curves = self._get_or_create_method_popup(popup_key, title, x_label, y_label)
+        self._popup_plot = popup_plot
+        self._popup_curves = curves
+
+        if "phase" not in curves:
+            popup_plot.addLegend(offset=(-10, 10))
+            curves["phase"] = popup_plot.plot(pen=pg.mkPen("#1f77b4", width=1.6), name="Phase Loop")
+            curves["thresh_marker"] = popup_plot.plot(
+                pen=None,
+                symbol="o",
+                symbolPen=pg.mkPen("#1a1a1a", width=0.8),
+                symbolBrush=pg.mkBrush("#d62728"),
+                symbolSize=10,
+                name="Threshold",
             )
-            self._popup_curves["max_marker"] = self._popup_plot.plot(
-                pen=None, symbol="x", symbolBrush="g", symbolSize=10, name="Max dV/dt"
+            curves["max_marker"] = popup_plot.plot(
+                pen=None,
+                symbol="d",
+                symbolPen=pg.mkPen("#1a1a1a", width=0.8),
+                symbolBrush=pg.mkBrush("#2ca02c"),
+                symbolSize=11,
+                name="Max dV/dt",
             )
 
         min_len = min(len(voltage), len(dvdt))
-        self._popup_curves["phase"].setData(np.array(voltage)[:min_len], np.array(dvdt)[:min_len])
+        curves["phase"].setData(np.array(voltage)[:min_len], np.array(dvdt)[:min_len])
 
         threshold_v = self._val(result, "threshold_v")
         threshold_dvdt = self._val(result, "threshold_dvdt")
-        if threshold_v is not None and threshold_dvdt is not None:
-            self._popup_curves["thresh_marker"].setData([threshold_v], [threshold_dvdt])
+        if (
+            threshold_v is not None
+            and threshold_dvdt is not None
+            and np.isfinite(float(threshold_v))
+            and np.isfinite(float(threshold_dvdt))
+        ):
+            curves["thresh_marker"].setData([float(threshold_v)], [float(threshold_dvdt)])
         else:
-            self._popup_curves["thresh_marker"].setData([], [])
+            curves["thresh_marker"].setData([], [])
 
         max_dvdt = self._val(result, "max_dvdt")
-        if max_dvdt is not None and len(dvdt) > 0:
-            idx = int(np.argmax(dvdt))
+        if max_dvdt is not None and np.isfinite(float(max_dvdt)) and len(dvdt) > 0:
+            idx = int(np.nanargmax(dvdt))
             if idx < len(voltage):
-                self._popup_curves["max_marker"].setData([voltage[idx]], [dvdt[idx]])
+                curves["max_marker"].setData([float(voltage[idx])], [float(dvdt[idx])])
         else:
-            self._popup_curves["max_marker"].setData([], [])
+            curves["max_marker"].setData([], [])
 
-        # Add statistical annotations (LOW-5)
-        if threshold_v is not None and max_dvdt is not None:
-            if "phase_stats" not in self._popup_curves:
-                text_item = pg.TextItem(anchor=(0, 1), color=(255, 255, 255), fill=(0, 0, 0, 150))
-                self._popup_plot.addItem(text_item)
-                self._popup_curves["phase_stats"] = text_item
-            if "phase_stats" in self._popup_curves:
-                stats_text = f"Threshold V: {threshold_v:.1f}\nMax dV/dt: {max_dvdt:.1f}"
-                self._popup_curves["phase_stats"].setText(stats_text)
-                v_range = np.nanmax(voltage) - np.nanmin(voltage)
-                dvdt_range = np.nanmax(dvdt) - np.nanmin(dvdt)
-                self._popup_curves["phase_stats"].setPos(
-                    np.nanmin(voltage) + 0.05 * v_range, np.nanmax(dvdt) - 0.05 * dvdt_range
-                )
+        if threshold_v is not None and max_dvdt is not None and np.isfinite(float(threshold_v)):
+            if "phase_stats" not in curves:
+                text_item = pg.TextItem(anchor=(0, 1), color=(255, 255, 255), fill=(0, 0, 0, 175))
+                popup_plot.addItem(text_item)
+                curves["phase_stats"] = text_item
+            stats_text = f"Threshold: {float(threshold_v):.1f} {unit}\nMax dV/dt: {float(max_dvdt):.1f} {unit_s}"
+            curves["phase_stats"].setText(stats_text)
+            v_range = float(np.nanmax(voltage) - np.nanmin(voltage)) or 1.0
+            dvdt_range = float(np.nanmax(dvdt) - np.nanmin(dvdt)) or 1.0
+            curves["phase_stats"].setPos(
+                float(np.nanmin(voltage)) + 0.04 * v_range, float(np.nanmax(dvdt)) - 0.04 * dvdt_range
+            )
+        elif "phase_stats" in curves:
+            curves["phase_stats"].setText("")
+        popup_plot.autoRange()
 
-        # Also draw threshold line on main plot
-        if threshold_v is not None:
+        # Draw threshold line on main plot using raw-trace coordinate (_plot_threshold_v when LJP != 0)
+        plot_thresh_v = self._val(result, "_plot_threshold_v")
+        if plot_thresh_v is None:
+            plot_thresh_v = threshold_v
+        if plot_thresh_v is not None and np.isfinite(float(plot_thresh_v)):
             if "main_thresh" not in self._result_hlines:
-                line = pg.InfiniteLine(angle=0, pen=pg.mkPen("r", style=QtCore.Qt.PenStyle.DashLine))
+                line = pg.InfiniteLine(angle=0, pen=pg.mkPen("#d62728", width=1.5, style=QtCore.Qt.PenStyle.DashLine))
                 self.plot_widget.addItem(line)
                 self._result_hlines["main_thresh"] = line
-            self._result_hlines["main_thresh"].setValue(threshold_v)
+            self._result_hlines["main_thresh"].setValue(float(plot_thresh_v))
             self._result_hlines["main_thresh"].setVisible(True)
         elif "main_thresh" in self._result_hlines:
             self._result_hlines["main_thresh"].setVisible(False)
+
+    def cleanup(self) -> None:
+        """Disconnect theme listeners and clean up popup windows/workers."""
+        try:
+            from synaptipy.shared.theme_manager import get_theme_signals
+
+            get_theme_signals().theme_changed.disconnect(self._on_theme_changed)
+        except (TypeError, RuntimeError):
+            pass
+        super().cleanup()

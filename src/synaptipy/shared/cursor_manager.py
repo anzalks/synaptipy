@@ -66,6 +66,10 @@ class CursorToolManager(QtCore.QObject):
         best_y = None
         min_dist = float("inf")
         for item in items:
+            if callable(getattr(item, "isVisible", None)) and item.isVisible() is False:
+                continue
+            if getattr(item, "_synaptipy_role", None) == "cursor_connector":
+                continue
             xData = getattr(item, "xData", None)
             yData = getattr(item, "yData", None)
             if xData is None or yData is None or len(xData) == 0 or len(xData) != len(yData):
@@ -121,17 +125,24 @@ class CursorToolManager(QtCore.QObject):
         else:
             self.add_cursor_box(best_x, best_y, clicked_plot)
 
-    def handle_delta_click(self, x_val: float, y_val: float, target_plot: pg.PlotItem):
+    @staticmethod
+    def _resolve_cursor_colors():
+        """Return ``(bg_qcolor, fg_color_str)`` with legible contrast over OS accent fill."""
         try:
             from synaptipy.shared.zoom_theme import get_system_accent_color
 
-            bg_color_str = get_system_accent_color()
-            bg_color = pg.mkColor(bg_color_str)
+            bg_color = pg.mkColor(get_system_accent_color())
         except ImportError:
             bg_color = pg.mkColor(0, 120, 215)
 
+        luminance = (0.299 * bg_color.red() + 0.587 * bg_color.green() + 0.114 * bg_color.blue()) / 255.0
+        fg_color = "#111111" if luminance > 0.62 else "white"
         if bg_color.alpha() == 255:
-            bg_color.setAlpha(180)
+            bg_color.setAlpha(205)
+        return bg_color, fg_color
+
+    def handle_delta_click(self, x_val: float, y_val: float, target_plot: pg.PlotItem):
+        bg_color, fg_color = self._resolve_cursor_colors()
 
         pair_id = self._delta_pair_counter + 1
 
@@ -140,8 +151,8 @@ class CursorToolManager(QtCore.QObject):
             target_plot.addItem(marker, ignoreBounds=True)
 
             text_item = pg.TextItem(
-                text=f"[Pair {pair_id} Start] X: {x_val:.4g}\\nY: {y_val:.4g}",
-                color="white",
+                text=f"[Pair {pair_id} Start] X: {x_val:.4g}\nY: {y_val:.4g}",
+                color=fg_color,
                 fill=pg.mkBrush(bg_color),
                 anchor=(0.5, 1.2),
             )
@@ -167,8 +178,8 @@ class CursorToolManager(QtCore.QObject):
             target_plot.addItem(marker2, ignoreBounds=True)
 
             text2 = pg.TextItem(
-                text=f"[Pair {pair_id} End] X: {x_val:.4g}\\nY: {y_val:.4g}",
-                color="white",
+                text=f"[Pair {pair_id} End] X: {x_val:.4g}\nY: {y_val:.4g}",
+                color=fg_color,
                 fill=pg.mkBrush(bg_color),
                 anchor=(0.5, 1.2),
             )
@@ -176,14 +187,15 @@ class CursorToolManager(QtCore.QObject):
             text2.setPos(x_val, y_val)
 
             line = pg.PlotDataItem([x1, x_val], [y1, y_val], pen=pg.mkPen(bg_color, style=QtCore.Qt.DashLine))
+            line._synaptipy_role = "cursor_connector"
             target_plot.addItem(line, ignoreBounds=True)
 
             dx = x_val - x1
             dy = y_val - y1
 
             mid_text = pg.TextItem(
-                text=f"[Pair {pair_id}]\\nΔX: {dx:.4g}\\nΔY: {dy:.4g}",
-                color="white",
+                text=f"[Pair {pair_id}]\nΔX: {dx:.4g}\nΔY: {dy:.4g}",
+                color=fg_color,
                 fill=pg.mkBrush(bg_color),
                 anchor=(0.5, 1.2),
             )
@@ -206,22 +218,13 @@ class CursorToolManager(QtCore.QObject):
             self.cursor_added.emit(x_val, y_val)
 
     def add_cursor_box(self, x_val: float, y_val: float, target_plot: pg.PlotItem):
-        try:
-            from synaptipy.shared.zoom_theme import get_system_accent_color
-
-            bg_color_str = get_system_accent_color()
-            bg_color = pg.mkColor(bg_color_str)
-        except ImportError:
-            bg_color = pg.mkColor(0, 120, 215)
-
-        if bg_color.alpha() == 255:
-            bg_color.setAlpha(180)
+        bg_color, fg_color = self._resolve_cursor_colors()
 
         marker = pg.ScatterPlotItem(x=[x_val], y=[y_val], size=10, pen=pg.mkPen(None), brush=pg.mkBrush(bg_color))
         target_plot.addItem(marker, ignoreBounds=True)
 
         text_item = pg.TextItem(
-            text=f"X: {x_val:.4g}\\nY: {y_val:.4g}", color="white", fill=pg.mkBrush(bg_color), anchor=(0.5, 1.2)
+            text=f"X: {x_val:.4g}\nY: {y_val:.4g}", color=fg_color, fill=pg.mkBrush(bg_color), anchor=(0.5, 1.2)
         )
         target_plot.addItem(text_item, ignoreBounds=True)
         text_item.setPos(x_val, y_val)

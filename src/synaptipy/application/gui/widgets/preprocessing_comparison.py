@@ -7,7 +7,6 @@ import logging
 from typing import Optional, Tuple  # noqa: F401
 
 import numpy as np
-import pyqtgraph as pg
 from PySide6 import QtWidgets
 
 log = logging.getLogger(__name__)
@@ -50,18 +49,25 @@ class PreprocessingComparisonDialog(QtWidgets.QDialog):
         # Horizontal layout for side-by-side plots
         plot_layout = QtWidgets.QHBoxLayout()
 
+        from synaptipy.shared.plot_customization import get_average_pen, get_single_trial_pen
+        from synaptipy.shared.plot_factory import SynaptipyPlotFactory
+
         # Left plot: Raw data
-        self.raw_plot = pg.PlotWidget(title="Raw Data")
+        self.raw_plot = SynaptipyPlotFactory.create_plot_widget(parent=self, background="white")
+        self.raw_plot.setTitle("Raw Data")
+        self.raw_plot.getPlotItem().getAxis("left").enableAutoSIPrefix(False)
         self.raw_plot.setLabel("left", "Amplitude")
         self.raw_plot.setLabel("bottom", "Time", units="s")
-        self.raw_plot.plot(self.raw_time, self.raw_data, pen=pg.mkPen(color="blue", width=1))
+        self.raw_plot.plot(self.raw_time, self.raw_data, pen=get_single_trial_pen())
         plot_layout.addWidget(self.raw_plot)
 
         # Right plot: Processed data
-        self.processed_plot = pg.PlotWidget(title="Preprocessed Data")
+        self.processed_plot = SynaptipyPlotFactory.create_plot_widget(parent=self, background="white")
+        self.processed_plot.setTitle("Preprocessed Data")
+        self.processed_plot.getPlotItem().getAxis("left").enableAutoSIPrefix(False)
         self.processed_plot.setLabel("left", "Amplitude")
         self.processed_plot.setLabel("bottom", "Time", units="s")
-        self.processed_plot.plot(self.processed_time, self.processed_data, pen=pg.mkPen(color="green", width=1))
+        self.processed_plot.plot(self.processed_time, self.processed_data, pen=get_average_pen())
         plot_layout.addWidget(self.processed_plot)
 
         layout.addLayout(plot_layout)

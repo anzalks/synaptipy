@@ -61,6 +61,7 @@ class PreferencesDialog(QtWidgets.QDialog):
         self._original_scroll_direction = get_scroll_direction()
         self._original_theme_mode = get_theme_mode()
         self._original_enable_plugins = self._settings.value("enable_plugins", True, type=bool)
+        self._original_opengl = SessionManager().global_settings.get("enable_opengl_experimental", False)
         self._cpu_count = multiprocessing.cpu_count()
 
         self._setup_ui()
@@ -328,7 +329,7 @@ class PreferencesDialog(QtWidgets.QDialog):
 
         # Apply the selected theme immediately for preview
         selected_theme = self._get_selected_theme_mode()
-        apply_theme(selected_theme)
+        apply_theme(selected_theme, preview=True)
 
     def _apply_settings(self):
         """Apply current settings without closing dialog."""
@@ -337,9 +338,9 @@ class PreferencesDialog(QtWidgets.QDialog):
         set_scroll_direction(new_scroll)
         log.debug(f"Applied scroll direction: {new_scroll.value}")
 
-        # Save theme mode
+        # Save theme mode and apply (apply_theme emits theme_changed after palette update)
         new_theme = self._get_selected_theme_mode()
-        set_theme_mode(new_theme)
+        set_theme_mode(new_theme, emit_signal=False)
         apply_theme(new_theme)
         log.debug(f"Applied theme mode: {new_theme.value}")
 
@@ -370,6 +371,7 @@ class PreferencesDialog(QtWidgets.QDialog):
         self._original_scroll_direction = new_scroll
         self._original_theme_mode = new_theme
         self._original_enable_plugins = plugins_enabled
+        self._original_opengl = opengl_enabled
 
         if plugins_changed:
             self.sigPluginsToggled.emit(plugins_enabled)
@@ -380,34 +382,17 @@ class PreferencesDialog(QtWidgets.QDialog):
         self.accept()
 
     def _on_rejected(self):
-        """Handle Cancel button click - revert to original settings."""
-        # Revert theme if changed
-        if self._get_selected_theme_mode() != self._original_theme_mode:
-            apply_theme(self._original_theme_mode)
-
+        """Handle Cancel button click - revert any unapplied preview changes."""
+        apply_theme(self._original_theme_mode)
         self.reject()
 
     def _reset_to_defaults(self):
-        """Reset all preferences to default values (System for all settings)."""
-        # Set UI to defaults
+        """Reset dialog controls to default values (Apply/OK commits; Cancel reverts)."""
         self.scroll_system_radio.setChecked(True)
         self.theme_system_radio.setChecked(True)
         self.enable_plugins_checkbox.setChecked(True)
         self.cpu_cores_spinbox.setValue(1)
         self.ram_spinbox.setValue(4.0)
-
-        # Apply the defaults
-        set_scroll_direction(ScrollDirection.SYSTEM)
-        set_theme_mode(ThemeMode.SYSTEM)
-        apply_theme(ThemeMode.SYSTEM)
-        self._settings.setValue("enable_plugins", True)
-        self._settings.setValue("performance/max_cpu_cores", 1)
-        self._settings.setValue("performance/max_ram_allocation_gb", 4.0)
-        self._settings.sync()
-
-        # Update original values
-        self._original_scroll_direction = ScrollDirection.SYSTEM
-        self._original_theme_mode = ThemeMode.SYSTEM
-        self._original_enable_plugins = True
-
-        log.debug("Reset all preferences to defaults")
+        self.enable_opengl_checkbox.setChecked(False)
+        apply_theme(ThemeMode.SYSTEM, preview=True)
+        log.debug("Reset preferences dialog controls to defaults")

@@ -59,32 +59,58 @@ class SessionSummaryDialog(QtWidgets.QDialog):
         close_btn.clicked.connect(self.accept)
         layout.addWidget(close_btn)
 
+    @staticmethod
+    def _flatten_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
+        """Unpack Schema v1 nested 'metrics' while filtering private/internal keys."""
+        skip = {"schema_version", "module_used", "data_source", "xfa_sources", "_analysis_type_override"}
+        flat: Dict[str, Any] = {}
+        if "source_label" in entry:
+            flat["source_label"] = entry["source_label"]
+        metrics = entry.get("metrics")
+        if isinstance(metrics, dict):
+            for k, v in metrics.items():
+                if not str(k).startswith("_") and k not in skip and not str(k).endswith("_error"):
+                    flat[k] = v
+        for k, v in entry.items():
+            if (
+                not str(k).startswith("_")
+                and k not in skip
+                and k != "metrics"
+                and not str(k).endswith("_error")
+                and k not in flat
+            ):
+                flat[k] = v
+        return flat
+
     def _populate_table(self):
         if not self.results:
             return
 
-        # Determine columns dynamically from keys
-        # Filter out complex objects, keep numbers/strings
-        keys = []
-        sample = self.results[0]
-        for k, v in sample.items():
-            if isinstance(v, (int, float, str)):
-                keys.append(k)
+        flat_rows = [self._flatten_entry(r) for r in self.results]
 
-        # Ensure source_label is first
+        # Collect union of scalar keys in deterministic order
+        keys: List[str] = []
+        for row_dict in flat_rows:
+            for k, v in row_dict.items():
+                if k not in keys and isinstance(v, (int, float, str, np.number)) and not isinstance(v, bool):
+                    keys.append(k)
+
         if "source_label" in keys:
             keys.remove("source_label")
             keys.insert(0, "source_label")
 
         self.table.setColumnCount(len(keys))
         self.table.setHorizontalHeaderLabels([k.replace("_", " ").title() for k in keys])
-        self.table.setRowCount(len(self.results))
+        self.table.setRowCount(len(flat_rows))
 
-        for row, entry in enumerate(self.results):
+        for row, entry in enumerate(flat_rows):
             for col, key in enumerate(keys):
                 val = entry.get(key)
-                if isinstance(val, float):
-                    item = QtWidgets.QTableWidgetItem(f"{val:.4g}")
+                if val is None:
+                    item = QtWidgets.QTableWidgetItem("N/A")
+                elif isinstance(val, (float, np.floating)):
+                    vf = float(val)
+                    item = QtWidgets.QTableWidgetItem("N/A" if (np.isnan(vf) or np.isinf(vf)) else f"{vf:.4g}")
                 else:
                     item = QtWidgets.QTableWidgetItem(str(val))
                 self.table.setItem(row, col, item)
@@ -93,21 +119,30 @@ class SessionSummaryDialog(QtWidgets.QDialog):
         if not self.results:
             return
 
-        # Identify numeric columns
-        numeric_keys = []
-        sample = self.results[0]
-        for k, v in sample.items():
-            if isinstance(v, (int, float)) and not isinstance(v, bool):
-                numeric_keys.append(k)
+        flat_rows = [self._flatten_entry(r) for r in self.results]
+        numeric_keys: List[str] = []
+        for row_dict in flat_rows:
+            for k, v in row_dict.items():
+                if k not in numeric_keys and isinstance(v, (int, float, np.number)) and not isinstance(v, bool):
+                    numeric_keys.append(k)
 
         for key in numeric_keys:
-            values = [r.get(key) for r in self.results if r.get(key) is not None]
+            values = [
+                float(r[key])
+                for r in flat_rows
+                if r.get(key) is not None
+                and isinstance(r.get(key), (int, float, np.number))
+                and not isinstance(r.get(key), bool)
+                and np.isfinite(float(r[key]))
+            ]
             if values:
-                mean_val = np.mean(values)
-                std_val = np.std(values)
+                mean_val = float(np.nanmean(values))
+                std_val = float(np.nanstd(values))
 
                 label = key.replace("_", " ").title()
-                self.stats_layout.addRow(f"{label}:", QtWidgets.QLabel(f"{mean_val:.4g} ± {std_val:.4g}"))
+                self.stats_layout.addRow(
+                    f"{label} (n={len(values)}):", QtWidgets.QLabel(f"{mean_val:.4g} +/- {std_val:.4g}")
+                )
 
     def _generate_methods_paragraph(self) -> str:
         try:
@@ -118,15 +153,13 @@ class SessionSummaryDialog(QtWidgets.QDialog):
             version = "unknown"
 
         if not self.results:
-            return f"Data was analyzed using Synaptipy {version}."
+            return f"Electrophysiology data were analyzed using Synaptipy {version}."
+
+        from synaptipy.application.controllers.analysis_formatter import generate_methods_text
 
         sample = self.results[0]
-        freq = sample.get("matched_filter_freq", "X")
-        prominence = sample.get("prominence_factor", "Y")
-
-        # You can expand this logic to extract more actual parameters
+        detail_text = generate_methods_text(sample)
         return (
-            f"Data was analyzed using Synaptipy {version}. "
-            f"Event detection used a matched filter (freq: {freq} Hz) "
-            f"with a prominence factor of {prominence}."
+            f"Electrophysiology data were analyzed using Synaptipy {version} "
+            f"(n = {len(self.results)}). {detail_text}"
         )

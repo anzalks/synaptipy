@@ -50,28 +50,28 @@ class PreprocessingWidget(QtWidgets.QWidget):
         self.baseline_type_combo.addItems(["None", "Mode", "Mean", "Median", "Linear Detrend"])
         self.baseline_type_combo.setToolTip(
             "Baseline correction method:\n"
-            "  None  – remove existing baseline correction\n"
-            "  Mode  – subtract the most-frequent amplitude value\n"
-            "  Mean  – subtract the mean of the selected time window\n"
-            "  Median – subtract the median of the selected time window\n"
-            "  Linear Detrend – fit and subtract a linear trend"
+            "  None  - remove existing baseline correction\n"
+            "  Mode  - subtract the most-frequent amplitude value\n"
+            "  Mean  - subtract the mean of the selected time window\n"
+            "  Median - subtract the median of the selected time window\n"
+            "  Linear Detrend - fit and subtract a linear trend"
         )
         self.baseline_type_combo.currentIndexChanged.connect(self._on_baseline_type_changed)
         bl_type_layout.addWidget(self.baseline_type_combo, 1)
         baseline_layout.addLayout(bl_type_layout)
 
-        # Time Window — always-visible separate parameter row
+        # Time Window - always-visible separate parameter row
         tw_layout = QtWidgets.QHBoxLayout()
         tw_layout.addWidget(QtWidgets.QLabel("Time Window:"))
         self.bl_tw_start = QtWidgets.QLineEdit("0.0")
         self.bl_tw_start.setValidator(QtGui.QDoubleValidator())
-        self.bl_tw_start.setMaximumWidth(60)
+        self.bl_tw_start.setMaximumWidth(84)
         self.bl_tw_start.setToolTip("Baseline window start time (seconds). Used by Mode / Mean / Median methods.")
         tw_layout.addWidget(self.bl_tw_start)
-        tw_layout.addWidget(QtWidgets.QLabel("–"))
+        tw_layout.addWidget(QtWidgets.QLabel("-"))
         self.bl_tw_end = QtWidgets.QLineEdit("0.05")
         self.bl_tw_end.setValidator(QtGui.QDoubleValidator())
-        self.bl_tw_end.setMaximumWidth(60)
+        self.bl_tw_end.setMaximumWidth(84)
         self.bl_tw_end.setToolTip("Baseline window end time (seconds). Used by Mode / Mean / Median methods.")
         tw_layout.addWidget(self.bl_tw_end)
         tw_layout.addWidget(QtWidgets.QLabel("s"))
@@ -128,10 +128,10 @@ class PreprocessingWidget(QtWidgets.QWidget):
         self.filter_type_combo.addItems(["None", "Lowpass", "Highpass", "Bandpass", "Notch"])
         self.filter_type_combo.setToolTip(
             "Signal filter type:\n"
-            "  Lowpass  – remove frequencies above the cutoff (smooth slow signals)\n"
-            "  Highpass – remove frequencies below the cutoff (remove DC drift)\n"
-            "  Bandpass – keep frequencies between low and high cutoffs\n"
-            "  Notch    – remove a narrow frequency band (e.g. 50/60 Hz mains noise)"
+            "  Lowpass  - remove frequencies above the cutoff (smooth slow signals)\n"
+            "  Highpass - remove frequencies below the cutoff (remove DC drift)\n"
+            "  Bandpass - keep frequencies between low and high cutoffs\n"
+            "  Notch    - remove a narrow frequency band (e.g. 50/60 Hz mains noise)"
         )
         self.filter_type_combo.currentIndexChanged.connect(self._on_filter_type_changed)
         type_layout.addWidget(self.filter_type_combo, 1)
@@ -219,7 +219,7 @@ class PreprocessingWidget(QtWidgets.QWidget):
             line_edit = QtWidgets.QLineEdit(default_val)
             # Add validator for numbers
             line_edit.setValidator(QtGui.QDoubleValidator())
-            line_edit.setMaximumWidth(60)
+            line_edit.setMaximumWidth(84)
 
             layout.addWidget(line_edit)
             widget.inputs[name] = line_edit

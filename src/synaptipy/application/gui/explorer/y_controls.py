@@ -79,6 +79,9 @@ class ExplorerYControls(QtWidgets.QWidget):
         # Global Scrollbar
         self.global_y_scrollbar = QtWidgets.QScrollBar(QtCore.Qt.Orientation.Vertical)
         self.global_y_scrollbar.setRange(0, self.SCROLLBAR_MAX_RANGE)
+        self.global_y_scrollbar.setValue(self.SCROLLBAR_MAX_RANGE // 2)
+        self.global_y_scrollbar.setInvertedAppearance(True)
+        self.global_y_scrollbar.setInvertedControls(True)
         self.global_y_scrollbar.setToolTip("Y scroll (All)")
         self.global_y_scrollbar.valueChanged.connect(self._on_global_scroll_changed)
 
@@ -164,6 +167,8 @@ class ExplorerYControls(QtWidgets.QWidget):
             y_scrollbar = QtWidgets.QScrollBar(QtCore.Qt.Orientation.Vertical)
             y_scrollbar.setRange(0, self.SCROLLBAR_MAX_RANGE)
             y_scrollbar.setValue(self.SCROLLBAR_MAX_RANGE // 2)
+            y_scrollbar.setInvertedAppearance(True)
+            y_scrollbar.setInvertedControls(True)
             y_scrollbar.setToolTip(f"Y pan for {display_name}")
             y_scrollbar.valueChanged.connect(lambda v, c=chan_id: self._on_individual_scroll_changed(c, v))
 

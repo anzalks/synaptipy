@@ -49,11 +49,25 @@ class SynaptipyPlotFactory:
             Configured PlotWidget
         """
         try:
-            # Create the plot widget with custom ViewBox (left=pan, right=rect-zoom)
-            plot_widget = pg.PlotWidget(parent=parent, viewBox=SynaptipyViewBox())
+            import os
 
-            # Set background immediately
+            enable_menu = os.environ.get("QT_QPA_PLATFORM") != "offscreen"
+            # Create the plot widget with custom ViewBox (left=pan, right=rect-zoom)
+            plot_widget = pg.PlotWidget(
+                parent=parent,
+                viewBox=SynaptipyViewBox(enableMenu=enable_menu),
+                enableMenu=enable_menu,
+            )
+
+            # Set background immediately and apply consistent axis/tick theme
             plot_widget.setBackground(background)
+            try:
+                from .plot_customization import apply_plot_theme
+
+                axis_fg = "white" if str(background).lower() in ("black", "k", "#000000", "#232323") else "black"
+                apply_plot_theme(plot_widget.getPlotItem(), background_color=background, axis_color=axis_fg)
+            except Exception as theme_err:
+                log.debug(f"Could not apply plot theme in factory: {theme_err}")
 
             # Configure view box
             viewbox = plot_widget.getViewBox()
@@ -151,6 +165,10 @@ class SynaptipyPlotFactory:
 
         def attempt_grid_config(attempt: int = 0):
             try:
+                import shiboken6
+
+                if not shiboken6.isValid(plot_widget):
+                    return
                 plot_item = plot_widget.getPlotItem()
                 if not plot_item:
                     if attempt < max_retries:

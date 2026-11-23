@@ -114,7 +114,7 @@ class ExportManager(QtCore.QObject):
         tab_name: str,
         recording,
         parent_widget: Optional[QtWidgets.QWidget] = None,
-    ) -> None:
+    ) -> bool:
         """Open format/DPI dialogs then save *plot_widget* to a file.
 
         Args:
@@ -129,7 +129,7 @@ class ExportManager(QtCore.QObject):
             dialog = PlotExportDialog(parent_widget)
             if not dialog.exec():
                 log.debug("[ExportManager] Save plot cancelled")
-                return
+                return False
 
             settings = dialog.get_settings()
             fmt = settings["format"]
@@ -142,19 +142,22 @@ class ExportManager(QtCore.QObject):
                 f"Images (*.{fmt})",
             )
             if not filename:
-                return
+                return False
 
             exporter = PlotExporter(recording=recording, plot_canvas_widget=plot_widget)
             success = exporter.export(filename, fmt, dpi)
 
             if success:
                 log.debug("[ExportManager] Plot saved to %s", filename)
-            else:
-                log.warning("[ExportManager] PlotExporter.export() returned False")
+                return True
+            log.warning("[ExportManager] PlotExporter.export() returned False")
+            QtWidgets.QMessageBox.warning(parent_widget, "Save Error", f"Could not export plot to '{filename}'.")
+            return False
 
         except Exception as exc:
             log.error("[ExportManager] Failed to save plot: %s", exc)
             QtWidgets.QMessageBox.critical(parent_widget, "Save Error", f"Failed to save plot:\n{exc}")
+            return False
 
     # ------------------------------------------------------------------
     # Private helpers

@@ -36,6 +36,10 @@ class ThemeSignals(QtCore.QObject):
 _theme_signals: Optional[ThemeSignals] = None
 
 _system_theme_listener_installed = False
+_initial_system_dark: Optional[bool] = None
+_palette_overwritten: bool = False
+_preview_theme_mode: Optional[ThemeMode] = None
+_applying_theme: bool = False
 
 
 def get_theme_signals() -> ThemeSignals:
@@ -62,25 +66,28 @@ def get_theme_mode() -> ThemeMode:
         return ThemeMode.SYSTEM
 
 
-def set_theme_mode(mode: ThemeMode) -> None:
+def set_theme_mode(mode: ThemeMode, emit_signal: bool = True) -> None:
     """Set the theme mode setting."""
+    global _preview_theme_mode
+    _preview_theme_mode = None
     settings = _get_settings()
     settings.setValue("appearance/theme", mode.value)
     settings.sync()
     log.debug(f"Theme mode set to: {mode.value}")
 
-    signals = get_theme_signals()
-    signals.theme_changed.emit(mode.value)
+    if emit_signal:
+        signals = get_theme_signals()
+        signals.theme_changed.emit(mode.value)
 
 
 def is_dark_mode() -> bool:
     """
-    Check if dark mode should be active based on current setting.
+    Check if dark mode should be active based on current or previewed setting.
 
     Returns:
         True if dark mode should be used, False otherwise.
     """
-    mode = get_theme_mode()
+    mode = _preview_theme_mode if _preview_theme_mode is not None else get_theme_mode()
 
     if mode == ThemeMode.DARK:
         return True
@@ -92,7 +99,20 @@ def is_dark_mode() -> bool:
     return False
 
 
-def _detect_system_dark_mode() -> bool:
+def _snapshot_initial_system_dark(app: Optional[QtWidgets.QApplication]) -> None:
+    """Capture initial OS window luminance before Synaptipy overwrites QApplication palette."""
+    global _initial_system_dark
+    if _initial_system_dark is not None or app is None or _palette_overwritten:
+        return
+    try:
+        bg_color = app.palette().color(QtGui.QPalette.ColorRole.Window)
+        luminance = (0.299 * bg_color.red() + 0.587 * bg_color.green() + 0.114 * bg_color.blue()) / 255.0
+        _initial_system_dark = luminance < 0.5
+    except Exception:
+        pass
+
+
+def _detect_system_dark_mode() -> bool:  # noqa: C901
     """
     Detect if the system is using dark mode.
 
@@ -130,6 +150,9 @@ def _detect_system_dark_mode() -> bool:
             log.debug(f"Could not read Windows theme setting: {e}")
             # Fallback to palette detection below
 
+    if _palette_overwritten and _initial_system_dark is not None:
+        return _initial_system_dark
+
     # Fallback: use palette luminance detection
     if app:
         palette = app.palette()
@@ -144,6 +167,7 @@ def _detect_system_dark_mode() -> bool:
 def install_system_theme_listener(app: QtWidgets.QApplication) -> None:
     """Reapply System mode when Qt reports an operating-system theme change."""
     global _system_theme_listener_installed
+    _snapshot_initial_system_dark(app)
     if _system_theme_listener_installed:
         return
 
@@ -153,58 +177,286 @@ def install_system_theme_listener(app: QtWidgets.QApplication) -> None:
         return
 
     def _on_color_scheme_changed(_scheme) -> None:
-        if get_theme_mode() == ThemeMode.SYSTEM:
+        if _preview_theme_mode is None and not _applying_theme and get_theme_mode() == ThemeMode.SYSTEM:
             apply_theme(ThemeMode.SYSTEM)
 
     signal.connect(_on_color_scheme_changed)
     _system_theme_listener_installed = True
 
 
-def apply_theme(mode: Optional[ThemeMode] = None) -> None:
+def _get_macos_objc_handles():
+    """Return cached ARM64/x86_64-safe libobjc function wrappers on macOS Cocoa."""
+    import ctypes
+    import sys
+
+    if sys.platform != "darwin":
+        return None
+    app = QtWidgets.QApplication.instance()
+    if app is None or getattr(app, "platformName", lambda: "")().lower() != "cocoa":
+        return None
+    try:
+        objc = ctypes.cdll.LoadLibrary("/usr/lib/libobjc.A.dylib")
+        objc.objc_getClass.argtypes = [ctypes.c_char_p]
+        objc.objc_getClass.restype = ctypes.c_void_p
+        objc.sel_registerName.argtypes = [ctypes.c_char_p]
+        objc.sel_registerName.restype = ctypes.c_void_p
+        msg_addr = ctypes.cast(objc.objc_msgSend, ctypes.c_void_p).value
+        return {
+            "objc": objc,
+            "msg0": ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p)(msg_addr),
+            "msg1_ptr": ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p)(msg_addr),
+            "msg1_void": ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p)(msg_addr),
+            "msg1_long": ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_long)(msg_addr),
+            "msg1_bool": ctypes.CFUNCTYPE(None, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_bool)(msg_addr),
+            "msg_utf8": ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_char_p)(msg_addr),
+        }
+    except Exception as exc:
+        log.debug("Could not initialize macOS Objective-C bridge: %s", exc)
+        return None
+
+
+def activate_macos_foreground_app(focus: bool = False) -> None:
+    """Promote CLI/Conda Python on macOS to a regular foreground app so the native menu bar shows."""
+    import os
+
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return
+    handles = _get_macos_objc_handles()
+    if handles is None:
+        return
+    try:
+        objc = handles["objc"]
+        ns_app = handles["msg0"](objc.objc_getClass(b"NSApplication"), objc.sel_registerName(b"sharedApplication"))
+        if not ns_app:
+            return
+        # 0 == NSApplicationActivationPolicyRegular (owns Dock icon + native top menu bar)
+        handles["msg1_long"](ns_app, objc.sel_registerName(b"setActivationPolicy:"), 0)
+        if focus:
+            handles["msg1_bool"](ns_app, objc.sel_registerName(b"activateIgnoringOtherApps:"), True)
+    except Exception as exc:
+        log.debug("macOS foreground activation skipped: %s", exc)
+
+
+def _set_macos_native_appearance(mode: Optional[ThemeMode]) -> bool:
+    """Set NSApp.appearance on macOS Cocoa so native QMacStyle tabs/controls/menus switch Light/Dark."""
+    handles = _get_macos_objc_handles()
+    if handles is None:
+        return False
+    try:
+        objc = handles["objc"]
+        ns_app = handles["msg0"](objc.objc_getClass(b"NSApplication"), objc.sel_registerName(b"sharedApplication"))
+        if not ns_app:
+            return False
+        if mode == ThemeMode.DARK:
+            apr_name = b"NSAppearanceNameDarkAqua"
+        elif mode == ThemeMode.LIGHT:
+            apr_name = b"NSAppearanceNameAqua"
+        else:
+            apr_name = None
+
+        apr_ptr = None
+        if apr_name is not None:
+            ns_str = handles["msg_utf8"](
+                objc.objc_getClass(b"NSString"),
+                objc.sel_registerName(b"stringWithUTF8String:"),
+                apr_name,
+            )
+            apr_ptr = handles["msg1_ptr"](
+                objc.objc_getClass(b"NSAppearance"),
+                objc.sel_registerName(b"appearanceNamed:"),
+                ns_str,
+            )
+        handles["msg1_void"](ns_app, objc.sel_registerName(b"setAppearance:"), apr_ptr)
+        return True
+    except Exception as exc:
+        log.debug("Could not set macOS NSAppearance: %s", exc)
+        return False
+
+
+def select_platform_style(
+    dark: bool,
+    platform_str: Optional[str] = None,
+    qt_platform_name: Optional[str] = None,
+    available_keys: Optional[list[str]] = None,
+) -> tuple[str, bool]:
+    """Select the native Qt widget style for each OS and return ``(style_name, uses_native_palette)``.
+
+    - **macOS (Cocoa)**: ``"macOS"`` (native pill/segmented tabs, native controls, driven by ``NSAppearance``).
+    - **Windows**: ``"windows11"`` when available (Win11 native Light/Dark), ``"windowsvista"`` on Win10 Light,
+      and ``"Fusion"`` on Win10 Dark (since Win32 ``uxtheme`` does not support dark controls).
+    - **Linux**: ``"Breeze"`` / ``"adwaita"`` when matching the desktop scheme, else ``"Fusion"`` (standard
+      freedesktop Qt style with full Light/Dark palette support).
+    - **Headless (offscreen)**: ``"Fusion"`` for deterministic cross-platform CI rendering.
     """
-    Apply the specified theme mode to the application.
+    import sys
+
+    plat = (platform_str or sys.platform).lower()
+    app = QtWidgets.QApplication.instance()
+    qpa = (
+        qt_platform_name
+        if qt_platform_name is not None
+        else (getattr(app, "platformName", lambda: "")() if app is not None else "")
+    ).lower()
+    raw_keys = available_keys if available_keys is not None else list(QtWidgets.QStyleFactory.keys())
+    available = {k.lower(): k for k in raw_keys}
+    fusion = available.get("fusion", "Fusion")
+
+    if qpa == "offscreen":
+        return (fusion, False)
+
+    if plat == "darwin" and "macos" in available:
+        return (available["macos"], True)
+
+    if plat == "win32":
+        if "windows11" in available:
+            return (available["windows11"], False)
+        if not dark and "windowsvista" in available:
+            return (available["windowsvista"], True)
+        return (fusion, False)
+
+    if plat.startswith("linux"):
+        sys_dark = _detect_system_dark_mode()
+        if dark == sys_dark:
+            for linux_native in ("breeze", "adwaita", "kvantum"):
+                if linux_native in available:
+                    return (available[linux_native], True)
+        return (fusion, False)
+
+    return (fusion, False)
+
+
+def _build_global_stylesheet(dark: bool, native_macos: bool = False) -> str:
+    """Build minimal semantic QSS rules without overriding native platform tabs, menus, or controls."""
+    if dark:
+        subdued = "#a0a0a0"
+        primary_bg = "#2a82da"
+        primary_hover = "#3b93eb"
+        primary_pressed = "#1f6ec0"
+        primary_disabled_bg = "#4a4a4a"
+        primary_disabled_fg = "#888888"
+        danger_fg = "#ff7b7b"
+        danger_border = "#8b3a3a"
+        danger_hover = "#4a2424"
+        banner_bg = "#2b313a"
+        banner_border = "#444c56"
+        splash_border = "#5a5a5a"
+    else:
+        subdued = "#666666"
+        primary_bg = "#0078d7"
+        primary_hover = "#1084e0"
+        primary_pressed = "#0063b1"
+        primary_disabled_bg = "#d6d6d6"
+        primary_disabled_fg = "#888888"
+        danger_fg = "#b91c1c"
+        danger_border = "#e0a0a0"
+        danger_hover = "#fde8e8"
+        banner_bg = "#f4f7fb"
+        banner_border = "#d0d7de"
+        splash_border = "#b8b8b8"
+
+    primary_qss = (
+        ""
+        if native_macos
+        else (
+            f'QPushButton[buttonRole="primary"] {{ background-color: {primary_bg}; color: #ffffff;'
+            f" border: 1px solid {primary_pressed}; border-radius: 4px; padding: 4px 12px; font-weight: 600; }}"
+            f'QPushButton[buttonRole="primary"]:hover {{ background-color: {primary_hover}; }}'
+            f'QPushButton[buttonRole="primary"]:pressed {{ background-color: {primary_pressed}; }}'
+            f'QPushButton[buttonRole="primary"]:disabled {{ background-color: {primary_disabled_bg};'
+            f" color: {primary_disabled_fg}; border-color: {primary_disabled_bg}; }}"
+        )
+    )
+    return (
+        f'QLabel[subdued="true"] {{ color: {subdued}; }}'
+        f"{primary_qss}"
+        f'QPushButton[buttonRole="danger"] {{ color: {danger_fg}; border: 1px solid {danger_border};'
+        f" border-radius: 4px; padding: 4px 10px; }}"
+        f'QPushButton[buttonRole="danger"]:hover {{ background-color: {danger_hover}; }}'
+        f"QFrame#DemoDownloadBanner {{ background-color: {banner_bg};"
+        f" border-bottom: 1px solid {banner_border}; }}"
+        f"QWidget#WelcomeScreen {{ border: 1px solid {splash_border}; }}"
+    )
+
+
+def apply_theme(mode: Optional[ThemeMode] = None, preview: bool = False) -> None:
+    """
+    Apply the specified theme mode using native OS styling on macOS, Windows, and Linux.
 
     Args:
         mode: Theme mode to apply. If None, uses current setting.
+        preview: True when previewing an unsaved theme selection in PreferencesDialog.
     """
+    global _preview_theme_mode, _applying_theme
     if mode is None:
+        _preview_theme_mode = None
         mode = get_theme_mode()
+    elif preview:
+        _preview_theme_mode = mode
+    else:
+        _preview_theme_mode = None
 
     app = QtWidgets.QApplication.instance()
     if not app:
         log.warning("No QApplication instance found, cannot apply theme")
         return
 
-    if mode == ThemeMode.SYSTEM:
-        if _detect_system_dark_mode():
+    _snapshot_initial_system_dark(app)
+
+    _applying_theme = True
+    try:
+        # On macOS Cocoa, set NSAppearance first so SYSTEM resets to nil before querying OS dark mode
+        _set_macos_native_appearance(mode if mode in (ThemeMode.LIGHT, ThemeMode.DARK) else None)
+
+        if mode == ThemeMode.SYSTEM:
+            dark = _detect_system_dark_mode()
+        else:
+            dark = mode == ThemeMode.DARK
+
+        if dark:
             _apply_dark_theme(app)
-            log.debug("Applied detected system dark theme")
+            log.debug("Applied dark theme")
         else:
             _apply_light_theme(app)
-            log.debug("Applied detected system light theme")
+            log.debug("Applied light theme")
 
-    elif mode == ThemeMode.LIGHT:
-        _apply_light_theme(app)
-        log.debug("Applied light theme")
-    elif mode == ThemeMode.DARK:
-        _apply_dark_theme(app)
-        log.debug("Applied dark theme")
+        try:
+            from synaptipy.shared.zoom_theme import refresh_cached_pen_brush
+
+            refresh_cached_pen_brush()
+        except Exception:
+            pass
+    finally:
+        _applying_theme = False
+
+    get_theme_signals().theme_changed.emit(mode.value)
 
 
 def _apply_light_theme(app: QtWidgets.QApplication) -> None:
-    """Apply light theme using Fusion style and an explicit light QPalette."""
-    # Fusion style fully respects QPalette on all platforms (including macOS).
-    app.setStyle("Fusion")
-    app.setStyleSheet("")
-    _apply_light_palette(app)
+    """Apply light theme using the native OS style and palette."""
+    global _palette_overwritten
+    style_name, uses_native_palette = select_platform_style(dark=False)
+    app.setStyle(style_name)
+    if uses_native_palette:
+        if _palette_overwritten:
+            app.setPalette(QtGui.QPalette())
+            _palette_overwritten = False
+    else:
+        _apply_light_palette(app)
+    app.setStyleSheet(_build_global_stylesheet(dark=False, native_macos=(style_name.lower() == "macos")))
 
 
 def _apply_dark_theme(app: QtWidgets.QApplication) -> None:
-    """Apply dark theme using Fusion style and an explicit dark QPalette."""
-    # Fusion style fully respects QPalette on all platforms (including macOS).
-    app.setStyle("Fusion")
-    app.setStyleSheet("")
-    _apply_dark_palette(app)
+    """Apply dark theme using the native OS style and palette."""
+    global _palette_overwritten
+    style_name, uses_native_palette = select_platform_style(dark=True)
+    app.setStyle(style_name)
+    if uses_native_palette:
+        if _palette_overwritten:
+            app.setPalette(QtGui.QPalette())
+            _palette_overwritten = False
+    else:
+        _apply_dark_palette(app)
+    app.setStyleSheet(_build_global_stylesheet(dark=True, native_macos=(style_name.lower() == "macos")))
 
 
 def _apply_light_palette(app: QtWidgets.QApplication) -> None:
@@ -231,6 +483,8 @@ def _apply_light_palette(app: QtWidgets.QApplication) -> None:
     # Selection colors
     palette.setColor(QtGui.QPalette.ColorRole.Highlight, highlight)
     palette.setColor(QtGui.QPalette.ColorRole.HighlightedText, QtGui.QColor(255, 255, 255))
+    if hasattr(QtGui.QPalette.ColorRole, "Accent"):
+        palette.setColor(QtGui.QPalette.ColorRole.Accent, highlight)
 
     # Link colors
     palette.setColor(QtGui.QPalette.ColorRole.Link, QtGui.QColor(0, 100, 200))
@@ -263,6 +517,8 @@ def _apply_light_palette(app: QtWidgets.QApplication) -> None:
     )
     palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Base, QtGui.QColor(240, 240, 240))
 
+    global _palette_overwritten
+    _palette_overwritten = True
     app.setPalette(palette)
 
 
@@ -290,6 +546,8 @@ def _apply_dark_palette(app: QtWidgets.QApplication) -> None:
     # Selection colors
     palette.setColor(QtGui.QPalette.ColorRole.Highlight, highlight)
     palette.setColor(QtGui.QPalette.ColorRole.HighlightedText, QtGui.QColor(255, 255, 255))
+    if hasattr(QtGui.QPalette.ColorRole, "Accent"):
+        palette.setColor(QtGui.QPalette.ColorRole.Accent, highlight)
 
     # Link colors
     palette.setColor(QtGui.QPalette.ColorRole.Link, QtGui.QColor(42, 130, 218))
@@ -318,28 +576,70 @@ def _apply_dark_palette(app: QtWidgets.QApplication) -> None:
     palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.HighlightedText, disabled_text)
     palette.setColor(QtGui.QPalette.ColorGroup.Disabled, QtGui.QPalette.ColorRole.Base, QtGui.QColor(45, 45, 45))
 
+    global _palette_overwritten
+    _palette_overwritten = True
     app.setPalette(palette)
 
 
+def _repolish_widget(widget: QtWidgets.QWidget) -> None:
+    """Refresh QSS property evaluation on *widget* without recreating it."""
+    style = widget.style()
+    if style is not None:
+        style.unpolish(widget)
+        style.polish(widget)
+    widget.update()
+
+
 def style_as_subdued(widget, italic: bool = False, font_size: Optional[int] = None) -> None:
-    """Style a widget's text as subdued/secondary using the current palette."""
-    p = widget.palette()
-    p.setColor(widget.foregroundRole(), p.color(QtGui.QPalette.ColorRole.PlaceholderText))
-    widget.setPalette(p)
+    """Style a widget's text as subdued/secondary while tracking live theme switches."""
+    if isinstance(widget, QtWidgets.QWidget):
+        widget.setProperty("subdued", True)
+        widget.setAttribute(QtCore.Qt.WidgetAttribute.WA_SetPalette, False)
+        _repolish_widget(widget)
+    else:
+        p = widget.palette()
+        p.setColor(widget.foregroundRole(), p.color(QtGui.QPalette.ColorRole.PlaceholderText))
+        widget.setPalette(p)
     if italic or font_size:
         f = widget.font()
         if italic:
             f.setItalic(True)
         if font_size:
-            f.setPixelSize(font_size)
+            f.setPointSize(font_size)
         widget.setFont(f)
 
 
+def clear_subdued_style(widget) -> None:
+    """Restore normal theme foreground text color on a widget previously styled as subdued."""
+    if isinstance(widget, QtWidgets.QWidget):
+        widget.setProperty("subdued", False)
+        widget.setAttribute(QtCore.Qt.WidgetAttribute.WA_SetPalette, False)
+        f = widget.font()
+        if f.italic():
+            f.setItalic(False)
+            widget.setFont(f)
+        _repolish_widget(widget)
+
+
 def warning_banner_stylesheet() -> str:
-    """Return a QFrame stylesheet for warning/info banners that respects the current theme."""
+    """Return a scoped banner stylesheet that avoids double borders on child QLabels."""
     if is_dark_mode():
-        return "QFrame { background: #3d3520; border: 1px solid #665b30;" " border-radius: 4px; color: #e0c870; }"
-    return "QFrame { background: #fff3cd; border: 1px solid #ffc107;" " border-radius: 4px; color: #856404; }"
+        return (
+            "QFrame#UpdateBanner, .QFrame { background-color: #3d3520; border: 1px solid #665b30;"
+            " border-radius: 4px; color: #e0c870; }"
+            " QFrame#UpdateBanner QLabel { border: none; background: transparent; color: #e0c870; }"
+            " QFrame#UpdateBanner QPushButton { color: #e0c870; background: transparent;"
+            " border: 1px solid #8a7b42; border-radius: 3px; padding: 2px 8px; }"
+            " QFrame#UpdateBanner QPushButton:hover { background-color: #4f4528; }"
+        )
+    return (
+        "QFrame#UpdateBanner, .QFrame { background-color: #fff3cd; border: 1px solid #ffc107;"
+        " border-radius: 4px; color: #664d03; }"
+        " QFrame#UpdateBanner QLabel { border: none; background: transparent; color: #664d03; }"
+        " QFrame#UpdateBanner QPushButton { color: #664d03; background: transparent;"
+        " border: 1px solid #d39e00; border-radius: 3px; padding: 2px 8px; }"
+        " QFrame#UpdateBanner QPushButton:hover { background-color: #ffe69c; }"
+    )
 
 
 def warning_label_stylesheet() -> str:
@@ -351,16 +651,21 @@ def warning_label_stylesheet() -> str:
             " padding: 8px; font-weight: bold; }"
         )
     return (
-        "QLabel { background-color: #FFF3CD; color: #856404;"
+        "QLabel { background-color: #FFF3CD; color: #664d03;"
         " border: 1px solid #FFEAA7; border-radius: 4px;"
         " padding: 8px; font-weight: bold; }"
     )
 
 
-def themed_plot_colors() -> tuple:
-    """Return (background_color, foreground_color) for plots based on the current theme."""
+def status_html_colors() -> dict[str, str]:
+    """Return WCAG-compliant ``{"warning": hex, "error": hex, "success": hex}`` for rich-text status labels."""
     if is_dark_mode():
-        return ("#232323", "#cccccc")
+        return {"warning": "#f0b429", "error": "#ff6b6b", "success": "#51cf66"}
+    return {"warning": "#9a6700", "error": "#c92a2a", "success": "#2b8a3e"}
+
+
+def themed_plot_colors() -> tuple:
+    """Return (background_color, foreground_color) for plots (white canvas in both themes)."""
     return ("white", "black")
 
 
@@ -380,11 +685,15 @@ __all__ = [
     "set_theme_mode",
     "is_dark_mode",
     "apply_theme",
+    "select_platform_style",
+    "activate_macos_foreground_app",
     "install_system_theme_listener",
     "get_theme_signals",
     "style_as_subdued",
+    "clear_subdued_style",
     "warning_banner_stylesheet",
     "warning_label_stylesheet",
+    "status_html_colors",
     "themed_plot_colors",
     "get_themed_icon",
 ]

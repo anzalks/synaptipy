@@ -39,6 +39,7 @@ class WelcomeScreen(QtWidgets.QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("WelcomeScreen")
 
         # Set window flags for instant display
         self.setWindowFlags(
@@ -47,7 +48,8 @@ class WelcomeScreen(QtWidgets.QWidget):
             | QtCore.Qt.WindowType.FramelessWindowHint
         )
 
-        # Set window attributes for better performance
+        # Set window attributes for better performance and styled border support
+        self.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_TranslucentBackground, False)
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_NoSystemBackground, False)
 
@@ -201,12 +203,13 @@ class WelcomeScreen(QtWidgets.QWidget):
     def showEvent(self, event):
         """Override showEvent to ensure proper positioning and immediate display."""
         super().showEvent(event)
+        self.adjustSize()
 
         # Center the window on screen
         screen = QtWidgets.QApplication.primaryScreen()
         if screen:
             available_geometry = screen.availableGeometry()
-            window_geometry = self.geometry()
+            window_geometry = self.frameGeometry()
 
             # Calculate center position
             x = available_geometry.left() + (available_geometry.width() - window_geometry.width()) // 2

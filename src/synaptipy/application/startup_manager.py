@@ -96,11 +96,11 @@ class StartupManager(QtCore.QObject):
     Optimized startup manager with minimal delays and parallel loading.
     """
 
-    # Streamlined loading steps
+    # Streamlined loading steps (ordered monotonically: 0 -> 1 -> 2 -> 3 = 100%)
     LOADING_STEPS = [
         (0, "Initializing...", "Setting up core components"),
-        (1, "Loading GUI...", "Building user interface"),
-        (2, "Configuring plots...", "Setting up visualization"),
+        (1, "Configuring plots...", "Setting up visualization"),
+        (2, "Loading GUI...", "Building user interface"),
         (3, "Ready!", "Application loaded successfully"),
     ]
 
@@ -135,9 +135,9 @@ class StartupManager(QtCore.QObject):
         except Exception as e:
             log.warning(f"Could not restore saved theme: {e}")
 
-        # Create and setup welcome screen
+        # Create and setup welcome screen (max step index is len - 1 so final step reaches 100%)
         self.welcome_screen = WelcomeScreen()
-        self.welcome_screen.set_loading_steps(len(self.LOADING_STEPS))
+        self.welcome_screen.set_loading_steps(max(1, len(self.LOADING_STEPS) - 1))
 
         # Start loading process immediately (no artificial delays)
         QtCore.QTimer.singleShot(10, self._begin_loading)
@@ -205,7 +205,7 @@ class StartupManager(QtCore.QObject):
                 log.debug(f"Could not connect to initialized signal: {e}")
 
             log.debug("Main window created successfully")
-            self._update_progress(1)
+            self._update_progress(2)
             QtCore.QTimer.singleShot(10, self._complete_loading)
 
         except Exception as e:
@@ -228,7 +228,7 @@ class StartupManager(QtCore.QObject):
         except Exception as e:
             log.warning(f"PyQtGraph configuration failed: {e}")
         finally:
-            self._update_progress(2)
+            self._update_progress(1)
 
     def _complete_loading(self):
         """Complete the loading process."""
@@ -269,6 +269,10 @@ class StartupManager(QtCore.QObject):
                 self.main_window.show()
                 self.main_window.raise_()
                 self.main_window.activateWindow()
+                if not self._headless_smoke_test:
+                    from synaptipy.shared.theme_manager import activate_macos_foreground_app
+
+                    activate_macos_foreground_app(focus=True)
 
                 # Clean up welcome screen
                 self.welcome_screen.deleteLater()

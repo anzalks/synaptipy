@@ -15,7 +15,12 @@ from typing import Any, Optional
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from synaptipy.shared.plot_customization import get_plot_customization_manager
+from synaptipy.shared.plot_customization import (
+    get_force_opaque_trials,
+    get_plot_customization_manager,
+    set_force_opaque_trials,
+)
+from synaptipy.shared.styling import style_label
 from synaptipy.shared.theme_manager import style_as_subdued
 
 log = logging.getLogger(__name__)
@@ -35,13 +40,14 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         super().__init__(parent)
         self.setWindowTitle("Plot Customization")
         self.setModal(True)
-        self.resize(600, 500)
+        self.resize(840, 540)
 
         self.customization_manager = get_plot_customization_manager()
         # Get a deep copy of preferences to avoid reference issues
         self.current_preferences = copy.deepcopy(self.customization_manager.get_all_preferences())
         # Store original preferences when dialog opens - use deep copy
         self._original_preferences = copy.deepcopy(self.customization_manager.get_all_preferences())
+        self._original_force_opaque = get_force_opaque_trials()
 
         # PERFORMANCE: Add checkbox attribute
         self.force_opaque_checkbox = None
@@ -61,11 +67,12 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
 
         # Title
         title_label = QtWidgets.QLabel("Plot Customization")
-        title_label.setStyleSheet("font-size: 16px; font-weight: bold; margin: 10px;")
+        style_label(title_label, "heading")
         layout.addWidget(title_label)
 
         # Create tab widget for different plot types
         self.tab_widget = QtWidgets.QTabWidget()
+        self.tab_widget.setUsesScrollButtons(True)
         layout.addWidget(self.tab_widget)
 
         # Add tabs for each plot type
@@ -530,6 +537,8 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         colors = [
             ("Matplotlib Blue", "#377eb8"),  # Original matplotlib blue
             ("Black", "black"),
+            ("White", "white"),
+            ("Red (High Contrast)", "#e41a1c"),
             ("Blue", "blue"),
             ("Orange", "orange"),
             ("Red", "red"),
@@ -590,7 +599,7 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
 
             # Scatter points preferences
             sp = self.current_preferences.get("scatter_points", {})
-            self._set_combo_value(self.scatter_color_combo, sp.get("color", "#ffff00"))
+            self._set_combo_value(self.scatter_color_combo, sp.get("color", "#e41a1c"))
             self._set_combo_value(self.scatter_opacity_combo, sp.get("opacity", 100))
             self._set_combo_value(self.scatter_size_combo, sp.get("size", 8))
             self._set_combo_value(self.scatter_symbol_combo, sp.get("symbol", "o"))
@@ -785,30 +794,35 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         self.current_preferences["grid"]["enabled"] = self.grid_enabled_checkbox.isChecked()
 
     def _reset_to_defaults(self):
-        """Reset all preferences to default values."""
+        """Reset dialog controls to factory default values (Apply/OK saves; Cancel reverts)."""
         try:
-            self.customization_manager.reset_to_defaults()
-            self.current_preferences = copy.deepcopy(self.customization_manager.get_all_preferences())
+            temp_mgr = type(self.customization_manager).__new__(type(self.customization_manager))
+            temp_mgr._load_defaults()
+            self.current_preferences = copy.deepcopy(temp_mgr.defaults)
             self._load_current_preferences()
-            # Reset the original preferences reference - use deep copy
-            self._original_preferences = copy.deepcopy(self.current_preferences)
-            log.debug("Preferences reset to defaults")
+            if self.force_opaque_checkbox is not None:
+                self.force_opaque_checkbox.blockSignals(True)
+                self.force_opaque_checkbox.setChecked(False)
+                self.force_opaque_checkbox.blockSignals(False)
+            log.debug("Plot customization dialog controls reset to defaults")
         except Exception as e:
             log.error(f"Failed to reset preferences: {e}")
 
     def _apply_changes(self):
         """Apply current changes and save preferences only if they have changed."""
         try:
-            # Only proceed if preferences have actually been modified
+            if self.force_opaque_checkbox is not None:
+                desired_opaque = self.force_opaque_checkbox.isChecked()
+                set_force_opaque_trials(desired_opaque)
+                self._original_force_opaque = desired_opaque
+
             if self._preferences_changed():
                 log.debug("Changes detected, applying new plot preferences.")
-                # Use batch update for better performance
                 success = self.customization_manager.update_preferences_batch(
                     self.current_preferences, emit_signal=True
                 )
                 if success:
                     log.debug("Plot preferences applied and saved via batch update.")
-                    # Update the original preferences reference to prevent re-applying the same change
                     self._original_preferences = copy.deepcopy(self.current_preferences)
                 else:
                     log.warning("Batch update failed.")
@@ -852,12 +866,16 @@ class PlotCustomizationDialog(QtWidgets.QDialog):
         self._apply_changes()
         self.accept()
 
-    def _on_force_opaque_changed(self, state):
-        """Handle changes to the force opaque checkbox."""
-        is_checked = state == QtCore.Qt.CheckState.Checked.value
-        # Import the setter function (can be done at top of file too)
-        from synaptipy.shared.plot_customization import set_force_opaque_trials
+    def reject(self):
+        """Restore original force-opaque and preference state when user cancels."""
+        if get_force_opaque_trials() != self._original_force_opaque:
+            set_force_opaque_trials(self._original_force_opaque)
+        if self.customization_manager.has_preferences_changed(self._original_preferences):
+            self.customization_manager.update_preferences_batch(self._original_preferences, emit_signal=True)
+        super().reject()
 
+    def _on_force_opaque_changed(self, state):
+        """Preview changes to the force opaque checkbox; Cancel reverts via reject()."""
+        is_checked = state == QtCore.Qt.CheckState.Checked.value
         set_force_opaque_trials(is_checked)
         log.debug(f"Force opaque trials toggled via dialog to: {is_checked}")
-        # The set_force_opaque_trials function emits the signal to update plots automatically

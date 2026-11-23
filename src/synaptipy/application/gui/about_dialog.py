@@ -65,7 +65,8 @@ class AboutDialog(QtWidgets.QDialog):
         title_label = QtWidgets.QLabel("<b>Synaptipy</b>")
         title_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
         font = title_label.font()
-        font.setPointSize(font.pointSize() + 4)
+        base_pt = font.pointSize()
+        font.setPointSize((base_pt if base_pt > 0 else 11) + 4)
         title_label.setFont(font)
         root.addWidget(title_label)
 
@@ -89,7 +90,7 @@ class AboutDialog(QtWidgets.QDialog):
         apa_box = QtWidgets.QPlainTextEdit()
         apa_box.setPlainText(_APA_CITATION)
         apa_box.setReadOnly(True)
-        apa_box.setFixedHeight(70)
+        apa_box.setMinimumHeight(68)
         root.addWidget(apa_box)
 
         # BibTeX citation text (read-only, selectable)
@@ -99,7 +100,7 @@ class AboutDialog(QtWidgets.QDialog):
         bibtex_box = QtWidgets.QPlainTextEdit()
         bibtex_box.setPlainText(_BIBTEX_CITATION)
         bibtex_box.setReadOnly(True)
-        bibtex_box.setFixedHeight(120)
+        bibtex_box.setMinimumHeight(140)
         root.addWidget(bibtex_box)
 
         # Copy citation button

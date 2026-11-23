@@ -1060,7 +1060,8 @@ def calculate_n_pulse_ratio(  # noqa: C901
     plots=[
         {"name": "Trace", "type": "trace", "show_events": True},
         {"type": "vlines", "data": "stimulus_onsets"},
-        {"type": "markers", "x": "_peak_times", "y": "_peak_amps", "symbol": "d"},
+        {"type": "trace_overlay", "start_time": "_first_onset_s", "end_time": "_first_window_end_s"},
+        {"type": "markers", "x": "_peak_times", "y": "_peak_amps", "role": "primary", "symbol": "d"},
     ],
 )
 def run_opto_sync_wrapper(  # noqa: C901
@@ -1243,6 +1244,16 @@ def run_opto_sync_wrapper(  # noqa: C901
             "response_amplitudes": _response_amps,
             "_peak_times": _peak_times,
             "_peak_amps": _peak_amps,
+            "_first_onset_s": (
+                float(result.stimulus_onsets[0]) + _blank_s
+                if result.stimulus_onsets is not None and len(result.stimulus_onsets) > 0
+                else None
+            ),
+            "_first_window_end_s": (
+                float(result.stimulus_onsets[0]) + _amp_window_s
+                if result.stimulus_onsets is not None and len(result.stimulus_onsets) > 0
+                else None
+            ),
         },
     }
 

@@ -204,69 +204,9 @@ def setup_theme_for_viewbox(viewbox) -> None:
         log.warning(f"Failed to set up theme for ViewBox: {e}")
 
 
-def apply_theme_with_monitoring(viewbox) -> None:  # noqa: C901
-    """Apply theme and monitor for rbScaleBox changes to reapply theme."""
-    try:
-        if not viewbox:
-            return
-
-        log.debug("Applying theme with monitoring...")
-
-        # Apply initial theme
-        apply_theme_to_viewbox(viewbox)
-
-        # Set up aggressive monitoring to reapply theme when rbScaleBox changes
-        def monitor_and_reapply():
-            try:
-                if hasattr(viewbox, "rbScaleBox") and viewbox.rbScaleBox is not None:
-                    # Force reapply theme to ensure it sticks
-                    apply_theme_to_viewbox(viewbox)
-
-                    # Also try to force the rectangle shape
-                    rb = viewbox.rbScaleBox
-                    if rb is not None:
-                        # Force rectangular shape
-                        rb.resetTransform()
-                        rb.setRotation(0)
-                        rb.setScale(1.0)
-
-                        # Force sharp corners
-                        from PySide6.QtCore import Qt
-                        from PySide6.QtGui import QPen
-
-                        if hasattr(viewbox, "_synaptipy_theme_pen"):
-                            sharp_pen = QPen(viewbox._synaptipy_theme_pen.color())
-                            sharp_pen.setWidth(1)
-                            sharp_pen.setCapStyle(Qt.SquareCap)
-                            sharp_pen.setJoinStyle(Qt.MiterJoin)
-                            rb.setPen(sharp_pen)
-
-                        # Force transparency
-                        if hasattr(viewbox, "_synaptipy_theme_brush"):
-                            rb.setBrush(viewbox._synaptipy_theme_brush)
-
-                    # Set up a timer to keep monitoring
-                    from PySide6.QtCore import QTimer
-
-                    timer = QTimer()
-                    timer.timeout.connect(lambda: monitor_and_reapply())
-                    timer.start(50)  # Check every 50ms for more aggressive monitoring
-
-            except Exception as e:
-                log.debug(f"Monitor reapply failed: {e}")
-
-        # Start monitoring immediately
-        from PySide6.QtCore import QTimer
-
-        QTimer.singleShot(10, monitor_and_reapply)
-
-        log.debug("Theme with monitoring applied successfully!")
-
-    except Exception as e:
-        log.error(f"Failed to apply theme with monitoring: {e}")
-        import traceback
-
-        log.error(f"Traceback: {traceback.format_exc()}")
+def apply_theme_with_monitoring(viewbox) -> None:
+    """Apply theme and install class-level selection rectangle hook."""
+    apply_theme_with_custom_selection(viewbox)
 
 
 def apply_theme_with_patching(viewbox) -> None:

@@ -198,11 +198,17 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
     def _on_plot_preferences_updated(self):
         """Handle global plot preference changes efficiently."""
-        # Only update pens if we have cached data, otherwise do a full re-plot
         if self._current_plot_data and self.plot_widget:
             self._update_plot_pens_only()
-        else:
-            self._plot_selected_data()
+            if self._last_analysis_result is not None:
+                try:
+                    self._plot_analysis_visualizations(self._last_analysis_result)
+                except Exception as exc:
+                    log.debug("Could not refresh analysis overlays on preference change: %s", exc)
+            if self.plot_canvas and self.plot_canvas.widget:
+                self.plot_canvas.widget.update()
+        elif self.plot_widget:
+            self._update_plot_pens_only()
 
     def _is_active_analysis_tab(self) -> bool:
         """Return True only when this widget is active at every level of tab nesting.
@@ -364,9 +370,12 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 )
 
                 try:
-                    exporter.export(filename, fmt, dpi)
-                    if hasattr(self, "status_label") and self.status_label:
-                        self.status_label.setText(f"Status: Plot saved to {filename}")
+                    exported = exporter.export(filename, fmt, dpi)
+                    if exported:
+                        if hasattr(self, "status_label") and self.status_label:
+                            self.status_label.setText(f"Status: Plot saved to {filename}")
+                    else:
+                        QtWidgets.QMessageBox.warning(self, "Export Error", f"Could not export plot to '{filename}'.")
                 except Exception as e:
                     log.error(f"Error saving plot: {e}")
                     QtWidgets.QMessageBox.critical(self, "Export Error", f"Failed to save plot:\n{e}")
@@ -731,9 +740,6 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 for method in sorted(self._active_preprocessing_settings["filters"].keys()):
                     self.pipeline.add_step(self._active_preprocessing_settings["filters"][method])
 
-                self._update_plot_pens_only()
-                self._on_data_plotted()
-
     def _on_preprocessing_error(self, error):
         """Preprocessing failed."""
         self._is_preprocessing = False
@@ -846,38 +852,84 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         return line_edit
 
     def _update_plot_pens_only(self):  # noqa: C901
-        """Efficiently update only the pen properties of existing plot items without recreating data."""
+        """Efficiently update pen, brush, marker, and grid styles of existing plot items."""
         if not self.plot_widget:
             return
 
         try:
-            # Get current pens from customization manager
-            from synaptipy.shared.plot_customization import get_average_pen, get_grid_pen, get_single_trial_pen
+            from synaptipy.shared.plot_customization import (
+                get_auc_brush,
+                get_average_pen,
+                get_event_fit_overlay_pen,
+                get_grid_pen,
+                get_hv_line_pen,
+                get_overlay_fit_pen,
+                get_scatter_pen_and_brush,
+                get_scatter_size,
+                get_scatter_symbol,
+                get_selection_window_brush,
+                get_selection_window_pen,
+                get_single_trial_pen,
+                get_trace_overlay_pen,
+                is_grid_enabled,
+            )
 
             single_trial_pen = get_single_trial_pen()
             average_pen = get_average_pen()
             grid_pen = get_grid_pen()
+            hv_pen = get_hv_line_pen()
+            overlay_pen = get_trace_overlay_pen()
+            fit_pen = get_overlay_fit_pen()
+            event_fit_pen = get_event_fit_overlay_pen()
+            scatter_pen, scatter_brush = get_scatter_pen_and_brush()
+            scatter_size = get_scatter_size()
+            scatter_sym = get_scatter_symbol()
+            win_brush = get_selection_window_brush()
+            win_pen = get_selection_window_pen()
+            auc_brush = get_auc_brush()
 
-            # Update pens for existing plot data items
-            # Accessing items on PlotItem directly
             items = self.plot_widget.items if hasattr(self.plot_widget, "items") else []
             for item in items:
-                if isinstance(item, pg.PlotDataItem):
-                    # Determine which pen to apply based on item properties or name
-                    if hasattr(item, "opts") and "name" in item.opts:
-                        item_name = item.opts["name"]
-                        if "average" in item_name.lower() or "avg" in item_name.lower():
-                            item.setPen(average_pen)
-                        else:
-                            item.setPen(single_trial_pen)
+                role = getattr(item, "_synaptipy_role", None)
+                if role == "cursor_connector":
+                    continue
+                if role == "trace_overlay":
+                    item.setPen(overlay_pen)
+                elif role == "overlay_fit":
+                    item.setPen(fit_pen)
+                elif role == "event_fit_overlay":
+                    item.setPen(event_fit_pen)
+                elif role == "hv_line":
+                    item.setPen(hv_pen)
+                elif role == "selection_window" and isinstance(item, pg.LinearRegionItem):
+                    item.setBrush(win_brush)
+                    for ln in getattr(item, "lines", []):
+                        ln.setPen(win_pen)
+                elif role == "auc_fill" and isinstance(item, pg.FillBetweenItem):
+                    item.setBrush(auc_brush)
+                elif role == "scatter_markers" and isinstance(item, pg.ScatterPlotItem):
+                    item.setPen(scatter_pen)
+                    item.setBrush(scatter_brush)
+                    item.setSize(scatter_size)
+                    if not getattr(item, "_synaptipy_fixed_symbol", False):
+                        item.setSymbol(scatter_sym)
+                elif role == "bracket":
+                    continue
+                elif isinstance(item, pg.PlotDataItem):
+                    raw_name = item.opts.get("name") if hasattr(item, "opts") and isinstance(item.opts, dict) else None
+                    item_name = str(raw_name or "").lower()
+                    if "average" in item_name or "avg" in item_name:
+                        item.setPen(average_pen)
                     else:
-                        # Default to single trial pen if we can't determine the type
                         item.setPen(single_trial_pen)
 
-            # Update grid
+            # Update grid visibility and opacity
             try:
-                alpha = grid_pen.alpha() if hasattr(grid_pen, "alpha") else 0.3
-                self.plot_widget.showGrid(x=True, y=True, alpha=alpha)
+                if is_grid_enabled() and grid_pen is not None:
+                    alpha = (grid_pen.color().alpha() / 255.0) if hasattr(grid_pen, "color") else 0.3
+                    self.plot_widget.showGrid(x=True, y=True, alpha=alpha)
+                else:
+                    self.plot_widget.showGrid(x=False, y=False)
             except Exception as e:
                 log.warning(f"Could not update grid: {e}")
 
@@ -907,9 +959,16 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self.plot_widget.setLabel("bottom", "Time", units="s")
 
         # Analysis region (LinearRegionItem for windowed analysis)
+        from synaptipy.shared.plot_customization import get_selection_window_brush, get_selection_window_pen
+
         self.analysis_region = pg.LinearRegionItem(
-            values=[0, 0], orientation=pg.LinearRegionItem.Vertical, brush=pg.mkBrush(0, 255, 0, 50), movable=True
+            values=[0, 0],
+            orientation=pg.LinearRegionItem.Vertical,
+            brush=get_selection_window_brush(),
+            pen=get_selection_window_pen(),
+            movable=True,
         )
+        self.analysis_region._synaptipy_role = "selection_window"
         self.analysis_region.setVisible(False)
         self.analysis_region.setZValue(-10)  # Behind data traces
         self.plot_widget.addItem(self.analysis_region)
@@ -1175,9 +1234,14 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self._preprocessed_data = None
         self._active_preprocessing_settings = None
         self._current_plot_data = None  # Clear plot context
+        self._last_analysis_result = None
+        self._set_save_button_enabled(False)
+        self._update_accumulation_ui_state()
         self.pipeline.clear()
 
-        # Clear plot when items change
+        # Clear plot and persistent cursors when items change
+        if self.cursor_manager:
+            self.cursor_manager.clear()
         if self.plot_widget:
             self.plot_widget.clear()
 
@@ -1204,6 +1268,11 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         self._preprocessed_data = None  # Clear preprocessing cache on new item
         self._active_preprocessing_settings = None  # Clear settings on new item
         self._current_plot_data = None  # Reset plot data context immediately
+        self._last_analysis_result = None
+        self._set_save_button_enabled(False)
+        self._update_accumulation_ui_state()
+        if self.cursor_manager:
+            self.cursor_manager.clear()
         self.pipeline.clear()
 
         if index < 0 or index >= len(self._analysis_items):
@@ -1282,19 +1351,21 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         # First try parent AnalyserTab's global preprocessing
         parent = self.parent()
+        parent_analyser = None
         while parent is not None:
             if hasattr(parent, "get_global_preprocessing"):
+                parent_analyser = parent
                 global_settings = parent.get_global_preprocessing()
                 break
             parent = parent.parent()
 
-        # Fallback: check SessionManager directly (for preprocessing set in Explorer
-        # but not yet confirmed via popup in AnalyserTab)
-        if not global_settings:
+        # Fallback: check SessionManager directly ONLY if parent hasn't already resolved
+        # a user confirmation (e.g. "This Tab Only" intentionally leaves global_settings=None)
+        if not global_settings and not getattr(parent_analyser, "_global_preprocessing_confirmed", False):
             try:
                 from synaptipy.application.session_manager import SessionManager
 
-                session_settings = SessionManager.instance().preprocessing_settings
+                session_settings = SessionManager().preprocessing_settings
                 if session_settings:
                     global_settings = session_settings
                     log.debug(f"{self.__class__.__name__}: Using preprocessing from SessionManager")
@@ -1370,14 +1441,20 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         fname = ""
         if self._selected_item_recording and self._selected_item_recording.source_file:
             fname = self._selected_item_recording.source_file.name
-        label = f"[{ts}] {self.get_display_name()}"
+        display_label = getattr(self, "_active_method_label", None) or self.get_display_name()
+        label = f"[{ts}] {display_label}"
         if fname:
             label += f"  |  {fname}"
-        # Include the first numeric result value if available
-        for v in result_data.values():
-            if isinstance(v, (int, float)):
-                label += f"  =  {round(v, 4)}"
-                break
+        # Extract primary numeric metric from nested Schema v1 'metrics' or flat dict
+        metrics_src = result_data.get("metrics", result_data) if isinstance(result_data, dict) else {}
+        if isinstance(metrics_src, dict):
+            skip_keys = {"schema_version", "data_source", "trial_index", "pair_id", "is_manual_cursor"}
+            for k, v in metrics_src.items():
+                if str(k).startswith("_") or k in skip_keys or isinstance(v, bool):
+                    continue
+                if isinstance(v, (int, float, np.number)) and np.isfinite(float(v)):
+                    label += f"  =  {round(float(v), 4)}"
+                    break
         item = QtWidgets.QListWidgetItem(label)
         item.setToolTip(str(result_data))
         self._saved_results_list.addItem(item)
@@ -1448,7 +1525,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
     # --- PHASE 2: Analysis Result Handling ---
 
     @QtCore.Slot(object)
-    def _on_analysis_result(self, results):
+    def _on_analysis_result(self, results):  # noqa: C901
         """Handle successful analysis results from worker."""
         if results is None:
             log.warning("Analysis returned None.")
@@ -1459,17 +1536,39 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         log.debug(f"{self.__class__.__name__}: Analysis finished successfully.")
 
-        # CRITICAL FIX: Store the results so save button can access them
+        # Store the results
         self._last_analysis_result = results
 
         # 4. Update UI (UI Thread)
         self._display_analysis_results(results)
         self._plot_analysis_visualizations(results)
 
+        # Inspect result payload for reported analysis errors (e.g. missing TTL, failed fit)
+        has_error = False
+        if isinstance(results, dict):
+            for top_k, top_v in results.items():
+                if (str(top_k) == "error" or str(top_k).endswith("_error")) and top_v:
+                    has_error = True
+                    break
+            metrics_dict = results.get("metrics")
+            if not has_error and isinstance(metrics_dict, dict):
+                for m_k, m_v in metrics_dict.items():
+                    if (str(m_k) == "error" or str(m_k).endswith("_error")) and m_v:
+                        has_error = True
+                        break
+
+        if has_error:
+            if hasattr(self, "status_label") and self.status_label:
+                self.status_label.setText("Status: Analysis reported an error.")
+            self._set_save_button_enabled(False)
+            if self.add_to_session_button:
+                self.add_to_session_button.setEnabled(False)
+            return
+
         if hasattr(self, "status_label") and self.status_label:
             self.status_label.setText("Status: Analysis complete.")
 
-        # Enable save button if we have results
+        # Enable save button if we have valid results
         self._set_save_button_enabled(True)
 
         # Update Accumulation UI state
@@ -1668,13 +1767,22 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         else:
             layout.addWidget(il_group)
 
-        # Connect signals to trigger plotting when selection changes
-        self.signal_channel_combobox.currentIndexChanged.connect(self._plot_selected_data)
+        # Connect signals to trigger channel context update + plotting when selection changes
+        self.signal_channel_combobox.currentIndexChanged.connect(self._on_signal_channel_combobox_changed)
         self.data_source_combobox.currentIndexChanged.connect(self._plot_selected_data)
 
         # _setup_trial_nav_ui removed in favor of plot area controls
 
         log.debug(f"{self.__class__.__name__}: Data selection UI setup complete")
+
+    def _on_signal_channel_combobox_changed(self, _index: int = -1):
+        """Update clamp-mode parameter visibility before re-plotting on channel switch."""
+        if hasattr(self, "_on_channel_changed"):
+            try:
+                self._on_channel_changed(_index)
+            except Exception as exc:
+                log.debug("Error in _on_channel_changed: %s", exc)
+        self._plot_selected_data()
 
     def _reset_trial_filtering(self):
         """Reset trial filter inputs and plot filtered trials default."""
@@ -2072,7 +2180,9 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                     except Exception as e:
                         log.debug(f"Error checking zoom state: {e}")
 
-            # 1. Clear plot
+            # 1. Clear plot and any stale cursors/results for previous trace
+            if self.cursor_manager:
+                self.cursor_manager.clear()
             self.plot_widget.clear()
 
             # 2. Get Plot Data via Manager
@@ -2161,6 +2271,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
             self.plot_widget.setLabel("bottom", "Time", units="s")
             self.plot_widget.setLabel("left", plot_package.channel_name, units=plot_package.units)
+            self.plot_widget.getAxis("left").enableAutoSIPrefix(False)
             self.plot_widget.setTitle(f"{plot_package.channel_name} - {plot_package.label}")
 
             if len(plot_package.main_time) > 0 and len(plot_package.main_data) > 0:
@@ -2205,12 +2316,15 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 # User was in full view (or first plot) -> Auto-range to new data
                 self.auto_range_plot()
 
-            # 8. Update analysis_region defaults (25-75% of time range)
+            # 8. Seed analysis_region defaults (25-75% of time range) only if uninitialized
+            # or outside the current trace bounds, preserving user-dragged bounds on redraw.
             if getattr(self, "analysis_region", None) and len(plot_package.main_time) > 1:
                 t_min = float(plot_package.main_time[0])
                 t_max = float(plot_package.main_time[-1])
                 t_span = t_max - t_min
-                self.analysis_region.setRegion([t_min + 0.25 * t_span, t_min + 0.75 * t_span])
+                cur_r0, cur_r1 = self.analysis_region.getRegion()
+                if cur_r0 >= cur_r1 or cur_r0 < t_min or cur_r1 > t_max or (cur_r0 == 0.0 and cur_r1 == 0.0):
+                    self.analysis_region.setRegion([t_min + 0.25 * t_span, t_min + 0.75 * t_span])
 
             self._on_data_plotted()
 
@@ -2225,11 +2339,10 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         Subclasses should override this to add their specific plot items (e.g., regions, markers).
         """
         # Base implementation handles analysis_region re-addition
-        if self.analysis_region and self.restrict_analysis_checkbox.isChecked():
-            if self.plot_widget and self.analysis_region not in self.plot_widget.items():
+        if self.analysis_region and self.restrict_analysis_checkbox and self.restrict_analysis_checkbox.isChecked():
+            if self.plot_widget and self.analysis_region not in self.plot_widget.items:
                 self.plot_widget.addItem(self.analysis_region)
             self.analysis_region.setVisible(True)
-        pass  # Default implementation does nothing
 
     # --- Cross-File Average ---
 
@@ -2400,9 +2513,12 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         if self._selected_item_recording:
             chan_id = self.signal_channel_combobox.currentData()
             if chan_id and chan_id in self._selected_item_recording.channels:
-                units = getattr(self._selected_item_recording.channels[chan_id], "units", "")
+                ch_obj = self._selected_item_recording.channels[chan_id]
+                units = getattr(ch_obj, "units", "")
+                chan_name = getattr(ch_obj, "name", None) or f"Ch {chan_id}"
         self.plot_widget.setLabel("bottom", "Time", units="s")
         self.plot_widget.setLabel("left", chan_name, units=units)
+        self.plot_widget.getAxis("left").enableAutoSIPrefix(False)
         self.auto_range_plot()
 
         # Cache so _execute_cross_file_average_analysis gets the right sampling rate / units
@@ -2422,7 +2538,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         }
         self._on_data_plotted()
 
-    def _execute_cross_file_average_analysis(self, params: Dict[str, Any]) -> None:
+    def _execute_cross_file_average_analysis(self, params: Dict[str, Any]) -> None:  # noqa: C901
         """
         Compute the cross-file grand average, apply preprocessing, plot the
         result, and run the registered analysis function on it.
@@ -2483,11 +2599,20 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 processed = result
 
         # Build data dict compatible with _execute_core_analysis
-        chan_name = self.signal_channel_combobox.currentText() if self.signal_channel_combobox else ""
+        chan_name = self._current_plot_data.get("channel_name", "") if self._current_plot_data else ""
+        if not chan_name and self.signal_channel_combobox:
+            chan_name = self.signal_channel_combobox.currentText()
         units = self._current_plot_data.get("units", "") if self._current_plot_data else ""
+        exec_processed = processed
+        exec_time = time_arr
+        if "t_start" in params and "t_end" in params and params["t_end"] > params["t_start"]:
+            w_mask = (time_arr >= params["t_start"]) & (time_arr <= params["t_end"])
+            if np.any(w_mask):
+                exec_processed = processed[w_mask]
+                exec_time = time_arr[w_mask]
         cross_data: Dict[str, Any] = {
-            "data": processed,
-            "time": time_arr,
+            "data": exec_processed,
+            "time": exec_time,
             "raw_data": grand_avg.copy(),
             "raw_time": time_arr.copy(),
             "data_source": "cross_file_average",
@@ -2516,6 +2641,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             self.plot_widget.setTitle(title)
             self.plot_widget.setLabel("bottom", "Time", units="s")
             self.plot_widget.setLabel("left", chan_name, units=units)
+            self.plot_widget.getAxis("left").enableAutoSIPrefix(False)
             self.auto_range_plot()
 
         # Run the registered analysis on the grand average
@@ -2644,6 +2770,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 return
 
             # --- INJECT GLOBAL ANALYSIS WINDOW ---
+            exec_plot_data = self._current_plot_data
             if (
                 getattr(self, "restrict_analysis_checkbox", None)
                 and self.restrict_analysis_checkbox.isChecked()
@@ -2653,10 +2780,24 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 params["t_start"] = min_t
                 params["t_end"] = max_t
                 log.debug(f"Applied restricted analysis window: {min_t:.4f} to {max_t:.4f} s")
+                if (
+                    isinstance(self._current_plot_data, dict)
+                    and "time" in self._current_plot_data
+                    and "data" in self._current_plot_data
+                    and max_t > min_t
+                ):
+                    t_full = self._current_plot_data["time"]
+                    d_full = self._current_plot_data["data"]
+                    w_mask = (t_full >= min_t) & (t_full <= max_t)
+                    if np.sum(w_mask) >= 2:
+                        exec_plot_data = dict(self._current_plot_data)
+                        exec_plot_data["time"] = t_full[w_mask]
+                        exec_plot_data["data"] = d_full[w_mask]
+                        exec_plot_data["_window_offset_idx"] = int(np.argmax(w_mask))
             # -------------------------------------
 
             # Step 2: Execute core analysis
-            results = self._execute_core_analysis(params, self._current_plot_data)
+            results = self._execute_core_analysis(params, exec_plot_data)
 
             # BUG 1 FIX: Check if results is None before proceeding
             if results is None:
@@ -2822,8 +2963,12 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             elif item_target_type == "Average Trace":
                 data_source_type = "Average"
 
-        # --- Get Analysis Type ---
-        analysis_type = self.get_display_name()
+        # --- Get Analysis Type (use concrete sub-analysis label when available) ---
+        analysis_type = (
+            specific_result_data.pop("_analysis_type_override", None)
+            or getattr(self, "_active_method_label", None)
+            or self.get_display_name()
+        )
 
         # --- Combine Data ---
         # Prioritize specific results passed in, then add common metadata
@@ -2843,11 +2988,13 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         log.debug(f"Final result data to save: {final_result}")
 
         # --- Check for Existing Result ---
+        saved_list = getattr(main_window, "saved_analysis_results", None)
+        if saved_list is None:
+            saved_list = getattr(main_window, "saved_results", None)
+
         existing_index = -1
-        if hasattr(main_window, "saved_results"):
-            for i, res in enumerate(main_window.saved_results):
-                # Define what "same result" means.
-                # Usually: Same file, same analysis type, same data source (trial/avg)
+        if isinstance(saved_list, list):
+            for i, res in enumerate(saved_list):
                 if (
                     res.get("source_file_path") == final_result.get("source_file_path")
                     and res.get("analysis_type") == final_result.get("analysis_type")
@@ -2871,16 +3018,14 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
 
         # --- Call MainWindow Method ---
         try:
-            # If overwriting, we might need a way to tell MainWindow to replace.
-            # If add_saved_result just appends, we might have duplicates.
-            # Let's assume we can replace if we have the index, OR we just append and let the user manage (but user
-            # asked to "rewrite").
-            # If MainWindow has 'update_saved_result', use it. Else, maybe 'saved_results[i] = ...' ?
-            # Safest is to check if we can replace.
+            if existing_index >= 0 and isinstance(saved_list, list):
+                from datetime import datetime
 
-            if existing_index >= 0 and hasattr(main_window, "saved_results"):
-                main_window.saved_results[existing_index] = final_result
-                # We also need to refresh the results view in MainWindow if it exists
+                final_result["timestamp_saved"] = datetime.now().isoformat()
+                saved_list[existing_index] = final_result
+                if hasattr(main_window, "exporter_tab") and main_window.exporter_tab is not None:
+                    if hasattr(main_window.exporter_tab, "_refresh_analysis_results"):
+                        main_window.exporter_tab._refresh_analysis_results()
                 if hasattr(main_window, "results_tab") and hasattr(main_window.results_tab, "refresh_results"):
                     main_window.results_tab.refresh_results()
                 elif hasattr(main_window, "refresh_results_display"):

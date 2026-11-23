@@ -1692,9 +1692,13 @@ def _resolve_sweep_baseline(
         },
     ],
     plots=[
-        {"type": "interactive_region", "data": ["baseline_start", "baseline_end"], "color": "g"},
-        {"type": "hlines", "data": ["rmp_mv"], "color": "r", "styles": ["solid"]},
-        {"type": "hlines", "data": ["rmp_mv_plus_sd", "rmp_mv_minus_sd"], "color": "r", "styles": ["dash", "dash"]},
+        {"type": "hlines", "data": ["_plot_rmp_mv"], "color": "r", "styles": ["solid"]},
+        {
+            "type": "hlines",
+            "data": ["_plot_rmp_plus_sd", "_plot_rmp_minus_sd"],
+            "color": "r",
+            "styles": ["dash", "dash"],
+        },
         {
             "type": "popup_xy",
             "title": "RMP Stability",
@@ -1773,6 +1777,9 @@ def run_rmp_analysis_wrapper(  # noqa: C901
             "sweep_indices": sweep_indices,
             "rmp_mv_plus_sd": rmp_mean + rmp_std,
             "rmp_mv_minus_sd": rmp_mean - rmp_std,
+            "_plot_rmp_mv": rmp_mean + ljp_mv,
+            "_plot_rmp_plus_sd": rmp_mean + rmp_std + ljp_mv,
+            "_plot_rmp_minus_sd": rmp_mean - rmp_std + ljp_mv,
         }
         return {"module_used": "passive_properties", "metrics": metrics}
 
@@ -1788,8 +1795,8 @@ def run_rmp_analysis_wrapper(  # noqa: C901
         {"name": "Trace", "type": "trace"},
         {
             "type": "result_hlines",
-            "keys": ["v_baseline", "v_peak", "v_ss"],
-            "colors": {"v_baseline": "b", "v_peak": "m", "v_ss": "r"},
+            "keys": ["_plot_v_baseline", "_plot_v_peak", "_plot_v_ss"],
+            "colors": {"_plot_v_baseline": "b", "_plot_v_peak": "m", "_plot_v_ss": "r"},
         },
     ],
     ui_params=[
@@ -1891,6 +1898,10 @@ def run_sag_ratio_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: flo
             sr = metrics.get("sag_ratio")
             if isinstance(sr, (float, np.floating)) and np.isnan(sr):
                 metrics.setdefault("sag_error", "Invalid windows or insufficient data")
+            show_sag = bool(kwargs.get("show_sag", True))
+            metrics["_plot_v_baseline"] = metrics.get("v_baseline") if show_sag else float("nan")
+            metrics["_plot_v_peak"] = metrics.get("v_peak") if show_sag else float("nan")
+            metrics["_plot_v_ss"] = metrics.get("v_ss") if show_sag else float("nan")
         else:
             metrics = {"sag_ratio": None, "sag_error": "Sag ratio calculation failed (check windows)"}
 
@@ -2120,7 +2131,25 @@ def run_rin_analysis_wrapper(  # noqa: C901
     label="Tau (Time Constant)",
     plots=[
         {"name": "Trace", "type": "trace"},
-        {"type": "overlay_fit", "x": "_fit_time", "y": "_fit_values", "color": "r", "width": 2, "label": "Exp Fit"},
+        {
+            "type": "overlay_fit",
+            "x": "_fit_time",
+            "y": "_fit_values",
+            "tau_key": "tau_ms",
+            "color": "r",
+            "width": 2,
+            "label": "Exp Fit",
+        },
+        {
+            "type": "overlay_fit",
+            "x": "_post_fit_time",
+            "y": "_post_fit_values",
+            "tau_key": "tau_decay_after_stimulus_ms",
+            "role": "secondary_fit",
+            "color": "#ff8c00",
+            "width": 2,
+            "label": "Post-Stim Decay Fit",
+        },
         {
             "type": "trace_overlay",
             "start_time": "_baseline_start_s",
@@ -2295,6 +2324,9 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
 
         metrics["_baseline_start_s"] = _baseline_start_s
         metrics["_baseline_end_s"] = _baseline_end_s
+        if isinstance(decay_result, dict):
+            metrics["_post_fit_time"] = decay_result.get("_fit_time", [])
+            metrics["_post_fit_values"] = decay_result.get("_fit_values", [])
         return {"module_used": "passive_properties", "metrics": metrics}
 
     except (ValueError, TypeError, KeyError, IndexError) as e:
@@ -2318,6 +2350,7 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
             "y_label": "Voltage Response (mV)",
             "slope_key": "rin_aggregate_mohm",
             "intercept_key": "iv_intercept",
+            "r2_key": "iv_r_squared",
             "x_scale": 0.001,
         },
     ],
