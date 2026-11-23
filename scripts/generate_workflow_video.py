@@ -81,11 +81,13 @@ class VideoGenerator:
         writer.close()
 
         print(f"Writing {gif_path} ...")
+        import shutil
         import subprocess
 
+        ffmpeg_bin = shutil.which("ffmpeg") or "/opt/homebrew/bin/ffmpeg"
         subprocess.run(
             [
-                "ffmpeg",
+                ffmpeg_bin,
                 "-y",
                 "-i",
                 str(mp4_path),
@@ -221,7 +223,8 @@ def run_choreography():  # noqa: C901 - linear scripted tutorial sequence is int
 
     from synaptipy.shared.theme_manager import ThemeMode, apply_theme
 
-    mode = ThemeMode.DARK if _os_is_dark() else ThemeMode.LIGHT
+    env_theme = os.environ.get("SYNAPTIPY_VIDEO_THEME", "dark").strip().lower()
+    mode = ThemeMode.LIGHT if env_theme == "light" else ThemeMode.DARK
     apply_theme(mode)
     print(f"Theme selected: {mode.value}")
 
@@ -392,6 +395,9 @@ def run_choreography():  # noqa: C901 - linear scripted tutorial sequence is int
         _pump(15)
 
     print("Exporting...")
+    import tempfile
+
+    export_tmp_dir = tempfile.TemporaryDirectory(prefix="synaptipy-video-export-")
     export_btn = getattr(exporter, "analysis_results_export_button", None)
     if export_btn:
         choreo.move_mouse_to(export_btn)
@@ -401,6 +407,7 @@ def run_choreography():  # noqa: C901 - linear scripted tutorial sequence is int
             active = QApplication.activeModalWidget()
             if active and isinstance(active, QFileDialog):
                 print("Intercepted QFileDialog!")
+                active.setDirectory(export_tmp_dir.name)
                 line_edits = active.findChildren(QLineEdit)
                 if line_edits:
                     text = "detected_spikes.csv"
@@ -428,9 +435,14 @@ def run_choreography():  # noqa: C901 - linear scripted tutorial sequence is int
         export_btn.click()
 
     _pump(60)
+    export_tmp_dir.cleanup()
     global_vg.save_video()
 
 
 if __name__ == "__main__":
     _OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     run_choreography()
+    sys.stdout.flush()
+    sys.stderr.flush()
+    if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
+        os._exit(0)

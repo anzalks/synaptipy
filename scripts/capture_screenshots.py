@@ -307,7 +307,9 @@ def _set_param(tab: Any, name: str, value: Any) -> None:
     widget = _get_param_widget(tab, name)
     if widget is None:
         return
-    if hasattr(widget, "setValue"):
+    if isinstance(value, bool) and hasattr(widget, "setChecked"):
+        widget.setChecked(value)
+    elif hasattr(widget, "setValue"):
         widget.setValue(value)
     elif hasattr(widget, "setCurrentText"):
         widget.setCurrentText(str(value))
@@ -334,25 +336,31 @@ def _set_trial(tab: Any, trial_index: int) -> None:
 
 
 def _run_analysis(tab: Any) -> None:
-    """Call _trigger_analysis directly (bypassing the debounce timer)."""
+    """Trigger analysis without opening modal QMessageBox dialogs in offscreen mode."""
+    from unittest.mock import patch  # noqa: PLC0415
+
+    from PySide6.QtWidgets import QMessageBox  # noqa: PLC0415
+
     if hasattr(tab, "_trigger_analysis"):
-        try:
-            tab._trigger_analysis()
-        except Exception as exc:
-            print(f"  [warn] analysis raised: {exc}", file=sys.stderr)
+        with (
+            patch.object(QMessageBox, "warning", side_effect=lambda *_a, **_kw: QMessageBox.StandardButton.Ok),
+            patch.object(QMessageBox, "critical", side_effect=lambda *_a, **_kw: QMessageBox.StandardButton.Ok),
+            patch.object(QMessageBox, "information", side_effect=lambda *_a, **_kw: QMessageBox.StandardButton.Ok),
+        ):
+            try:
+                tab._trigger_analysis()
+            except Exception as exc:
+                print(f"  [warn] analysis raised: {exc}", file=sys.stderr)
     _pump(10)
 
 
 def _grab_popups(tab: Any, dest_stem: str, output_dir: Path) -> List[str]:
-    """Capture any popup windows created by the last analysis run."""
+    """Capture the most recent popup window created by the last analysis run."""
     captured: List[str] = []
-    popups: List[Any] = getattr(tab, "_popup_windows", [])
-    for i, popup in enumerate(popups):
-        if popup is None:
-            continue
-        suffix = "" if i == 0 else f"_{i}"
-        fname = f"{dest_stem}_popup{suffix}.png"
-        _grab(popup, output_dir / fname)
+    popups: List[Any] = [p for p in getattr(tab, "_popup_windows", []) if p is not None]
+    if popups:
+        fname = f"{dest_stem}_popup.png"
+        _grab(popups[-1], output_dir / fname)
         captured.append(fname)
     return captured
 
@@ -559,12 +567,13 @@ def _capture_batch_compatible_average(window: Any, output_dir: Path) -> List[str
 
 
 def _capture_intrinsic_properties(window: Any, analyser: Any, sm: Any, output_dir: Path) -> List[str]:
-    """Capture the Intrinsic Properties tab with the voltage-clamp example file."""
+    """Capture the Intrinsic Properties tab with the current-clamp passive-step example file."""
     captured: List[str] = []
-    if not _WCP03.exists():
+    primary_cc = _ABF19 if _ABF19.exists() else _WCP03
+    if not primary_cc.exists():
         return captured
 
-    _set_analysis_source(sm, _WCP03)
+    _set_analysis_source(sm, primary_cc)
 
     tab = _activate_sub_tab(window, analyser, "Intrinsic Properties")
     if tab is None:
@@ -576,6 +585,8 @@ def _capture_intrinsic_properties(window: Any, analyser: Any, sm: Any, output_di
 
     # ---- Baseline (RMP) ----
     _set_method(tab, "Baseline (RMP)")
+    _set_param(tab, "baseline_start", 0.0)
+    _set_param(tab, "baseline_end", 0.15)
     _run_analysis(tab)
     _grab_annotated(
         window,
@@ -586,12 +597,13 @@ def _capture_intrinsic_properties(window: Any, analyser: Any, sm: Any, output_di
     captured.append("analyser_intrinsic_properties_baseline_rmp.png")
     captured.extend(_grab_popups(tab, "analyser_intrinsic_properties_baseline_rmp", output_dir))
 
-    # ---- Input Resistance ----
+    # ---- Input Resistance (ABF19: -20 pA hyperpolarising step 200-300 ms) ----
     _set_method(tab, "Input Resistance")
-    # Baseline: 0-40 ms; response window: 50-80 ms (matching the -10 pA current step).
-    _set_param(tab, "baseline_end", 0.04)
-    _set_param(tab, "response_start", 0.05)
-    _set_param(tab, "response_end", 0.08)
+    _set_param(tab, "current_amplitude", -20.0)
+    _set_param(tab, "baseline_start", 0.0)
+    _set_param(tab, "baseline_end", 0.19)
+    _set_param(tab, "response_start", 0.2)
+    _set_param(tab, "response_end", 0.3)
     _run_analysis(tab)
     _grab_annotated(
         window,
@@ -601,10 +613,10 @@ def _capture_intrinsic_properties(window: Any, analyser: Any, sm: Any, output_di
     )
     captured.append("analyser_intrinsic_properties_input_resistance.png")
 
-    # ---- Tau (Time Constant) ----
+    # ---- Tau (Time Constant) on ABF19 (-20 pA step onset at 200 ms) ----
     _set_method(tab, "Tau (Time Constant)")
-    _set_param(tab, "stim_start_time", 0.05)
-    _set_param(tab, "fit_duration", 0.03)
+    _set_param(tab, "stim_start_time", 0.2)
+    _set_param(tab, "fit_duration", 0.08)
     _run_analysis(tab)
     _grab_annotated(
         window,
@@ -614,23 +626,16 @@ def _capture_intrinsic_properties(window: Any, analyser: Any, sm: Any, output_di
     )
     captured.append("analyser_intrinsic_properties_tau_time_constant.png")
 
-    # ---- Sag Ratio (Ih) ----
-    # NOTE: Sag Ratio is captured on ABF19 (see block below) because ABF19
-    # provides a clear hyperpolarising step with a well-defined dip and
-    # steady-state plateau.  Nothing to capture here with WCP03.
-
-    # ---- Capacitance (ABF19: CC, -20 pA step onset at 215 ms) ----
+    # ---- Capacitance (ABF19: CC, -20 pA step) ----
     if _ABF19.exists():
-        _set_analysis_source(sm, _ABF19)
-        tab = _activate_sub_tab(window, analyser, "Intrinsic Properties")
         if tab is not None:
             _set_method(tab, "Capacitance")
             _set_param(tab, "mode", "Current-Clamp")
             _set_param(tab, "current_amplitude_pa", -20.0)
             _set_param(tab, "baseline_start_s", 0.0)
-            _set_param(tab, "baseline_end_s", 0.2)
-            _set_param(tab, "response_start_s", 0.215)
-            _set_param(tab, "response_end_s", 0.55)
+            _set_param(tab, "baseline_end_s", 0.19)
+            _set_param(tab, "response_start_s", 0.2)
+            _set_param(tab, "response_end_s", 0.3)
             _run_analysis(tab)
             _grab_annotated(
                 window,
@@ -641,15 +646,13 @@ def _capture_intrinsic_properties(window: Any, analyser: Any, sm: Any, output_di
             captured.append("analyser_intrinsic_properties_capacitance.png")
 
             # ---- Sag Ratio (Ih) on ABF19 ----
-            # baseline: 0-200 ms, dip (peak hyperpolarisation): 210-300 ms,
-            # steady-state: 450-550 ms
             _set_method(tab, "Sag Ratio (Ih)")
             _set_param(tab, "baseline_start", 0.0)
-            _set_param(tab, "baseline_end", 0.2)
-            _set_param(tab, "peak_window_start", 0.21)
-            _set_param(tab, "peak_window_end", 0.3)
-            _set_param(tab, "ss_window_start", 0.45)
-            _set_param(tab, "ss_window_end", 0.55)
+            _set_param(tab, "baseline_end", 0.19)
+            _set_param(tab, "peak_window_start", 0.2)
+            _set_param(tab, "peak_window_end", 0.23)
+            _set_param(tab, "ss_window_start", 0.27)
+            _set_param(tab, "ss_window_end", 0.3)
             _run_analysis(tab)
             _grab_annotated(
                 window,
@@ -808,9 +811,10 @@ def _capture_synaptic_events(window: Any, analyser: Any, sm: Any, output_dir: Pa
     _grab(window, output_dir / "analyser_synaptic_events.png")
     captured.append("analyser_synaptic_events.png")
 
-    # ---- Threshold Based ----
-    _set_method(tab, "Threshold Based")
+    # ---- Amplitude (Threshold Based) ----
+    _set_method(tab, "Amplitude")
     _set_param(tab, "direction", "positive")
+    _set_param(tab, "compute_kinetics", False)
     _run_analysis(tab)
     _grab_annotated(
         window,
@@ -820,8 +824,8 @@ def _capture_synaptic_events(window: Any, analyser: Any, sm: Any, output_dir: Pa
     )
     captured.append("analyser_synaptic_events_threshold_based.png")
 
-    # ---- Deconvolution ----
-    _set_method(tab, "Deconvolution (Custom)")
+    # ---- Template (Deconvolution) ----
+    _set_method(tab, "Template")
     _set_param(tab, "direction", "positive")
     _run_analysis(tab)
     _grab_annotated(
@@ -832,13 +836,15 @@ def _capture_synaptic_events(window: Any, analyser: Any, sm: Any, output_dir: Pa
     )
     captured.append("analyser_synaptic_events_deconvolution_custom.png")
 
-    # ---- Baseline + Peak + Kinetics ----
-    _set_method(tab, "Baseline + Peak + Kinetics")
+    # ---- Amplitude + Bi-Exponential Kinetics ----
+    _set_method(tab, "Amplitude")
+    _set_param(tab, "direction", "positive")
+    _set_param(tab, "compute_kinetics", True)
     _run_analysis(tab)
     _grab_annotated(
         window,
         output_dir / "analyser_synaptic_events_baseline_peak_kinetics.png",
-        getattr(tab, "method_combobox", None),
+        _get_param_widget(tab, "compute_kinetics") or getattr(tab, "method_combobox", None),
         style="box",
     )
     captured.append("analyser_synaptic_events_baseline_peak_kinetics.png")
@@ -1133,57 +1139,11 @@ def _capture_cross_file_average(window: Any, analyser: Any, sm: Any, output_dir:
     _grab(window, output_dir / "explorer_tab_mark_trials.png")
     captured.append("explorer_tab_mark_trials.png")
 
-    # --- Step 3: Add marked trials to Analysis Set ---
-    explorer._add_marked_trials_to_analysis_set()
-    _pump(3)
-
-    # --- Step 4: Load ABF19 and mark one trial ---
-    _load_explorer(window, _ABF19, [_ABF21, _ABF19], 1)
-    explorer.config_panel.plot_mode_combo.setCurrentIndex(1)
-    _pump(5)
-    _mark_trial(explorer, _ABF19, 0)
+    # Cleanup: clear marked trials and return to Overlay All + Average mode.
+    explorer.global_manual_trials.clear()
     explorer._update_global_avg_label()
+    explorer.config_panel.plot_mode_combo.setCurrentIndex(0)
     explorer._update_all_ui_state()
-    _pump(3)
-    explorer._add_marked_trials_to_analysis_set()
-    _pump(5)
-
-    # analysis_items now has 3 "Current Trial" entries: ABF21 trials 5 & 12,
-    # ABF19 trial 0 — matching the "3 items (2 files)" label scenario.
-
-    # --- Step 5: Switch to Analyser and select Cross-File Average source ---
-    # Propagate the analysis items to the Analyser via SessionManager.
-    if sm and hasattr(sm, "selected_analysis_items"):
-        sm.selected_analysis_items = explorer._analysis_items[:]
-        _pump(5)
-
-    tab = _activate_sub_tab(window, analyser, "Intrinsic Properties")
-    if tab is None:
-        return captured
-
-    # Switch the data-source combobox to "Cross-File Average".
-    cb = getattr(tab, "data_source_combobox", None)
-    if cb is not None:
-        for i in range(cb.count()):
-            if cb.itemData(i) == "cross_file_average":
-                cb.setCurrentIndex(i)
-                _pump(5)
-                break
-
-    # Run analysis to produce per-file faint traces + grand average in the plot.
-    _run_analysis(tab)
-    _pump(5)
-
-    # Screenshot: Analyser showing "3 items (2 files)" label + per-file traces.
-    window.tab_widget.setCurrentIndex(1)
-    _pump(3)
-    _grab(window, output_dir / "analyser_cross_file_average.png")
-    captured.append("analyser_cross_file_average.png")
-
-    # Cleanup: clear the analysis set so subsequent captures start fresh.
-    explorer._analysis_items.clear()
-    if sm and hasattr(sm, "selected_analysis_items"):
-        sm.selected_analysis_items = []
     _pump(3)
 
     return captured
@@ -1370,6 +1330,7 @@ def capture_group_only(output_dir: Path, group: str) -> bool:
         session_manager = SessionManager()
         if group == "core":
             captured = _capture_explorer_screenshots(window, output_dir)
+            captured.extend(_capture_cross_file_average(window, analyser, session_manager, output_dir))
             captured.extend(_capture_protocol_map(window, output_dir))
             captured.extend(_capture_batch_compatible_average(window, output_dir))
             window.tab_widget.setCurrentIndex(1)
