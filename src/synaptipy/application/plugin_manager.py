@@ -24,6 +24,7 @@ See the LICENSE file in the root of the repository for full license details.
 
 import copy
 import hashlib
+import importlib.machinery
 import importlib.resources
 import importlib.util
 import logging
@@ -268,11 +269,18 @@ class PluginManager:
                     raw_src = p_file.read_text(encoding="utf-8")
                     migrated_src = _rewrite_legacy_synaptipy_imports(raw_src)
                     if migrated_src != raw_src:
-                        spec = importlib.util.spec_from_file_location(module_name, str(p_file))
-                        if spec is not None:
+                        migrated_bytes = migrated_src.encode("utf-8")
+
+                        class _LegacyCompatLoader(importlib.machinery.SourceFileLoader):
+                            def get_data(self, _path):
+                                return migrated_bytes
+
+                        loader = _LegacyCompatLoader(module_name, str(p_file))
+                        spec = importlib.util.spec_from_loader(module_name, loader, origin=str(p_file))
+                        if spec is not None and spec.loader is not None:
                             compat_mod = importlib.util.module_from_spec(spec)
                             sys.modules[module_name] = compat_mod
-                            exec(compile(migrated_src, str(p_file), "exec"), compat_mod.__dict__)
+                            spec.loader.exec_module(compat_mod)
                             log.warning(
                                 "Loaded legacy plugin '%s' by mapping 'Synaptipy' imports to lowercase "
                                 "'synaptipy'. Update imports in %s or use Help -> Download Example Plugins.",
