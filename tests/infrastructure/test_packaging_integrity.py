@@ -225,8 +225,15 @@ class TestPackagingConfigurations:
         assert "maxRelLen -ge 160" in installer_yml
         assert '"/VERYSILENT"' in installer_yml
 
-        # Linux Wayland-safe AppRun + wget retries + post-AppImage smoke verification
+        # Linux Wayland-safe AppRun + host Qt/Mesa isolation + xcb-cursor fallback + smoke verification
         assert 'export QT_QPA_PLATFORM="xcb"' in installer_yml
+        assert 'export QT_QPA_PLATFORM="wayland"' in installer_yml
+        assert "unset QT_PLUGIN_PATH QML_IMPORT_PATH QML2_IMPORT_PATH QT_STYLE_OVERRIDE QT_QPA_PLATFORMTHEME" in (
+            installer_yml
+        )
+        assert "libxcb-cursor.so.0*" in installer_yml
+        assert "fallback-cxx" in installer_yml
+        assert "AppDir/.DirIcon" in installer_yml
         assert "--tries=5" in installer_yml
         assert "--appimage-extract-and-run --smoke-test" in installer_yml
         assert ".[dev,docs,formats]" in installer_yml
@@ -340,3 +347,22 @@ class TestPackagingConfigurations:
         from synaptipy import __version__
 
         mod._require_bump_targets(__version__)
+
+    def test_linux_dark_mode_detection_handles_gtk_gsettings_and_kdeglobals(self, tmp_path, monkeypatch):
+        from synaptipy.shared.theme_manager import _detect_linux_dark_mode
+
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("GTK_THEME", "Adwaita:dark")
+        assert _detect_linux_dark_mode() is True
+
+        monkeypatch.setenv("GTK_THEME", "Adwaita:light")
+        assert _detect_linux_dark_mode() is False
+
+        monkeypatch.delenv("GTK_THEME", raising=False)
+        monkeypatch.setattr("shutil.which", lambda _cmd: None)
+        kde_dir = tmp_path / ".config"
+        kde_dir.mkdir(parents=True)
+        (kde_dir / "kdeglobals").write_text("[General]\nColorScheme=BreezeDark\n", encoding="utf-8")
+        assert _detect_linux_dark_mode() is True
+        (kde_dir / "kdeglobals").write_text("[General]\nColorScheme=BreezeLight\n", encoding="utf-8")
+        assert _detect_linux_dark_mode() is False

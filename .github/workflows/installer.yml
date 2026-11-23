@@ -290,23 +290,72 @@ jobs:
 
           # 1. Create the AppDir structure required by AppImage
           rm -rf AppDir
-          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/bin AppDir/usr/fallback-xcb AppDir/usr/fallback-cxx
 
-          # 2. Copy the PyInstaller output into the AppDir
-          cp -r dist/synaptipy/* AppDir/usr/bin/
+          # 2. Copy the PyInstaller output into the AppDir (preserving .so symlinks)
+          cp -a dist/synaptipy/. AppDir/usr/bin/
 
-          # 3. Copy the desktop file and icon to the root of AppDir
+          # 2b. Strip host-GPU-driver-conflicting loader libs and move C++ runtime to
+          #     an opt-in fallback directory so newer distros (Ubuntu 24.04, Fedora,
+          #     Arch) use their own GLIBCXX_3.4.32+ libstdc++.so.6 for Mesa DRI drivers.
+          for gpu_glob in "libdrm.so*" "libgbm.so*" "libEGL*.so*" "libGLX*.so*" "libOpenGL*.so*" "libGLdispatch*.so*"; do
+            find AppDir/usr/bin/_internal -maxdepth 1 -name "${gpu_glob}" -delete 2>/dev/null || true
+          done
+          for cxx_glob in "libstdc++.so*" "libgcc_s.so*"; do
+            for f in AppDir/usr/bin/_internal/${cxx_glob}; do
+              [ -e "$f" ] || [ -L "$f" ] || continue
+              mv "$f" AppDir/usr/fallback-cxx/
+            done
+          done
+
+          # 2c. Bundle XCB/XKB cursor & utility libs as a low-priority fallback so
+          #     fresh Ubuntu 22.04/24.04, Debian, and Mint desktops without
+          #     libxcb-cursor0 launch Qt 6.7 xcb out-of-the-box.
+          for xcb_glob in \
+            "libxcb-cursor.so.0*" \
+            "libxcb-icccm.so.4*" \
+            "libxcb-image.so.0*" \
+            "libxcb-keysyms.so.1*" \
+            "libxcb-render-util.so.0*" \
+            "libxcb-xinerama.so.0*" \
+            "libxcb-shape.so.0*" \
+            "libxkbcommon-x11.so.0*"; do
+            for sys_lib in /usr/lib/x86_64-linux-gnu/${xcb_glob} /lib/x86_64-linux-gnu/${xcb_glob}; do
+              [ -e "$sys_lib" ] || continue
+              cp -a "$sys_lib" AppDir/usr/fallback-xcb/
+            done
+          done
+
+          # 3. Copy the desktop file and icons (.DirIcon for file-manager thumbnails)
           cp installer/linux/synaptipy.desktop AppDir/
           cp src/synaptipy/resources/icons/logo.png AppDir/synaptipy.png
+          cp src/synaptipy/resources/icons/logo.png AppDir/.DirIcon
 
-          # 4. Write POSIX AppRun wrapper with Wayland-to-XWayland (xcb) fallback
+          # 4. Write POSIX AppRun wrapper isolating host Qt/Python env vars and
+          #    providing Wayland/XWayland + fallback library resolution
           cat << 'EOF' > AppDir/AppRun
           #!/bin/sh
           set -e
           HERE="$(dirname "$(readlink -f "$0")")"
+          unset PYTHONHOME PYTHONPATH
+          unset QT_PLUGIN_PATH QML_IMPORT_PATH QML2_IMPORT_PATH QT_STYLE_OVERRIDE QT_QPA_PLATFORMTHEME
           if [ -z "${QT_QPA_PLATFORM:-}" ] && [ -n "${WAYLAND_DISPLAY:-}" ] && [ -n "${DISPLAY:-}" ]; then
             export QT_QPA_PLATFORM="xcb"
+          elif [ -z "${QT_QPA_PLATFORM:-}" ] && [ -n "${WAYLAND_DISPLAY:-}" ]; then
+            export QT_QPA_PLATFORM="wayland"
           fi
+          FALLBACK_LD="${HERE}/usr/fallback-xcb"
+          HAS_SYS_STDCXX=0
+          for d in /lib/x86_64-linux-gnu /usr/lib/x86_64-linux-gnu /usr/lib64 /lib64 /usr/lib; do
+            if [ -e "${d}/libstdc++.so.6" ]; then
+              HAS_SYS_STDCXX=1
+              break
+            fi
+          done
+          if [ "${HAS_SYS_STDCXX}" -eq 0 ]; then
+            FALLBACK_LD="${HERE}/usr/fallback-cxx:${FALLBACK_LD}"
+          fi
+          export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:+${LD_LIBRARY_PATH}:}${FALLBACK_LD}"
           exec "${HERE}/usr/bin/synaptipy" "$@"
           EOF
           chmod +x AppDir/AppRun

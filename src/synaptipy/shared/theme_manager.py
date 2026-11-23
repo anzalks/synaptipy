@@ -112,6 +112,73 @@ def _snapshot_initial_system_dark(app: Optional[QtWidgets.QApplication]) -> None
         pass
 
 
+def _check_gtk_theme_env() -> Optional[bool]:
+    """Inspect GTK_THEME environment variable for explicit light/dark suffix."""
+    import os
+
+    gtk_theme = os.environ.get("GTK_THEME", "").strip().lower()
+    if not gtk_theme:
+        return None
+    if gtk_theme.endswith((":dark", "-dark")) or "dark" in gtk_theme:
+        return True
+    if gtk_theme.endswith((":light", "-light")):
+        return False
+    return None
+
+
+def _check_gsettings_color_scheme() -> Optional[bool]:
+    """Query GNOME/freedesktop color-scheme via gsettings when available."""
+    import shutil
+    import subprocess
+
+    gsettings = shutil.which("gsettings")
+    if not gsettings:
+        return None
+    try:
+        proc = subprocess.run(
+            [gsettings, "get", "org.gnome.desktop.interface", "color-scheme"],
+            capture_output=True,
+            text=True,
+            timeout=0.5,
+            check=False,
+        )
+        if proc.returncode == 0:
+            val = proc.stdout.strip().strip("'\"").lower()
+            if "dark" in val:
+                return True
+            if val in ("default", "prefer-light"):
+                return False
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return None
+
+
+def _check_kde_color_scheme() -> Optional[bool]:
+    """Inspect ~/.config/kdeglobals ColorScheme for KDE Plasma dark themes."""
+    from pathlib import Path
+
+    kdeglobals = Path.home() / ".config" / "kdeglobals"
+    if not kdeglobals.is_file():
+        return None
+    try:
+        for raw_line in kdeglobals.read_text(encoding="utf-8", errors="ignore").splitlines():
+            line = raw_line.strip()
+            if line.lower().startswith("colorscheme="):
+                return "dark" in line.split("=", 1)[1].strip().lower()
+    except OSError:
+        pass
+    return None
+
+
+def _detect_linux_dark_mode() -> Optional[bool]:
+    """Detect GNOME, GTK, or KDE dark-scheme preferences on Linux (including standalone AppImages)."""
+    for probe in (_check_gtk_theme_env, _check_gsettings_color_scheme, _check_kde_color_scheme):
+        detected = probe()
+        if detected is not None:
+            return detected
+    return None
+
+
 def _detect_system_dark_mode() -> bool:  # noqa: C901
     """
     Detect if the system is using dark mode.
@@ -149,6 +216,11 @@ def _detect_system_dark_mode() -> bool:  # noqa: C901
         except Exception as e:
             log.debug(f"Could not read Windows theme setting: {e}")
             # Fallback to palette detection below
+
+    if sys.platform.startswith("linux"):
+        linux_dark = _detect_linux_dark_mode()
+        if linux_dark is not None:
+            return linux_dark
 
     if _palette_overwritten and _initial_system_dark is not None:
         return _initial_system_dark
