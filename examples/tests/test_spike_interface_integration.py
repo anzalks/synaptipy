@@ -116,17 +116,25 @@ def _make_peaks_array(sample_indices):
 
 @pytest.fixture(autouse=True)
 def isolate_registry():
-    """Restore AnalysisRegistry state around each test."""
-    saved_registry = dict(AnalysisRegistry._registry)
-    saved_metadata = copy.deepcopy(AnalysisRegistry._metadata)
-    saved_original = copy.deepcopy(AnalysisRegistry._original_metadata)
+    """Restore AnalysisRegistry state around each test and ensure this module's entry is active."""
+    import synaptipy.core.analysis.registry as _reg_mod
+
+    live_reg = _reg_mod.AnalysisRegistry
+    globals()["AnalysisRegistry"] = live_reg
+    saved_registry = dict(live_reg._registry)
+    saved_metadata = copy.deepcopy(live_reg._metadata)
+    saved_original = copy.deepcopy(live_reg._original_metadata)
+    if live_reg.get_function("spike_interface_detection") is not run_spike_interface_wrapper:
+        _spec.loader.exec_module(_plugin_mod)
+        globals()["run_spike_interface_wrapper"] = _plugin_mod.run_spike_interface_wrapper
+        globals()["detect_spikes_spikeinterface"] = _plugin_mod.detect_spikes_spikeinterface
     yield
-    AnalysisRegistry._registry.clear()
-    AnalysisRegistry._metadata.clear()
-    AnalysisRegistry._original_metadata.clear()
-    AnalysisRegistry._registry.update(saved_registry)
-    AnalysisRegistry._metadata.update(saved_metadata)
-    AnalysisRegistry._original_metadata.update(saved_original)
+    live_reg._registry.clear()
+    live_reg._metadata.clear()
+    live_reg._original_metadata.clear()
+    live_reg._registry.update(saved_registry)
+    live_reg._metadata.update(saved_metadata)
+    live_reg._original_metadata.update(saved_original)
 
 
 @pytest.fixture

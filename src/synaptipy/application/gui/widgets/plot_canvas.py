@@ -293,6 +293,8 @@ class SynaptipyPlotCanvas(QtCore.QObject):
         Must be called while items still have a valid scene() because
         PlotItem.close() internally calls scene().removeItem(self.vb).
         """
+        import warnings
+
         for plot_item in list(self.plot_items.values()):
             try:
                 vb = plot_item.getViewBox()
@@ -301,7 +303,9 @@ class SynaptipyPlotCanvas(QtCore.QObject):
                         sig = getattr(vb, sig_name, None)
                         if sig is not None:
                             try:
-                                sig.disconnect()
+                                with warnings.catch_warnings():
+                                    warnings.simplefilter("ignore", RuntimeWarning)
+                                    sig.disconnect()
                             except (TypeError, RuntimeError):
                                 pass
                 self._disconnect_ctrl_signals(plot_item)

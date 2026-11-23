@@ -120,39 +120,44 @@ def _drain_qt_events_after_test():
             pass
 
 
+_LAST_SESSION = None
+
+
 @pytest.hookimpl(trylast=True)
 def pytest_sessionfinish(session, exitstatus):
-    """Force-exit after tests to prevent crashes during Python/Qt teardown.
+    """Record the finished session so pytest_unconfigure can exit with final status."""
+    global _LAST_SESSION
+    _LAST_SESSION = session
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_unconfigure(config):
+    """Force-exit after terminal summary & coverage reporting to prevent Qt C++ teardown crashes.
+
+    Note: Must run in ``pytest_unconfigure`` rather than ``pytest_sessionfinish`` because
+    ``TerminalReporter.pytest_sessionfinish`` is a hookwrapper that prints failure tracebacks,
+    runs ``pytest_terminal_summary`` (including ``pytest-cov`` ``--cov-fail-under``), and prints
+    the final summary ONLY AFTER all ``pytest_sessionfinish`` non-wrapper hooks return.
 
     PySide6 + pyqtgraph leave C++ objects partially alive at session end.
     Normal process exit triggers Qt DLL_PROCESS_DETACH / CRT atexit cleanup
-    that dereferences freed C++ pointers → crash on all platforms.
-
-    - macOS/Linux: os._exit() calls libc _exit() which skips C++ destructors,
-      atexit handlers and Python GC — safe on these platforms.
-    - Windows: os._exit() calls ExitProcess() which fires DLL_PROCESS_DETACH
-      on all loaded DLLs (including Qt) → access violation on freed Qt C++
-      objects.  RtlExitUserProcess() still runs LdrShutdownProcess() and
-      therefore also fires DLL_PROCESS_DETACH → same crash.
-      kernel32.TerminateProcess() is the ONLY Windows API that truly bypasses
-      DLL_PROCESS_DETACH (per MSDN: "does not run the DLL entry function with
-      DLL_PROCESS_DETACH").  argtypes must be set explicitly: without them,
-      ctypes defaults GetCurrentProcess() restype to c_int (32-bit), and the
-      pseudo-handle −1 is truncated to 0xFFFFFFFF instead of the correct 64-bit
-      0xFFFFFFFFFFFFFFFF, causing TerminateProcess to fail with
-      ERROR_INVALID_HANDLE and fall through to a normal (crashing) exit.
-      We pass the pseudo-handle as ctypes.c_void_p(-1) directly to avoid the
-      GetCurrentProcess return-type issue entirely.
+    that dereferences freed C++ pointers -> crash on all platforms.
     """
     if _TEST_SETTINGS_DIR:
         shutil.rmtree(_TEST_SETTINGS_DIR, ignore_errors=True)
 
     # Never hard-terminate a pytest-xdist worker process before execnet flushes
     # its workerfinished payload back to the controller.
-    if hasattr(session.config, "workerinput"):
+    if hasattr(config, "workerinput"):
         return
 
-    if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
+    if os.environ.get("QT_QPA_PLATFORM") == "offscreen" and _LAST_SESSION is not None:
+        exitstatus = int(getattr(_LAST_SESSION, "exitstatus", 0))
+        try:
+            sys.stdout.flush()
+            sys.stderr.flush()
+        except Exception:
+            pass
         if sys.platform == "win32":
             import ctypes
 
@@ -163,7 +168,7 @@ def pytest_sessionfinish(session, exitstatus):
             kernel32.TerminateProcess.argtypes = [ctypes.c_void_p, ctypes.c_uint]
             kernel32.TerminateProcess.restype = ctypes.c_bool
             # -1 == pseudo-handle constant for current process (GetCurrentProcess)
-            kernel32.TerminateProcess(ctypes.c_void_p(-1), int(exitstatus))
+            kernel32.TerminateProcess(ctypes.c_void_p(-1), exitstatus)
         else:
             os._exit(exitstatus)
 

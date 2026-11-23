@@ -26,12 +26,10 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
+from synaptipy.core.analysis.batch_engine import BatchAnalysisEngine  # noqa: E402
+
 DATA_DIR = REPO_ROOT / "examples" / "data"
 OUT_DIR = REPO_ROOT / "paper" / "results"
-OUT_DIR.mkdir(parents=True, exist_ok=True)
-
-# ── Public API imports only ──────────────────────────────────────────────────
-from synaptipy.core.analysis.batch_engine import BatchAnalysisEngine
 
 # ── Files to analyse ─────────────────────────────────────────────────────────
 FILES = [
@@ -111,6 +109,7 @@ def main() -> None:
         sys.exit(1)
 
     # ── Save ─────────────────────────────────────────────────────────────────
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
     csv_path = OUT_DIR / "demo_results.csv"
     df.to_csv(csv_path, index=False)
     print(f"\nResults saved → {csv_path}")
@@ -133,8 +132,6 @@ def main() -> None:
         print(df.to_string(index=False))
 
     print("\n--- Grand mean ± SD ---")
-    import numpy as np
-
     for col in summary_cols:
         if col not in df.columns:
             continue
