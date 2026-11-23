@@ -251,6 +251,7 @@ class TestPackagingConfigurations:
         assert "pytest -n auto --no-cov" in test_yml
         assert "/tmp/synaptipy-wheel-test/bin/python -m pip install dist/*.whl" in test_yml
         assert "Finder AppleScript styling timed out" not in installer_yml
+        assert "-comp zstd" in installer_yml
         assert '-processors "$(nproc)"' in installer_yml
         assert "verify-ci:" in release_yml
         assert "workflow_id: 'test.yml'" in release_yml

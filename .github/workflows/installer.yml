@@ -325,7 +325,7 @@ jobs:
           mksquashfs -version
 
           echo "Creating squashfs filesystem..."
-          if ! mksquashfs AppDir AppDir.squashfs -root-owned -noappend -comp xz -Xbcj x86 -b 1M -mkfs-time 0 -processors "$(nproc)"; then
+          if ! mksquashfs AppDir AppDir.squashfs -root-owned -noappend -comp zstd -Xcompression-level 15 -b 1M -mkfs-time 0 -processors "$(nproc)"; then
             echo "ERROR: mksquashfs failed"
             exit 1
           fi
@@ -347,8 +347,14 @@ jobs:
           file "${APPIMAGE_PATH}"
 
           rm -f /tmp/synaptipy_appimage_smoke_ok.txt
-          QT_QPA_PLATFORM=offscreen SYNAPTIPY_SMOKE_SENTINEL=/tmp/synaptipy_appimage_smoke_ok.txt \
-            xvfb-run -a "./${APPIMAGE_PATH}" --appimage-extract-and-run --smoke-test > /tmp/smoke_appimage.txt 2>&1
+          if ! QT_QPA_PLATFORM=offscreen SYNAPTIPY_SMOKE_SENTINEL=/tmp/synaptipy_appimage_smoke_ok.txt \
+            xvfb-run -a "./${APPIMAGE_PATH}" --appimage-extract-and-run --smoke-test > /tmp/smoke_appimage.txt 2>&1; then
+            echo "=== /tmp/smoke_appimage.txt ==="
+            cat /tmp/smoke_appimage.txt || true
+            echo "=== ~/.synaptipy/logs ==="
+            cat ~/.synaptipy/logs/boot.log ~/.synaptipy/logs/app.log 2>/dev/null || true
+            exit 1
+          fi
           cat /tmp/smoke_appimage.txt
           test -f /tmp/synaptipy_appimage_smoke_ok.txt
           echo "Post-package Linux AppImage verification PASSED"
