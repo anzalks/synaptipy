@@ -1235,9 +1235,13 @@ class AnalyserTab(QtWidgets.QWidget):
         if getattr(self, "_log_handler", None) is not None:
             logging.getLogger("synaptipy").removeHandler(self._log_handler)
         try:
+            import warnings
+
             from synaptipy.shared.theme_manager import get_theme_signals
 
-            get_theme_signals().theme_changed.disconnect(self._on_theme_changed)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                get_theme_signals().theme_changed.disconnect(self._on_theme_changed)
         except (TypeError, RuntimeError):
             pass
         if self._batch_dialog is not None:

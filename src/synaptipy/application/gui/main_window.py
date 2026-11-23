@@ -1294,10 +1294,20 @@ class MainWindow(QtWidgets.QMainWindow):
             try:
                 # Disconnect signals to prevent any pending operations
                 if hasattr(self, "data_loader") and self.data_loader:
-                    self.data_loader.data_ready.disconnect()
-                    self.data_loader.data_error.disconnect()
-                    self.data_loader.loading_started.disconnect()
-                    self.data_loader.loading_progress.disconnect()
+                    import warnings
+
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore", RuntimeWarning)
+                        for sig in (
+                            self.data_loader.data_ready,
+                            self.data_loader.data_error,
+                            self.data_loader.loading_started,
+                            self.data_loader.loading_progress,
+                        ):
+                            try:
+                                sig.disconnect()
+                            except (TypeError, RuntimeError):
+                                pass
 
                 # Request thread to quit
                 self.data_loader_thread.quit()
