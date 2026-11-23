@@ -146,6 +146,11 @@ def pytest_sessionfinish(session, exitstatus):
     if _TEST_SETTINGS_DIR:
         shutil.rmtree(_TEST_SETTINGS_DIR, ignore_errors=True)
 
+    # Never hard-terminate a pytest-xdist worker process before execnet flushes
+    # its workerfinished payload back to the controller.
+    if hasattr(session.config, "workerinput"):
+        return
+
     if os.environ.get("QT_QPA_PLATFORM") == "offscreen":
         if sys.platform == "win32":
             import ctypes

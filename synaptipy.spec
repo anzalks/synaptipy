@@ -29,7 +29,13 @@ _TARGET_ARCH = (os.environ.get("SYNAPTIPY_TARGET_ARCH") or platform.machine()) i
 
 def _safe_collect_submodules(pkg_name):
     try:
-        return collect_submodules(pkg_name)
+        return [
+            mod
+            for mod in collect_submodules(pkg_name)
+            if ".tests." not in mod
+            and not mod.endswith(".tests")
+            and not mod.startswith("pyqtgraph.examples")
+        ]
     except Exception:
         return []
 
@@ -99,6 +105,50 @@ for _data_pkg in ("pynwb", "hdmf", "neo", "jsonschema_specifications", "tzdata")
 icon_ext = ".icns" if _IS_DARWIN else ".ico"
 icon_path = os.path.join("src", "synaptipy", "resources", "icons", f"logo{icon_ext}")
 
+# Exclude pure developer, linter, test, documentation, and unused GUI-binding
+# packages present in the CI build environment while keeping full scipy/numpy
+# scientific subpackages bundled for custom user plugins (~/.synaptipy/plugins).
+_EXCLUDED_MODULES = [
+    "tkinter",
+    "_tkinter",
+    "pytest",
+    "_pytest",
+    "pytestqt",
+    "pytest_cov",
+    "pytest_mock",
+    "pytest_timeout",
+    "xdist",
+    "execnet",
+    "nbval",
+    "flake8",
+    "pycodestyle",
+    "pyflakes",
+    "mccabe",
+    "black",
+    "blib2to3",
+    "isort",
+    "sphinx",
+    "sphinx_rtd_theme",
+    "myst_parser",
+    "sphinx_autodoc_typehints",
+    "sphinx_copybutton",
+    "sphinx_design",
+    "docutils",
+    "alabaster",
+    "snowballstemmer",
+    "imagesize",
+    "IPython",
+    "ipykernel",
+    "jupyter_client",
+    "jupyter_core",
+    "nbformat",
+    "notebook",
+    "PyQt5",
+    "PyQt6",
+    "PySide2",
+    "wx",
+]
+
 a = Analysis(
     ["src/synaptipy/application/__main__.py"],
     pathex=["src"],
@@ -108,7 +158,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=_EXCLUDED_MODULES,
     noarchive=False,
 )
 pyz = PYZ(a.pure)

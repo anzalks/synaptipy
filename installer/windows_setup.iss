@@ -20,6 +20,7 @@ SetupIconFile=..\src\synaptipy\resources\icons\logo.ico
 UninstallDisplayIcon={app}\synaptipy.exe
 OutputBaseFilename=Synaptipy_Setup_{#MyAppVersion}
 Compression=lzma2
+CompressionThreads=auto
 SolidCompression=yes
 OutputDir=..
 

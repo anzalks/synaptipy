@@ -9,7 +9,7 @@ on:
       dry_run:
         description: >
           Dry run: build all installers and run smoke tests, but skip uploading
-          binaries to GitHub Releases.  Packaged binaries are available as run
+          binaries to GitHub Releases. Packaged binaries are available as run
           artifacts from the build job regardless of this setting.
         type: boolean
         default: true
@@ -24,9 +24,6 @@ jobs:
     timeout-minutes: 90
     permissions:
       contents: read
-    # Default all run: blocks to bash so that grep/cut/echo work on every
-    # platform.  Steps that must use PowerShell (Windows packaging) override
-    # this explicitly with `shell: powershell`.
     defaults:
       run:
         shell: bash
@@ -65,14 +62,18 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-          cache: 'pip'
-          cache-dependency-path: |
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
             requirements.txt
             pyproject.toml
 
       # PySide6 loads C extensions during PyInstaller's import analysis phase.
       # Without xcb/xvfb the dynamic loader aborts, producing an incomplete or
-      # broken bundle.  Install here for all Linux builds, not only smoke tests.
+      # broken bundle. Install here for all Linux builds, not only smoke tests.
       - name: Install Linux display dependencies
         if: runner.os == 'Linux'
         run: |
@@ -84,13 +85,10 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev,docs,formats]" -r requirements.txt
+          PY_EXE="$(python -c 'import sys; print(sys.executable)')"
+          uv pip install --system --python "$PY_EXE" -r requirements.txt
+          uv pip install --system --python "$PY_EXE" -e ".[dev,docs,formats]"
 
-      # Export APP_VERSION once using bash grep/cut so that every subsequent
-      # packaging step can reference ${{ env.APP_VERSION }} regardless of OS.
-      # This avoids duplicating the grep/cut idiom in each platform block and
-      # removes any risk of it being run under PowerShell (which lacks grep).
       - name: Read app version
         shell: bash
         run: |
@@ -103,9 +101,6 @@ jobs:
 
       # Build the Sphinx qthelp output and compile .qch/.qhc artefacts so
       # they land in src/synaptipy/resources/docs/ before PyInstaller runs.
-      # On macOS/Windows the qhelpgenerator binary is shipped inside the
-      # pyside6 wheel (already installed above); on Linux we install the
-      # system qt6-tools-dev-tools package (see step above).
       - name: Build offline Help artefacts
         run: python scripts/build_offline_help.py
 
@@ -239,34 +234,23 @@ jobs:
       - name: Package and verify DMG (macOS)
         if: runner.os == 'macOS'
         run: |
-          command -v create-dmg >/dev/null 2>&1 || brew install create-dmg
+          command -v create-dmg >/dev/null 2>&1 || \
+            HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 brew install create-dmg
           VERSION="${{ env.APP_VERSION }}"
           ARCH="${{ matrix.arch_label }}"
           EXPECTED_ARCH="${{ matrix.target_arch }}"
           DMG_PATH="dist/Synaptipy_${VERSION}_macOS_${ARCH}.dmg"
           rm -f "${DMG_PATH}"
 
-          if ! create-dmg \
+          # Use --skip-jenkins directly on headless CI runners so Finder AppleScript
+          # window styling does not stall for ~2-3 minutes before timing out.
+          create-dmg \
             --volname "Synaptipy Installer (${ARCH})" \
+            --skip-jenkins \
             --no-internet-enable \
-            --window-pos 200 120 \
-            --window-size 800 400 \
-            --icon-size 100 \
-            --icon "Synaptipy.app" 200 190 \
-            --hide-extension "Synaptipy.app" \
             --app-drop-link 600 185 \
             "${DMG_PATH}" \
-            "dist/Synaptipy.app"; then
-            echo "Finder AppleScript styling timed out on headless runner; retrying with --skip-jenkins..."
-            rm -f "${DMG_PATH}"
-            create-dmg \
-              --volname "Synaptipy Installer (${ARCH})" \
-              --skip-jenkins \
-              --no-internet-enable \
-              --app-drop-link 600 185 \
-              "${DMG_PATH}" \
-              "dist/Synaptipy.app"
-          fi
+            "dist/Synaptipy.app"
 
           codesign --force --sign - "${DMG_PATH}"
 
@@ -323,12 +307,12 @@ jobs:
           chmod +x runtime
           echo "Runtime downloaded: $(stat -c%s runtime) bytes"
 
-          # 6. Build the squashfs filesystem
+          # 6. Build the squashfs filesystem across all available CPU cores
           echo "System mksquashfs version:"
           mksquashfs -version
 
           echo "Creating squashfs filesystem..."
-          if ! mksquashfs AppDir AppDir.squashfs -root-owned -noappend -comp xz -Xbcj x86 -b 1M -mkfs-time 0; then
+          if ! mksquashfs AppDir AppDir.squashfs -root-owned -noappend -comp xz -Xbcj x86 -b 1M -mkfs-time 0 -processors "$(nproc)"; then
             echo "ERROR: mksquashfs failed"
             exit 1
           fi
@@ -357,9 +341,6 @@ jobs:
           echo "Post-package Linux AppImage verification PASSED"
 
       - name: Upload installer artifact
-        # if-no-files-found: error surfaces packaging failures immediately
-        # rather than silently uploading an empty artifact that later causes
-        # the release job to attach zero binaries to the GitHub Release.
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}

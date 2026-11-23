@@ -2,16 +2,55 @@ name: Synaptipy CI
 
 on:
   push:
-    branches: ["**"]
+    branches: ["main", "master"]
   pull_request:
     branches: ["**"]
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
 
 permissions:
   pull-requests: write
   contents: write
 
 jobs:
+  lint:
+    name: Format and Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            requirements.txt
+            pyproject.toml
+
+      - name: Install lint tools
+        run: |
+          PY_EXE="$(python -c 'import sys; print(sys.executable)')"
+          uv pip install --system --python "$PY_EXE" flake8 'black~=26.1' 'isort~=8.0'
+
+      - name: Check formatting with black and isort
+        run: |
+          black --check --diff src/ tests/
+          isort --check --diff src/ tests/
+
+      - name: Lint with flake8
+        run: |
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 src/ tests/
+
   test:
     name: Test and Lint
     runs-on: ${{ matrix.os }}
@@ -32,8 +71,12 @@ jobs:
       uses: actions/setup-python@v6
       with:
         python-version: ${{ matrix.python-version }}
-        cache: 'pip'
-        cache-dependency-path: |
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
           requirements.txt
           pyproject.toml
 
@@ -47,31 +90,28 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        pip install flake8 'black~=26.1' 'isort~=8.0' pytest pytest-qt pytest-mock pytest-cov pytest-timeout nbval matplotlib
-        pip install -e .
+        PY_EXE="$(python -c 'import sys; print(sys.executable)')"
+        if [ -f requirements.txt ]; then uv pip install --system --python "$PY_EXE" -r requirements.txt; fi
+        uv pip install --system --python "$PY_EXE" \
+          pytest pytest-qt pytest-mock pytest-cov pytest-timeout pytest-xdist nbval matplotlib
+        uv pip install --system --python "$PY_EXE" -e .
 
-    - name: Check formatting with black and isort
-      run: |
-        black --check --diff src/ tests/
-        isort --check --diff src/ tests/
-
-    - name: Lint with flake8
-      run: |
-        # Stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # Style violations — scoped to src/ and tests/, uses .flake8 config
-        flake8 src/ tests/
-
-    - name: Run tests with coverage
+    - name: Run tests with coverage (canonical Linux 3.11 gate)
+      if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
       env:
         QT_QPA_PLATFORM: offscreen
       run: |
+        xvfb-run python -m pytest -p faulthandler --cov=src/synaptipy --cov-report=term-missing --cov-report=xml --cov-fail-under=90
+
+    - name: Run tests (parallel core + offscreen GUI/integration)
+      if: matrix.os != 'ubuntu-latest' || matrix.python-version != '3.11'
+      run: |
+        python -m pytest -n auto --no-cov -q --tb=short tests/core/ --ignore=tests/core/test_error_handler.py
+        NON_CORE_TARGETS="tests/application tests/gui tests/infrastructure tests/shared tests/tooling tests/core/test_error_handler.py"
         if [ "$RUNNER_OS" == "Linux" ]; then
-          xvfb-run python -m pytest -p faulthandler --cov=src/synaptipy --cov-report=term-missing --cov-report=xml --cov-fail-under=90
+          QT_QPA_PLATFORM=offscreen xvfb-run python -m pytest -p faulthandler --no-cov -q --tb=short $NON_CORE_TARGETS
         else
-          python -m pytest -p faulthandler --cov=src/synaptipy --cov-report=term-missing --cov-report=xml --cov-fail-under=90
+          QT_QPA_PLATFORM=offscreen python -m pytest -p faulthandler --no-cov -q --tb=short $NON_CORE_TARGETS
         fi
 
     - name: Coverage Comment
@@ -84,7 +124,6 @@ jobs:
       with:
         GITHUB_TOKEN: ${{ github.token }}
 
-    # Push core test coverage badge endpoint.json to the data branch so the
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
       uses: codecov/codecov-action@v7
@@ -97,7 +136,7 @@ jobs:
         disable_search: true      # prevent auto-discovery of python-coverage-comment-action.txt
         verbose: true             # surface any path-matching or processing errors
 
-  # A small, explicitly marked set of layout/plot checks.  This avoids
+  # A small, explicitly marked set of layout/plot checks. This avoids
   # repeating every GUI test under a different scale factor while retaining a
   # reliable regression gate for Qt's high-DPI rendering path.
   hidpi:
@@ -112,8 +151,11 @@ jobs:
     - uses: actions/setup-python@v6
       with:
         python-version: "3.11"
-        cache: 'pip'
-        cache-dependency-path: |
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
           requirements.txt
           pyproject.toml
     - name: Install Linux display dependencies
@@ -124,10 +166,10 @@ jobs:
           libxcb-xfixes0 libegl1 libxcb-cursor0
     - name: Install test dependencies
       run: |
-        python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        pip install pytest pytest-qt pytest-mock pytest-cov matplotlib
-        pip install -e .
+        PY_EXE="$(python -c 'import sys; print(sys.executable)')"
+        if [ -f requirements.txt ]; then uv pip install --system --python "$PY_EXE" -r requirements.txt; fi
+        uv pip install --system --python "$PY_EXE" pytest pytest-qt pytest-mock pytest-cov matplotlib
+        uv pip install --system --python "$PY_EXE" -e .
     - name: Run marked high-DPI tests
       timeout-minutes: 8
       env:
@@ -150,8 +192,11 @@ jobs:
     - uses: actions/setup-python@v6
       with:
         python-version: "3.11"
-        cache: 'pip'
-        cache-dependency-path: |
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
           requirements.txt
           pyproject.toml
     - name: Install Linux display dependencies
@@ -162,10 +207,10 @@ jobs:
           libxcb-xfixes0 libegl1 libxcb-cursor0
     - name: Install notebook dependencies
       run: |
-        python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        pip install pytest pytest-qt pytest-mock pytest-cov nbval matplotlib
-        pip install -e .
+        PY_EXE="$(python -c 'import sys; print(sys.executable)')"
+        if [ -f requirements.txt ]; then uv pip install --system --python "$PY_EXE" -r requirements.txt; fi
+        uv pip install --system --python "$PY_EXE" pytest pytest-qt pytest-mock pytest-cov nbval matplotlib
+        uv pip install --system --python "$PY_EXE" -e .
     - name: Test example notebooks
       timeout-minutes: 12
       env:
@@ -183,21 +228,23 @@ jobs:
     - uses: actions/setup-python@v6
       with:
         python-version: "3.11"
-        cache: 'pip'
-        cache-dependency-path: pyproject.toml
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+        cache-dependency-glob: pyproject.toml
     - name: Build distribution
       run: |
-        python -m pip install --upgrade pip build twine
+        PY_EXE="$(python -c 'import sys; print(sys.executable)')"
+        uv pip install --system --python "$PY_EXE" build twine
         python -m build
         twine check dist/*
-    - name: Install wheel in a fresh environment
+    - name: Install wheel in a fresh environment via standard pip
       run: |
         python -m venv /tmp/synaptipy-wheel-test
         /tmp/synaptipy-wheel-test/bin/python -m pip install --upgrade pip
         /tmp/synaptipy-wheel-test/bin/python -m pip install dist/*.whl
         /tmp/synaptipy-wheel-test/bin/python -c "import synaptipy; print(synaptipy.__version__)"
-
-
 
   # ---------------------------------------------------------------------------
   # Minimum-viable slot: oldest supported Python + pinned lower-bound versions.
@@ -218,8 +265,12 @@ jobs:
       uses: actions/setup-python@v6
       with:
         python-version: "3.10"
-        cache: 'pip'
-        cache-dependency-path: |
+
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
           requirements.txt
           pyproject.toml
 
@@ -234,32 +285,27 @@ jobs:
       # Install exact lower-bound versions to verify the code works at the
       # stated minimum rather than only at the latest patch release.
       run: |
-        python -m pip install --upgrade pip
-        pip install \
+        PY_EXE="$(python -c 'import sys; print(sys.executable)')"
+        uv pip install --system --python "$PY_EXE" \
           "numpy==2.0.0" \
           "scipy==1.14.0" \
           "neo==0.14.0" \
           "pyqtgraph==0.13.3" \
           "pyside6==6.7.3" \
-          "pandas==2.3.0"
-        pip install flake8 pytest pytest-qt pytest-mock pytest-cov pytest-timeout
-        pip install -e .
+          "pandas==2.3.0" \
+          flake8 pytest pytest-qt pytest-mock pytest-cov pytest-timeout pytest-xdist
+        uv pip install --system --python "$PY_EXE" -e .
 
     - name: Lint (syntax + undefined names only)
       run: |
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 
     - name: Run dependency-compatibility suite
-      env:
-        QT_QPA_PLATFORM: offscreen
       run: |
-        # The golden 3x3 matrix exercises every GUI and E2E test. This special
-        # dependency check concentrates on the scientific/core stack, then
-        # starts the real application in a fresh process below. Running the
-        # whole GUI suite here has shown a Qt teardown deadlock after tests.
-        xvfb-run python -m pytest -p faulthandler tests/core/ -q --tb=short --no-cov
-        # Retain a bounded real MainWindow startup check for this dependency set.
-        xvfb-run python -m pytest -p faulthandler tests/gui/test_e2e_gui.py::TestMainWindowInitialisation \
+        python -m pytest -n auto --no-cov -q --tb=short tests/core/ --ignore=tests/core/test_error_handler.py
+        QT_QPA_PLATFORM=offscreen xvfb-run python -m pytest -p faulthandler \
+          tests/core/test_error_handler.py \
+          tests/gui/test_e2e_gui.py::TestMainWindowInitialisation \
           --timeout=90 -q --tb=short --no-cov
 
   # ---------------------------------------------------------------------------
@@ -283,14 +329,17 @@ jobs:
       with:
         python-version: "3.11"
 
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+
     - name: Install Bandit
-      run: python -m pip install --upgrade pip bandit
+      run: |
+        PY_EXE="$(python -c 'import sys; print(sys.executable)')"
+        uv pip install --system --python "$PY_EXE" bandit
 
     - name: Run Bandit (fail on HIGH severity)
-      # --severity-level high  -> exit code 1 only when HIGH issues are found
-      # --confidence-level low -> report all confidence levels
-      # -c bandit.yaml         -> project-level skip list (documented in bandit.yaml)
-      # --format txt           -> human-readable output in CI logs
       run: |
         bandit -r src/synaptipy/ \
           -c bandit.yaml \
@@ -318,6 +367,14 @@ jobs:
       with:
         python-version: "3.12"
 
+    - name: Set up uv
+      uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+        cache-dependency-glob: |
+          requirements.txt
+          pyproject.toml
+
     - name: Install Linux display dependencies
       run: |
         sudo apt-get update
@@ -327,14 +384,14 @@ jobs:
 
     - name: Install and upgrade all scientific dependencies
       # Start from requirements.txt then force-upgrade the scientific stack
-      # to whatever pip resolves as latest.  pyside6 is intentionally excluded
+      # to whatever resolves as latest. pyside6 is intentionally excluded
       # from the upgrade because the 6.7.3 pin is required for stability.
       run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install --upgrade numpy scipy neo pyqtgraph pandas
-        pip install flake8 pytest pytest-qt pytest-mock pytest-cov pytest-timeout
-        pip install -e .
+        PY_EXE="$(python -c 'import sys; print(sys.executable)')"
+        uv pip install --system --python "$PY_EXE" -r requirements.txt
+        uv pip install --system --python "$PY_EXE" --upgrade numpy scipy neo pyqtgraph pandas
+        uv pip install --system --python "$PY_EXE" flake8 pytest pytest-qt pytest-mock pytest-cov pytest-timeout pytest-xdist
+        uv pip install --system --python "$PY_EXE" -e .
 
     - name: Report installed versions
       run: |
@@ -350,31 +407,23 @@ jobs:
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 
     - name: Run dependency-compatibility suite
-      env:
-        QT_QPA_PLATFORM: offscreen
       run: |
-        # The golden 3x3 matrix exercises every GUI and E2E test. This special
-        # dependency check concentrates on the scientific/core stack, then
-        # starts the real application in a fresh process below. Running the
-        # whole GUI suite here has shown a Qt teardown deadlock after tests.
-        xvfb-run python -m pytest -p faulthandler tests/core/ -q --tb=short --no-cov
-        # Retain a bounded real MainWindow startup check for this dependency set.
-        xvfb-run python -m pytest -p faulthandler tests/gui/test_e2e_gui.py::TestMainWindowInitialisation \
+        python -m pytest -n auto --no-cov -q --tb=short tests/core/ --ignore=tests/core/test_error_handler.py
+        QT_QPA_PLATFORM=offscreen xvfb-run python -m pytest -p faulthandler \
+          tests/core/test_error_handler.py \
+          tests/gui/test_e2e_gui.py::TestMainWindowInitialisation \
           --timeout=90 -q --tb=short --no-cov
 
   # ---------------------------------------------------------------------------
   # Auto-tag: create a release tag on main when all required CI passes.
-  # Reads the canonical version from pyproject.toml and creates a lightweight
-  # tag (v<version>) only if that tag does not yet exist.  Pushing the tag
-  # automatically triggers installer.yml and release.yml.
-  # Only runs on direct pushes to main — not on PRs or other branches.
+  # Reads the canonical version from pyproject.toml and creates an annotated
+  # tag (v<version>) only if that tag does not yet exist.
+  # Only runs on direct pushes to main - not on PRs or other branches.
   # ---------------------------------------------------------------------------
   auto-tag:
     name: Auto-tag release
     runs-on: ubuntu-latest
-    needs: [test, minimum-viable, latest-dependencies, security, hidpi, notebooks, wheel-install]
-    # A tag names this exact validated commit. Every normal-CI gate, including
-    # packaging and both dependency-bound checks, must succeed before release.
+    needs: [lint, test, minimum-viable, latest-dependencies, security, hidpi, notebooks, wheel-install]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
       contents: write
@@ -391,7 +440,7 @@ jobs:
           VERSION=$(grep -E '^version = ' pyproject.toml | cut -d'"' -f2)
           TAG="v${VERSION}"
           if git ls-remote --tags origin "${TAG}" | grep -q "${TAG}"; then
-            echo "Tag ${TAG} already exists — skipping."
+            echo "Tag ${TAG} already exists - skipping."
             CREATED=false
           else
             echo "Creating tag ${TAG} at $(git rev-parse HEAD)"
@@ -404,11 +453,9 @@ jobs:
           fi
           # GitHub does not trigger workflows when GITHUB_TOKEN pushes a tag,
           # so we dispatch installer.yml and release.yml explicitly via the API.
-          # This runs regardless of whether we just created the tag or it already
-          # existed (idempotent — both workflows handle duplicate runs gracefully).
           if [ "$CREATED" = "true" ]; then
             echo "Dispatching installer.yml and release.yml for ${TAG}..."
             gh workflow run installer.yml --ref "refs/tags/${TAG}" -f dry_run=false
             gh workflow run release.yml   --ref "refs/tags/${TAG}" -f dry_run=false
-            echo "Dispatched — installer and release workflows are now queued."
+            echo "Dispatched - installer and release workflows are now queued."
           fi

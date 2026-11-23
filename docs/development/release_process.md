@@ -80,7 +80,9 @@ workflows cleanly:
 2. `installer.yml` builds and smoke-tests all four standalone installers
    (`Synaptipy-<ver>-x86_64.AppImage`, `Synaptipy_Setup_<ver>.exe`,
    `Synaptipy_<ver>_macOS_arm64.dmg`, and `Synaptipy_<ver>_macOS_x86_64.dmg`).
-3. `release.yml` runs tests, strict Sphinx docs + `linkcheck`, builds the wheel
+3. `release.yml` verifies that `test.yml` succeeded on the tagged commit SHA
+   (running its own fallback 3x3 test matrix only when no `test.yml` run exists
+   for that commit), runs strict Sphinx docs + `linkcheck`, builds the wheel
    and sdist (including offline Help artefacts), publishes to TestPyPI and
    verifies clean installation before publishing to PyPI via OIDC Trusted
    Publisher, waits for `installer.yml` to finish, and attaches all four

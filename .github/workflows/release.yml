@@ -13,14 +13,79 @@ on:
         type: boolean
         default: true
 
-# Top-level permissions are intentionally minimal.  Each job that needs
+# Top-level permissions are intentionally minimal. Each job that needs
 # elevated access declares its own permissions block.
 permissions: {}
 
 jobs:
-  # ── 1. Run the full test suite ────────────────────────────────────────────────
+  # ── 1a. Reuse validated Synaptipy CI run on this commit when available ───────
+  verify-ci:
+    name: Verify Synaptipy CI status
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: read
+    outputs:
+      run_fallback_tests: ${{ steps.ci_check.outputs.run_fallback_tests }}
+    steps:
+      - name: Check test.yml status for tagged commit
+        id: ci_check
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+            // Poll up to 40 minutes when test.yml was triggered simultaneously
+            // (e.g. `git push origin main && git push origin vX.Y.Z`). When
+            // dispatched by auto-tag, test.yml is already completed so this
+            // finishes on iteration 0 in ~2 seconds. If no test.yml run exists
+            // for this SHA after 2 checks (manual tag on unpushed branch), fall
+            // back to running the full 3x3 test matrix inside release.yml.
+            for (let i = 0; i < 160; i++) {
+              const runs = await github.rest.actions.listWorkflowRuns({
+                owner,
+                repo,
+                workflow_id: 'test.yml',
+                head_sha: context.sha,
+                per_page: 20,
+              });
+
+              const latest = runs.data.workflow_runs[0];
+              if (!latest) {
+                if (i >= 1) {
+                  core.info(`No test.yml run found for ${context.sha}; enabling fallback 3x3 test matrix.`);
+                  core.setOutput('run_fallback_tests', 'true');
+                  return;
+                }
+                core.info(`Waiting 15s to check if test.yml queues for ${context.sha}...`);
+                await sleep(15000);
+                continue;
+              }
+
+              if (latest.status === 'completed') {
+                if (latest.conclusion === 'success') {
+                  core.info(`Verified green test.yml run ${latest.id} for ${context.sha}; skipping duplicate matrix.`);
+                  core.setOutput('run_fallback_tests', 'false');
+                  return;
+                }
+                core.setFailed(
+                  `test.yml run ${latest.id} for ${context.sha} finished with non-success conclusion: ${latest.conclusion}`
+                );
+                return;
+              }
+
+              core.info(`test.yml run ${latest.id} is ${latest.status} (poll ${i + 1}/160); waiting 15s...`);
+              await sleep(15000);
+            }
+
+            core.setFailed(`Timed out waiting for test.yml run on ${context.sha}.`);
+
+  # ── 1b. Fallback 3x3 test suite (only if test.yml did not run on this SHA) ──
   test:
     name: Test (${{ matrix.os }} / py${{ matrix.python-version }})
+    needs: verify-ci
+    if: needs.verify-ci.outputs.run_fallback_tests == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     permissions:
@@ -41,8 +106,12 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
-          cache: 'pip'
-          cache-dependency-path: |
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
             requirements.txt
             pyproject.toml
 
@@ -56,23 +125,24 @@ jobs:
 
       - name: Install package + test deps
         run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]" -r requirements.txt
+          PY_EXE="$(python -c 'import sys; print(sys.executable)')"
+          uv pip install --system --python "$PY_EXE" -r requirements.txt
+          uv pip install --system --python "$PY_EXE" -e ".[dev]"
 
       - name: Lint (syntax errors / undefined names)
         run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 
       - name: Run tests
-        env:
-          QT_QPA_PLATFORM: offscreen
         run: |
+          python -m pytest -n auto --no-cov -q --tb=short tests/core/ --ignore=tests/core/test_error_handler.py
+          NON_CORE_TARGETS="tests/application tests/gui tests/infrastructure tests/shared tests/tooling tests/core/test_error_handler.py"
           if [ "$RUNNER_OS" == "Linux" ]; then
-            xvfb-run python -m pytest --cov=src/synaptipy --cov-report=xml
+            QT_QPA_PLATFORM=offscreen xvfb-run python -m pytest -p faulthandler --no-cov -q --tb=short $NON_CORE_TARGETS
           else
-            python -m pytest --cov=src/synaptipy --cov-report=xml
+            QT_QPA_PLATFORM=offscreen python -m pytest -p faulthandler --no-cov -q --tb=short $NON_CORE_TARGETS
           fi
 
-  # ── 1b. Build docs + linkcheck (must pass before release) ───────────────────
+  # ── 1c. Build docs + linkcheck (must pass before release) ───────────────────
   docs:
     name: Docs (Sphinx HTML + linkcheck)
     runs-on: ubuntu-latest
@@ -87,15 +157,19 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-          cache: 'pip'
-          cache-dependency-path: |
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
             requirements.txt
             pyproject.toml
 
       - name: Install docs dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[docs]"
+          PY_EXE="$(python -c 'import sys; print(sys.executable)')"
+          uv pip install --system --python "$PY_EXE" -e ".[docs]"
 
       - name: Reject internal material in published documentation
         run: python scripts/check_published_docs.py
@@ -109,7 +183,12 @@ jobs:
   # ── 2. Build wheel + sdist ────────────────────────────────────────────────────
   build:
     name: Build distribution
-    needs: [test, docs]
+    needs: [verify-ci, test, docs]
+    if: >-
+      always() &&
+      needs.verify-ci.result == 'success' &&
+      (needs.test.result == 'success' || needs.test.result == 'skipped') &&
+      needs.docs.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -122,8 +201,12 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-          cache: 'pip'
-          cache-dependency-path: |
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
             requirements.txt
             pyproject.toml
 
@@ -133,7 +216,10 @@ jobs:
           sudo apt-get install -y libegl1 libxkbcommon-x11-0 libxcb-cursor0 qt6-tools-dev-tools
 
       - name: Install build tools and docs dependencies
-        run: python -m pip install --upgrade pip build twine -e ".[docs]"
+        run: |
+          PY_EXE="$(python -c 'import sys; print(sys.executable)')"
+          uv pip install --system --python "$PY_EXE" build twine
+          uv pip install --system --python "$PY_EXE" -e ".[docs]"
 
       - name: Build offline Help artefacts (QtHelp + HTML fallback for pip-wheel users)
         env:
@@ -154,13 +240,6 @@ jobs:
           retention-days: 7
 
   # ── 3. Publish to TestPyPI (OIDC Trusted Publisher) ──────────────────────────
-  # Skipped on workflow_dispatch: GITHUB_REF_NAME is not a semver tag during
-  # manual runs, which would cause the smoke-test install to request a
-  # non-existent version from TestPyPI.
-  # continue-on-error: true  → if the Trusted Publisher environment is not yet
-  # configured on test.pypi.org the job fails gracefully; the dependent
-  # smoke-test and pypi-publish jobs gate on its actual result so they skip
-  # cleanly, and the release job still runs because pypi-publish is 'skipped'.
   testpypi-publish:
     name: Publish to TestPyPI
     needs: build
@@ -188,16 +267,11 @@ jobs:
           skip-existing: true
 
   # ── 4. Smoke-test the TestPyPI install ───────────────────────────────────────
-  # Blocking gate: verifies the package can be installed and imported before
-  # the official PyPI publish job is allowed to proceed.
   smoke_test_testpypi:
     name: Smoke test from TestPyPI
     needs: testpypi-publish
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Only run when testpypi-publish actually succeeded (result is 'success').
-    # If testpypi-publish was skipped or failed, skip the smoke test too so
-    # the pypi-publish job falls through to its own if-guard correctly.
     if: >
       (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.dry_run == false || github.event.inputs.dry_run == 'false'))) &&
       needs.testpypi-publish.result == 'success'
@@ -210,17 +284,12 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Read app version
-        run: |
-          APP_VERSION=$(grep -E '^version = ' pyproject.toml | cut -d'"' -f2)
-          echo "APP_VERSION=${APP_VERSION}" >> "$GITHUB_ENV"
-
       - name: Install from TestPyPI and verify import
         run: |
           APP_VERSION=$(grep -E '^version = ' pyproject.toml | cut -d'"' -f2)
           echo "APP_VERSION=${APP_VERSION}" >> "$GITHUB_ENV"
           python -m pip install --upgrade pip
-          
+
           echo "Waiting for TestPyPI simple index CDN to update..."
           MAX_RETRIES=10
           RETRY_DELAY=30
@@ -238,10 +307,6 @@ jobs:
           exit 1
 
   # ── 5. Publish to official PyPI (OIDC Trusted Publisher) ─────────────────────
-  # Only publish after the artifact was successfully installed from TestPyPI.
-  # If the TestPyPI Trusted Publisher is unavailable, both this job and the
-  # PyPI upload are skipped.  The GitHub Release job can still publish the
-  # already-validated binary artifacts and dist files for maintainer review.
   pypi-publish:
     name: Publish to PyPI
     needs: smoke_test_testpypi
@@ -265,19 +330,13 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        # No username/password -- authentication via OIDC Trusted Publisher
 
   # ── 6. Create GitHub Release ──────────────────────────────────────────────────
-  # On real tag pushes: creates/updates the GitHub Release with wheel + sdist.
-  # On workflow_dispatch (dry_run=true): uploads dist as a standard run
-  # artifact so the pipeline can be fully rehearsed without any public action.
   release:
     name: Create GitHub Release
     needs: [build, pypi-publish]
     runs-on: ubuntu-latest
     timeout-minutes: 75
-    # Run when build succeeded regardless of whether pypi-publish was skipped
-    # (dry_run / workflow_dispatch path) or succeeded (real release path).
     if: >-
       always() &&
       needs.build.result == 'success' &&
@@ -385,7 +444,6 @@ jobs:
 
       - name: Determine pre-release flag
         id: pre
-        # Tags containing a/b/rc (e.g. v0.1.0b1) are marked as pre-release
         run: |
           TAG="${GITHUB_REF_NAME}"
           if echo "$TAG" | grep -qE '[ab]|rc'; then
@@ -399,19 +457,11 @@ jobs:
       - name: Extract CHANGELOG section for this release
         id: changelog
         run: |
-          # When triggered by a tag push, GITHUB_REF_NAME is the semver string
-          # (e.g. "v0.1.3b6").  When triggered via workflow_dispatch from a
-          # branch, GITHUB_REF_NAME is the branch name (may contain "/") and
-          # is not a valid version; fall back to the version in pyproject.toml.
           if echo "${GITHUB_REF_NAME}" | grep -qE '^v?[0-9]+\.[0-9]+'; then
             TAG="${GITHUB_REF_NAME#v}"
           else
             TAG=$(grep -E '^version = ' pyproject.toml | cut -d'"' -f2)
           fi
-          # Grab everything between this version header and the next one.
-          # Use awk -v to pass TAG so special characters (e.g. "/") in the
-          # variable do not break the regex delimiter.  index() performs a
-          # plain string match rather than a regex match.
           NOTES=$(awk -v tag="## [$TAG]" \
             'index($0, tag)==1{found=1; next} found && /^## \[/{exit} found{print}' \
             CHANGELOG.md 2>/dev/null || echo "See CHANGELOG.md for details.")
@@ -420,12 +470,6 @@ jobs:
           echo "notes_file=release_notes.md" >> "$GITHUB_OUTPUT"
 
       - name: Create or update GitHub Release
-        # softprops/action-gh-release@v3 creates the release if it does not exist
-        # and updates (appends files to) the release if it was already created by
-        # the installer.yml workflow running in parallel.  The old
-        # "gh release delete + recreate" pattern was destructive: it wiped any
-        # .exe / .dmg binaries that installer.yml had already attached, because
-        # both workflows fire in parallel on the same tag push.
         if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.dry_run == false || github.event.inputs.dry_run == 'false'))
         uses: softprops/action-gh-release@v3
         with:
@@ -438,16 +482,11 @@ jobs:
             installer-artifacts/**/*.AppImage
             installer-artifacts/**/*.exe
             installer-artifacts/**/*.dmg
-          # Never overwrite files already uploaded by installer.yml
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: "Dry-run: upload dist as run artifact"
-        # On workflow_dispatch the dist wheel/sdist are surfaced as run
-        # artifacts (the 'dist' artifact from the build job is also available).
-        # This step provides a second copy with a distinct name so it is easy
-        # to find in the Actions run summary.
         if: github.event_name == 'workflow_dispatch' && !(inputs.dry_run == false || github.event.inputs.dry_run == 'false')
         uses: actions/upload-artifact@v4
         with:

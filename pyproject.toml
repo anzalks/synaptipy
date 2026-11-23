@@ -79,6 +79,7 @@ dev = [
     "pytest-mock",
     "pytest-cov",
     "pytest-timeout>=2.3.1",
+    "pytest-xdist>=3.5.0",
     "nbval",
     "flake8",
     "black~=26.1",

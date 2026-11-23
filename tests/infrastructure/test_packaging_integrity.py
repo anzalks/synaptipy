@@ -165,12 +165,19 @@ class TestPackagingConfigurations:
         assert '"CFBundleDocumentTypes"' in spec
         for required_token in (
             '"PySide6.QtHelp"',
+            '"scipy"',
             '"pyabf"',
             '"jsonschema_specifications"',
             '"tzdata"',
             '"ruamel"',
             '"abf"',
             '"nwb"',
+            "excludes=_EXCLUDED_MODULES",
+            '"pytest"',
+            '"sphinx"',
+            '"black"',
+            '"tkinter"',
+            '".tests." not in mod',
         ):
             assert required_token in spec
 
@@ -181,6 +188,7 @@ class TestPackagingConfigurations:
         assert "ArchitecturesAllowed=x64compatible" in iss
         assert "ArchitecturesInstallIn64BitMode=x64compatible" in iss
         assert "CloseApplications=yes" in iss
+        assert "CompressionThreads=auto" in iss
         assert "[InstallDelete]" in iss
         assert r'Name: "{app}\_internal"' in iss
 
@@ -229,6 +237,33 @@ class TestPackagingConfigurations:
 
         # Auto-tag creates annotated tags matching scripts/bump_version.py
         assert 'git tag -a "${TAG}"' in test_yml
+
+        # CI speedups preserve standard pip wheel/TestPyPI smoke tests and safety gates
+        assert "astral-sh/setup-uv@v7" in test_yml
+        assert "astral-sh/setup-uv@v7" in installer_yml
+        assert "astral-sh/setup-uv@v7" in release_yml
+        assert "concurrency:" in test_yml
+        assert "pytest -n auto --no-cov" in test_yml
+        assert "/tmp/synaptipy-wheel-test/bin/python -m pip install dist/*.whl" in test_yml
+        assert "Finder AppleScript styling timed out" not in installer_yml
+        assert '-processors "$(nproc)"' in installer_yml
+        assert "verify-ci:" in release_yml
+        assert "workflow_id: 'test.yml'" in release_yml
+        assert 'python -m pip install --pre --no-cache-dir "synaptipy==$APP_VERSION"' in release_yml
+        assert "--no-build-isolation" not in test_yml
+        assert "--no-build-isolation" not in installer_yml
+        assert "--no-build-isolation" not in release_yml
+
+        # Every non-core test directory under tests/ must be covered by NON_CORE_TARGETS
+        ignored_dirs = {"core", "data", "__pycache__"}
+        for child in (PROJECT_ROOT / "tests").iterdir():
+            if child.is_dir() and not child.name.startswith(".") and child.name not in ignored_dirs:
+                target_rel = f"tests/{child.name}"
+                assert target_rel in test_yml, f"{target_rel} missing from NON_CORE_TARGETS in test.yml"
+                assert target_rel in release_yml, f"{target_rel} missing from NON_CORE_TARGETS in release.yml"
+            elif child.is_file() and child.name.startswith("test_") and child.suffix == ".py":
+                target_rel = f"tests/{child.name}"
+                assert target_rel in test_yml, f"{target_rel} missing from NON_CORE_TARGETS in test.yml"
 
     def test_qhelpgenerator_probe_rejects_broken_binary_and_accepts_working_binary(self, tmp_path):
         from importlib.util import module_from_spec, spec_from_file_location
