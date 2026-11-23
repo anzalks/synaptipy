@@ -83,8 +83,9 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         # --- Draggable threshold line ---
         self._threshold_line: Optional[pg.InfiniteLine] = None
 
-        # --- Result h-lines ---
+        # --- Result h-lines & dynamic overlays ---
         self._result_hlines: Dict[str, pg.InfiniteLine] = {}
+        self._dynamic_plot_items: List[Any] = []
 
         # --- Popup plot handles (keyed per sub-method + plot title) ---
         self._popup_plot: Optional[pg.PlotItem] = None
@@ -604,7 +605,10 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 def _on_threshold_dragged(pk=param_key):
                     if self._threshold_line is None:
                         return
-                    val = self._threshold_line.value()
+                    val = float(self._threshold_line.value())
+                    base_med = getattr(self._threshold_line, "_synaptipy_baseline_median", None)
+                    if base_med is not None and np.isfinite(float(base_med)):
+                        val = abs(val - float(base_med))
                     if hasattr(self, "param_generator") and pk in self.param_generator.widgets:
                         w = self.param_generator.widgets[pk]
                         blocked = w.blockSignals(True)
@@ -2017,14 +2021,18 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 self.plot_widget.addItem(item)
                 self._dynamic_plot_items.append(item)
                 if self._current_plot_data:
-                    tv = self._current_plot_data["time"]
-                    vv = self._current_plot_data["data"]
-                    si = np.clip(np.searchsorted(tv, burst_spikes), 0, len(vv) - 1)
-                    s_pen, s_brush = get_scatter_pen_and_brush()
-                    scatter = pg.ScatterPlotItem(x=burst_spikes, y=vv[si], size=8, pen=s_pen, brush=s_brush)
-                    scatter._synaptipy_role = "scatter_markers"
-                    self.plot_widget.addItem(scatter)
-                    self._dynamic_plot_items.append(scatter)
+                    tv = np.asarray(self._current_plot_data["time"], dtype=float)
+                    vv = np.asarray(self._current_plot_data["data"], dtype=float)
+                    if len(tv) > 0 and len(vv) == len(tv):
+                        bs_arr = np.asarray(burst_spikes, dtype=float)
+                        si = np.clip(np.searchsorted(tv, bs_arr, side="left"), 0, len(tv) - 1)
+                        prev = np.clip(si - 1, 0, len(tv) - 1)
+                        si = np.where(np.abs(tv[prev] - bs_arr) < np.abs(tv[si] - bs_arr), prev, si)
+                        s_pen, s_brush = get_scatter_pen_and_brush()
+                        scatter = pg.ScatterPlotItem(x=tv[si], y=vv[si], size=8, pen=s_pen, brush=s_brush)
+                        scatter._synaptipy_role = "scatter_markers"
+                        self.plot_widget.addItem(scatter)
+                        self._dynamic_plot_items.append(scatter)
 
     def _viz_vlines(self, cfg, result):
         data_key = cfg.get("data")
@@ -2215,9 +2223,20 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
     def _viz_threshold_line(self, cfg, result):
         """Update threshold line position from result."""
-        threshold_val = self._val(result, "threshold") or self._val(result, "threshold_value")
-        if threshold_val is not None and self._threshold_line:
-            self._threshold_line.setValue(threshold_val)
+        plot_level = self._val(result, "_plot_threshold_level")
+        base_med = self._val(result, "_baseline_median")
+        if plot_level is not None and np.isfinite(float(plot_level)) and self._threshold_line:
+            self._threshold_line._synaptipy_baseline_median = float(base_med) if base_med is not None else None
+            self._threshold_line.setValue(float(plot_level))
+            self._threshold_line.setVisible(True)
+            return
+
+        threshold_val = self._val(result, "threshold")
+        if threshold_val is None:
+            threshold_val = self._val(result, "threshold_value")
+        if threshold_val is not None and np.isfinite(float(threshold_val)) and self._threshold_line:
+            self._threshold_line._synaptipy_baseline_median = None
+            self._threshold_line.setValue(float(threshold_val))
             self._threshold_line.setVisible(True)
         elif self._threshold_line:
             self._threshold_line.setVisible(False)
@@ -2294,6 +2313,8 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         tau = self._val(result, tau_key) if tau_key else None
         if tau is None and cfg.get("role") != "secondary_fit":
             tau = self._val(result, "tau_ms")
+            if tau is None:
+                tau = self._val(result, "tau_fast_ms")
             if tau is None:
                 tau = self._val(result, "tau")
         if tau is not None and np.isfinite(float(tau)):
@@ -2732,7 +2753,11 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
         threshold_v = self._val(result, "threshold_v")
         threshold_dvdt = self._val(result, "threshold_dvdt")
-        if (
+        tm_v = self._val(result, "_thresh_marker_v")
+        tm_dvdt = self._val(result, "_thresh_marker_dvdt")
+        if tm_v is not None and tm_dvdt is not None and len(tm_v) > 0 and len(tm_v) == len(tm_dvdt):
+            curves["thresh_marker"].setData(np.asarray(tm_v, dtype=float), np.asarray(tm_dvdt, dtype=float))
+        elif (
             threshold_v is not None
             and threshold_dvdt is not None
             and np.isfinite(float(threshold_v))
@@ -2743,7 +2768,11 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             curves["thresh_marker"].setData([], [])
 
         max_dvdt = self._val(result, "max_dvdt")
-        if max_dvdt is not None and np.isfinite(float(max_dvdt)) and len(dvdt) > 0:
+        mm_v = self._val(result, "_max_dvdt_marker_v")
+        mm_dvdt = self._val(result, "_max_dvdt_marker_dvdt")
+        if mm_v is not None and mm_dvdt is not None and len(mm_v) > 0 and len(mm_v) == len(mm_dvdt):
+            curves["max_marker"].setData(np.asarray(mm_v, dtype=float), np.asarray(mm_dvdt, dtype=float))
+        elif max_dvdt is not None and np.isfinite(float(max_dvdt)) and len(dvdt) > 0:
             idx = int(np.nanargmax(dvdt))
             if idx < len(voltage):
                 curves["max_marker"].setData([float(voltage[idx])], [float(dvdt[idx])])

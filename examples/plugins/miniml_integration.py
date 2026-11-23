@@ -139,19 +139,25 @@ def _locate_event_peaks(
     window_size: int,
     sampling_interval: float,
     time_start: float,
+    time: Optional[np.ndarray] = None,
 ):
     """Map validated onset indices to amplitude-peak times and data values."""
     valid_locs = ev_locs[valid_mask]
     if valid_locs.size == 0:
         return [], []
-    half_win = max(1, window_size // 2)
+    max_search = max(5, int(0.015 / sampling_interval)) if sampling_interval > 0 else max(1, window_size // 2)
+    half_win = min(max(1, window_size // 2), max_search)
     find_extremum = np.argmin if direction == "negative" else np.argmax
     peak_indices = np.empty(len(valid_locs), dtype=np.int64)
     for k, onset in enumerate(valid_locs):
-        end_idx = min(int(onset) + half_win, len(data))
+        next_onset = int(valid_locs[k + 1]) if k + 1 < len(valid_locs) else len(data)
+        end_idx = min(int(onset) + half_win, max(int(onset) + 1, next_onset), len(data))
         seg = data[int(onset) : end_idx]
         peak_indices[k] = onset + find_extremum(seg) if len(seg) > 0 else onset
-    ev_times = (peak_indices * sampling_interval + time_start).tolist()
+    if time is not None and len(time) == len(data):
+        ev_times = np.asarray(time, dtype=float)[peak_indices].tolist()
+    else:
+        ev_times = (peak_indices * sampling_interval + time_start).tolist()
     ev_peaks = data[peak_indices].tolist()
     return ev_times, ev_peaks
 
@@ -307,7 +313,7 @@ def run_miniml_detection(
     ev_locs = np.asarray(detector.event_locations, dtype=np.int64)
     valid_mask = (ev_locs >= 0) & (ev_locs < len(data))
     ev_times, ev_peaks = _locate_event_peaks(
-        data, ev_locs, valid_mask, direction, window_size, sampling_interval, time[0]
+        data, ev_locs, valid_mask, direction, window_size, sampling_interval, time[0], time=time
     )
 
     duration = float(time[-1] - time[0]) if len(time) > 1 else 0.0

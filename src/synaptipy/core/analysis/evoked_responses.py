@@ -278,7 +278,7 @@ def _peak_pos_s(
     i1 = min(int(np.searchsorted(time, onset_s + win_s)) + 1, len(data))
     if i1 <= i0:
         fallback = min(int(np.searchsorted(time, onset_s)), len(data) - 1)
-        return onset_s, float(data[fallback])
+        return float(time[fallback]), float(data[fallback])
     seg = data[i0:i1]
     off = int(np.argmin(seg) if polarity == "negative" else np.argmax(seg))
     return float(time[i0 + off]), float(seg[off])
@@ -660,7 +660,8 @@ def calculate_n_pulse_ratio(  # noqa: C901
         i0 = _nearest_idx(onset_s + blank_s)
         i1 = min(_nearest_idx(end_s) + 1, len(data))
         if i1 <= i0:
-            return 0.0, onset_s
+            fb_idx = max(0, min(_nearest_idx(onset_s), len(data) - 1))
+            return float(data[fb_idx]), float(time[fb_idx])
         seg = data[i0:i1]
         # Search on the residual-subtracted waveform so steep prior decay tails
         # do not shift peak detection onto the stimulus onset boundary.

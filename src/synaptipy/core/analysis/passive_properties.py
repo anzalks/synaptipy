@@ -2341,6 +2341,7 @@ def run_tau_analysis_wrapper(data: np.ndarray, time: np.ndarray, sampling_rate: 
                         "amplitude_fast": result["amplitude_fast"],
                         "amplitude_slow": result["amplitude_slow"],
                         "tau_model": model,
+                        "tau_decay_after_stimulus_ms": tau_decay_ms,
                         "parameters": params,
                         "_fit_time": result.get("_fit_time", []),
                         "_fit_values": result.get("_fit_values", []),

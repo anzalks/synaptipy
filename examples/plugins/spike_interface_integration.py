@@ -147,7 +147,10 @@ def detect_spikes_spikeinterface(
 
     t0 = float(time[0]) if time is not None and len(time) > 0 else 0.0
     sample_indices = [int(i) for i in peaks["sample_index"] if 0 <= int(i) < len(data)]
-    spike_times_s: List[float] = [float(i) / float(sampling_rate) + t0 for i in sample_indices]
+    if time is not None and len(time) == len(data):
+        spike_times_s: List[float] = [float(time[i]) for i in sample_indices]
+    else:
+        spike_times_s = [float(i) / float(sampling_rate) + t0 for i in sample_indices]
     spike_trace_y: List[float] = [float(data[i]) for i in sample_indices]
     spike_filtered_amplitudes: List[float] = [float(filt_traces[i]) for i in sample_indices if i < len(filt_traces)]
     spike_count = len(spike_times_s)

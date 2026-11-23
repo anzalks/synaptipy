@@ -680,19 +680,20 @@ def detect_events_threshold(  # noqa: C901
             n_artifacts_rejected = int(np.sum(~not_artifact_mask))
             peaks = peaks[not_artifact_mask]
 
-        # Refine each detected peak to the true raw-data maximum nearby.
-        # find_peaks runs on baseline-corrected work_data; the rolling-median baseline
-        # can shift the apparent peak by several milliseconds for slow events.  Searching
-        # in the polarity-adjusted raw data within a window of ±refractory/2 (clamped to
-        # at least 10 samples) ensures the marker lands on the actual signal peak.
+        # Refine each detected peak to the true raw-data extremum in a tight local
+        # +/-1 ms peak-tip neighborhood (bounded halfway to neighboring events) so
+        # rolling-median plateau jitter is corrected without drifting along slow
+        # baseline slopes over wide refractory windows.
         if len(peaks) > 0:
-            _refine_r = max(10, distance_samples // 2)
+            _refine_r = min(max(3, int(0.001 * fs)), max(1, distance_samples // 2))
             _search = data if not is_negative else -data
             _corr = np.empty_like(peaks)
             for _i, _pk in enumerate(peaks):
-                _ws = max(0, _pk - _refine_r)
-                _we = min(len(data), _pk + _refine_r + 1)
-                _corr[_i] = _ws + int(np.argmax(_search[_ws:_we]))
+                _left_lim = (int(peaks[_i - 1]) + int(_pk)) // 2 + 1 if _i > 0 else 0
+                _right_lim = (int(_pk) + int(peaks[_i + 1])) // 2 + 1 if _i + 1 < len(peaks) else len(data)
+                _ws = max(_left_lim, max(0, int(_pk) - _refine_r))
+                _we = min(_right_lim, min(len(data), int(_pk) + _refine_r + 1))
+                _corr[_i] = int(_pk) if _we <= _ws else (_ws + int(np.argmax(_search[_ws:_we])))
             peaks = np.unique(_corr)
             if artifact_mask is not None and len(peaks) > 0:
                 valid_post = peaks < len(artifact_mask)
@@ -899,8 +900,11 @@ def run_event_detection_threshold_wrapper(  # noqa: C901
     event_fit_values: List[List[float]] = []
 
     if compute_kinetics:
+        fit_baselines = compute_local_pre_event_baseline(
+            data, _idx, sampling_rate, polarity=direction, baseline_method="pre_onset_mean"
+        )
         for k, idx in enumerate(_idx):
-            lb = float(local_baselines[k]) if k < len(local_baselines) else float(np.mean(data))
+            lb = float(fit_baselines[k]) if k < len(fit_baselines) else float(np.median(data))
             kin = fit_biexponential_decay(data, idx, sampling_rate, lb, polarity=direction)
             if kin["tau_mono_ms"] is not None:
                 tau_mono_list.append(kin["tau_mono_ms"])
@@ -915,6 +919,10 @@ def run_event_detection_threshold_wrapper(  # noqa: C901
     mean_tau_fast = float(np.mean(tau_fast_list)) if tau_fast_list else float("nan")
     mean_tau_slow = float(np.mean(tau_slow_list)) if tau_slow_list else float("nan")
 
+    baseline_median = float(np.median(data)) if len(data) > 0 else 0.0
+    abs_thr = abs(float(threshold))
+    plot_thr_level = (baseline_median - abs_thr) if direction == "negative" else (baseline_median + abs_thr)
+
     return {
         "module_used": "synaptic_events",
         "metrics": {
@@ -927,6 +935,8 @@ def run_event_detection_threshold_wrapper(  # noqa: C901
             "tau_mono_ms": mean_tau_mono,
             "tau_fast_ms": mean_tau_fast,
             "tau_slow_ms": mean_tau_slow,
+            "_baseline_median": baseline_median,
+            "_plot_threshold_level": plot_thr_level,
             "_event_charges": event_charges,
             "_event_times": time[_idx].tolist() if len(_idx) > 0 else [],
             "_event_peaks": data[_idx].tolist() if len(_idx) > 0 else [],
@@ -1157,6 +1167,26 @@ def detect_events_template(  # noqa: C901
         return EventDetectionResult(value=0, unit="Hz", is_valid=False, error_message=str(e))
 
 
+def _snap_filtered_peaks_to_raw(
+    data: np.ndarray,
+    detection_data: np.ndarray,
+    indices: np.ndarray,
+    direction: str,
+    sampling_rate: float,
+) -> np.ndarray:
+    """Snap peak indices found on a pre-filtered trace to local extrema of raw *data*."""
+    if detection_data is data or len(indices) == 0:
+        return indices
+    raw_search = -data if direction == "negative" else data
+    r_tip = max(2, int(0.0005 * sampling_rate)) if sampling_rate > 0 else 2
+    snapped = np.empty_like(indices)
+    for k, pi in enumerate(indices):
+        lo = max(0, int(pi) - r_tip)
+        hi = min(len(data), int(pi) + r_tip + 1)
+        snapped[k] = lo + int(np.argmax(raw_search[lo:hi])) if hi > lo else int(pi)
+    return np.unique(snapped)
+
+
 @AnalysisRegistry.register(
     "event_detection_deconvolution",
     label="Event (Template)",
@@ -1341,7 +1371,9 @@ def run_event_detection_template_wrapper(
 
     _idx = np.asarray(result.event_indices if result.event_indices is not None else [], dtype=int)
     if len(_idx) > 0:
-        _idx = _idx[(_idx >= 0) & (_idx < len(data))]
+        _idx = _snap_filtered_peaks_to_raw(
+            data, detection_data, _idx[(_idx >= 0) & (_idx < len(data))], direction, sampling_rate
+        )
 
     # Compute local pre-event baseline for each event (handles summating events).
     local_baselines = compute_local_pre_event_baseline(data, _idx, sampling_rate, polarity=direction)
