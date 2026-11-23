@@ -23,7 +23,8 @@ def test_manual_trigger_shows_popup(tab, monkeypatch):
     # Mock data to be None
     tab._current_plot_data = None
 
-    # Mock QMessageBox
+    # Materialize Shiboken lazy tp_dict entry before monkeypatch inspects __dict__ (pytest >= 9.2)
+    _ = getattr(QtWidgets.QMessageBox, "warning")
     mock_warning = MagicMock()
     monkeypatch.setattr(QtWidgets.QMessageBox, "warning", mock_warning)
 
@@ -40,7 +41,8 @@ def test_timer_trigger_suppresses_popup(tab, monkeypatch, qtbot):
     # Mock data to be None
     tab._current_plot_data = None
 
-    # Mock QMessageBox
+    # Materialize Shiboken lazy tp_dict entry before monkeypatch inspects __dict__ (pytest >= 9.2)
+    _ = getattr(QtWidgets.QMessageBox, "warning")
     mock_warning = MagicMock()
     monkeypatch.setattr(QtWidgets.QMessageBox, "warning", mock_warning)
 

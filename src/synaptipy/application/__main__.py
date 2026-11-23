@@ -456,6 +456,22 @@ def _start_welcome_flow(app: QtWidgets.QApplication, smoke_test: bool = False):
     return startup_manager
 
 
+def _terminate_offscreen_smoke_process(exit_code: int) -> None:
+    """Bypass Qt/pyqtgraph C++ destructor teardown in offscreen smoke-test mode."""
+    import logging
+
+    logging.shutdown()
+    if sys.platform == "win32":
+        import ctypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.TerminateProcess.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+        kernel32.TerminateProcess.restype = ctypes.c_bool
+        kernel32.TerminateProcess(ctypes.c_void_p(-1), int(exit_code))
+    else:
+        os._exit(int(exit_code))
+
+
 def run_gui():
     """
     Set up and run the Synaptipy GUI application with welcome screen.
@@ -504,6 +520,8 @@ def run_gui():
     log.debug("Starting Qt event loop...")
     exit_code = app.exec()
     log.debug("Qt event loop finished with exit code %s.", exit_code)
+    if smoke_test and os.environ.get("QT_QPA_PLATFORM") == "offscreen":
+        _terminate_offscreen_smoke_process(exit_code)
     return exit_code
 
 

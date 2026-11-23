@@ -120,6 +120,7 @@ def _drain_qt_events_after_test():
             pass
 
 
+@pytest.hookimpl(trylast=True)
 def pytest_sessionfinish(session, exitstatus):
     """Force-exit after tests to prevent crashes during Python/Qt teardown.
 

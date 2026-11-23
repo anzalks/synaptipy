@@ -18,9 +18,10 @@ with open(_PYPROJECT, encoding="utf-8") as _f:
 _APP_VERSION = _match.group(1) if _match else "0.0.0"
 
 _IS_DARWIN = sys.platform == "darwin"
-# UPX corrupts Mach-O code signatures on macOS (causing amfid SIGKILL after
-# Gatekeeper approval); keep UPX disabled on Darwin.
-_USE_UPX = not _IS_DARWIN
+# UPX corrupts Mach-O code signatures on macOS and PySide6/Qt6 shared-library
+# headers on Windows (0xC0000409) and Linux (SIGABRT 134); Inno Setup (lzma2)
+# and AppImage (mksquashfs) already compress the packaged bundles natively.
+_USE_UPX = False
 # Pin Mach-O slice architecture on macOS so universal2 Python/Qt binaries are
 # thinned to match single-arch scientific wheels (arm64 vs x86_64), preventing
 # silent architecture-mismatch crashes on launch.

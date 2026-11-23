@@ -293,18 +293,31 @@ def test_switching_method_retargets_the_secondary_channel_parameter(evoked_tab):
 
 
 @pytest.fixture
-def no_modal_dialogs(monkeypatch):
-    """Record every modal QMessageBox instead of showing one."""
+def no_modal_dialogs():
+    """Record every modal QMessageBox instead of showing one.
+
+    Uses explicit getattr/setattr restoration rather than ``monkeypatch.setattr``
+    because Shiboken populates ``QMessageBox.__dict__`` lazily on attribute lookup;
+    in pytest >= 9.2, ``monkeypatch.undo()`` deletes attributes that were not in
+    ``__dict__`` prior to patching, removing ``QMessageBox.critical`` for subsequent
+    tests in the session.
+    """
     shown = []
+    names = ("critical", "warning", "information", "question")
+    originals = {name: getattr(QtWidgets.QMessageBox, name) for name in names}
 
-    for name in ("critical", "warning", "information", "question"):
+    try:
+        for name in names:
 
-        def spy(*args, _name=name, **kwargs):
-            shown.append((_name, str(args[2]) if len(args) > 2 else ""))
-            return QtWidgets.QMessageBox.StandardButton.Ok
+            def spy(*args, _name=name, **kwargs):
+                shown.append((_name, str(args[2]) if len(args) > 2 else ""))
+                return QtWidgets.QMessageBox.StandardButton.Ok
 
-        monkeypatch.setattr(QtWidgets.QMessageBox, name, staticmethod(spy))
-    return shown
+            setattr(QtWidgets.QMessageBox, name, staticmethod(spy))
+        yield shown
+    finally:
+        for name, orig in originals.items():
+            setattr(QtWidgets.QMessageBox, name, orig)
 
 
 def test_selecting_the_tab_never_raises_a_modal_error(qtbot, no_modal_dialogs):

@@ -128,8 +128,14 @@ jobs:
           xvfb-run -a dist/synaptipy/synaptipy --version > /tmp/smoke_version.txt 2>&1
           cat /tmp/smoke_version.txt
           rm -f /tmp/synaptipy_smoke_ok.txt
-          SYNAPTIPY_SMOKE_SENTINEL=/tmp/synaptipy_smoke_ok.txt \
-            xvfb-run -a dist/synaptipy/synaptipy --smoke-test > /tmp/smoke_gui.txt 2>&1
+          if ! SYNAPTIPY_SMOKE_SENTINEL=/tmp/synaptipy_smoke_ok.txt \
+            xvfb-run -a dist/synaptipy/synaptipy --smoke-test > /tmp/smoke_gui.txt 2>&1; then
+            echo "=== /tmp/smoke_gui.txt ==="
+            cat /tmp/smoke_gui.txt || true
+            echo "=== ~/.synaptipy/logs ==="
+            cat ~/.synaptipy/logs/boot.log ~/.synaptipy/logs/app.log 2>/dev/null || true
+            exit 1
+          fi
           cat /tmp/smoke_gui.txt
           test -f /tmp/synaptipy_smoke_ok.txt
 
@@ -184,6 +190,13 @@ jobs:
           $env:SYNAPTIPY_SMOKE_SENTINEL = $sentinel
           $proc = Start-Process -FilePath $binaryPath -ArgumentList "--smoke-test" -PassThru -Wait
           if ($proc.ExitCode -ne 0 -or -not (Test-Path $sentinel)) {
+            $logDir = Join-Path $HOME ".synaptipy\logs"
+            if (Test-Path $logDir) {
+              Get-ChildItem -Path $logDir -File | ForEach-Object {
+                Write-Host "=== $($_.FullName) ==="
+                Get-Content $_.FullName | Select-Object -Last 80
+              }
+            }
             Write-Error ("GUI smoke test failed (exit code: {0}, sentinel present: {1})" -f $proc.ExitCode, (Test-Path $sentinel))
             exit 1
           }

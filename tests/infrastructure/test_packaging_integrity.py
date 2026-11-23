@@ -154,7 +154,7 @@ class TestPackagingConfigurations:
         spec = _read("synaptipy.spec")
 
         assert '_IS_DARWIN = sys.platform == "darwin"' in spec
-        assert "_USE_UPX = not _IS_DARWIN" in spec
+        assert "_USE_UPX = False" in spec
         assert "upx=_USE_UPX" in spec
         assert "SYNAPTIPY_TARGET_ARCH" in spec
         assert 'name="Synaptipy.app"' in spec
