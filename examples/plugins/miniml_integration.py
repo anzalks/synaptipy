@@ -372,7 +372,7 @@ def run_miniml_detection(
     name="miniml_events",
     label="miniML Events",
     expects_list=False,
-    supported_channel_units=("pA",),
+    supported_channel_units=("pA", "nA", "mV", "V", "uV"),
     run_button=True,
     ui_params=[
         {
@@ -506,6 +506,20 @@ def run_miniml_events_wrapper(
     ``_event_amplitudes``     Per-event amplitudes list (private, same as peaks)
     ========================  ================================================
     """
+    core_path_str = str(kwargs.get("miniml_core_path", "") or "").strip()
+    model_path_str = str(kwargs.get("model_path", "") or "").strip()
+    if not core_path_str or not model_path_str:
+        from synaptipy.application.gui.analysis_tabs.base import AnalysisNotConfigured
+
+        missing_parts = []
+        if not core_path_str:
+            missing_parts.append("'miniML core/ Path'")
+        if not model_path_str:
+            missing_parts.append("'Model Path (.h5)'")
+        raise AnalysisNotConfigured(
+            f"miniML Events needs {' and '.join(missing_parts)} configured on the left before running."
+        )
+
     return run_miniml_detection(
         data=data,
         time=time,
@@ -513,8 +527,8 @@ def run_miniml_events_wrapper(
         threshold=kwargs.get("threshold", 0.5),
         direction=kwargs.get("direction", "negative"),
         batch_size=kwargs.get("batch_size", 512),
-        model_path=kwargs.get("model_path", ""),
-        miniml_core_path=kwargs.get("miniml_core_path", ""),
+        model_path=model_path_str,
+        miniml_core_path=core_path_str,
         window_size=kwargs.get("window_size", 600),
         rel_prom_cutoff=kwargs.get("rel_prom_cutoff", 0.25),
         convolve_win=kwargs.get("convolve_win", 20),

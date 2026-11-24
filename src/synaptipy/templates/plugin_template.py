@@ -19,7 +19,6 @@ No core Synaptipy files need to be modified.
 FULL EXAMPLES
 -------------
 - ``examples/plugins/opto_jitter.py``                 - optogenetic latency jitter
-- ``examples/plugins/ap_repolarization.py``           - max AP repolarization rate
 - ``examples/plugins/synaptic_charge.py``             - postsynaptic charge transfer
 - ``examples/plugins/miniml_integration.py``          - miniML deep-learning events
 - ``examples/plugins/spike_interface_integration.py`` - SpikeInterface sorting wrapper

@@ -832,8 +832,7 @@ Plugins...**. With **Enable Custom Plugins** active they load automatically from
 | Plugin file | Analyser tab label | What it measures |
 |-------------|--------------------|------------------|
 | `synaptic_charge.py` | Synaptic Charge (AUC) | Area under a postsynaptic current trace (total charge in pC); shaded fill + peak star overlay |
-| `opto_jitter.py` | Opto Latency Jitter | Trial-to-trial variability in spike latency after an optogenetic TTL pulse |
-| `ap_repolarization.py` | Max Repolarization Rate | Steepest falling $dV/dt$ rate (V/s) during action potential repolarisation |
+| `opto_jitter.py` | Opto Latency Jitter | Trial-to-trial variability in evoked spike or postsynaptic response latency after TTL pulses |
 | `miniml_integration.py` | miniML Events | Deep-learning miniature event detection via [miniML](https://github.com/delvendahl/miniML); requires optional dependencies (see [Writing Custom Analysis Plugins](extending_synaptipy.md)) |
 | `spike_interface_integration.py` | SpikeInterface Spikes | Spike detection via [SpikeInterface](https://spikeinterface.readthedocs.io/en/stable/); requires `pip install spikeinterface` (see [Writing Custom Analysis Plugins](extending_synaptipy.md)) |
 

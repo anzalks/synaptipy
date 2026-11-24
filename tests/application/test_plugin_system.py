@@ -6,9 +6,9 @@ Test suite for the Synaptipy plugin system integration.
 Validates:
 1. PluginManager.load_plugins() is a no-op when the ``enable_plugins``
    QSettings key is ``False``.
-2. PluginManager.load_plugins() discovers and loads all three example plugins
-   (opto_jitter, ap_repolarization, synaptic_charge) when ``enable_plugins``
-   is ``True``.
+2. PluginManager.load_plugins() discovers and loads bundled example plugins
+   (opto_jitter, synaptic_charge, miniml_events, spike_interface_detection)
+   when ``enable_plugins`` is ``True``.
 3. The wrapper functions registered by each example plugin return the
    required nested ``{"module_used": ..., "metrics": {...}}`` dictionary
    schema without crashing.
@@ -83,30 +83,11 @@ def opto_module():
 
 
 @pytest.fixture
-def ap_module():
-    """Load ap_repolarization example plugin."""
-    path = EXAMPLES_PLUGIN_DIR / "ap_repolarization.py"
-    assert path.exists(), f"ap_repolarization.py not found at {path}"
-    return _load_module(path, "synaptipy_plugin_ap_repolarization")
-
-
-@pytest.fixture
-def synthetic_spike():
-    """
-    1-second synthetic voltage trace with one action potential at t=0.3 s.
-
-    Sampling rate: 10 kHz.  Spike peaks at +40 mV (above -20 mV threshold).
-    Repolarization lobe ensures the gradient minimum is clearly defined.
-    """
-    fs = 10_000.0
-    t = np.arange(0, 1.0, 1.0 / fs)
-    data = np.full_like(t, -65.0)
-    ap_centre, ap_sigma = 0.3, 0.002
-    ap = 105.0 * np.exp(-0.5 * ((t - ap_centre) / ap_sigma) ** 2)
-    repol_centre, repol_sigma = 0.305, 0.003
-    repol = -30.0 * np.exp(-0.5 * ((t - repol_centre) / repol_sigma) ** 2)
-    data = data + ap + repol
-    return data, t, fs
+def miniml_module():
+    """Load miniml_integration example plugin."""
+    path = EXAMPLES_PLUGIN_DIR / "miniml_integration.py"
+    assert path.exists(), f"miniml_integration.py not found at {path}"
+    return _load_module(path, "synaptipy_plugin_miniml_integration")
 
 
 @pytest.fixture
@@ -174,7 +155,7 @@ class TestSettingsGate:
         assert settings.applicationName() == SETTINGS_SECTION
 
     def test_loads_plugins_when_enabled(self):
-        """load_plugins() registers opto_jitter and ap_repolarization when enable_plugins=True."""
+        """load_plugins() registers bundled plugins when enable_plugins=True."""
         from synaptipy.application.plugin_manager import PluginManager
 
         with (
@@ -188,15 +169,11 @@ class TestSettingsGate:
             mock_settings_cls.return_value.value.return_value = True
             PluginManager.load_plugins()
 
-        assert (
-            AnalysisRegistry.get_function("opto_jitter") is not None
-        ), "opto_jitter not registered after load with enable_plugins=True"
-        assert (
-            AnalysisRegistry.get_function("ap_repolarization") is not None
-        ), "ap_repolarization not registered after load with enable_plugins=True"
-        assert (
-            AnalysisRegistry.get_function("synaptic_charge") is not None
-        ), "synaptic_charge not registered after load with enable_plugins=True"
+        for expected_key in ("opto_jitter", "synaptic_charge", "miniml_events", "spike_interface_detection"):
+            assert (
+                AnalysisRegistry.get_function(expected_key) is not None
+            ), f"{expected_key} not registered after load with enable_plugins=True"
+        assert AnalysisRegistry.get_function("ap_repolarization") is None
 
     def test_failed_plugin_rolls_back_partial_registration(self, tmp_path):
         """A plugin that raises after registering must not leave an unsafe analysis visible."""
@@ -345,94 +322,27 @@ class TestOptoJitterSchema:
 
 
 # ---------------------------------------------------------------------------
-# Tests: ap_repolarization schema and correctness
+# Tests: miniml_events units and unconfigured guidance
 # ---------------------------------------------------------------------------
 
 
-class TestApRepolarizationSchema:
-    """Validate the ap_repolarization wrapper return schema."""
+class TestMiniMLPluginUX:
+    """Validate miniML channel unit compatibility and unconfigured setup prompt."""
 
-    def test_returns_nested_schema(self, ap_module, synthetic_spike):
-        """Wrapper must return {module_used, metrics: {Max_Repol_V_s}} on success."""
-        data, t, fs = synthetic_spike
-        fn = AnalysisRegistry.get_function("ap_repolarization")
-        assert fn is not None, "ap_repolarization not in registry after loading module"
+    def test_supports_both_current_and_voltage_channels(self, miniml_module):
+        """miniML must accept both voltage-clamp (pA/nA) and current-clamp (mV/V/uV) channels."""
+        meta = AnalysisRegistry.get_metadata("miniml_events")
+        units = set(meta.get("supported_channel_units", ()))
+        assert {"pA", "nA", "mV", "V", "uV"}.issubset(units)
 
-        result = fn(
-            data,
-            t,
-            fs,
-            window_start=0.0,
-            window_end=1.0,
-            spike_threshold=-20.0,
-        )
+    def test_unconfigured_paths_raise_analysis_not_configured(self, miniml_module):
+        """Missing core/model paths raise AnalysisNotConfigured instead of returning a red error."""
+        from synaptipy.application.gui.analysis_tabs.base import AnalysisNotConfigured
 
-        assert isinstance(result, dict), f"Expected dict, got {type(result)}"
-        assert "error" not in result, f"Unexpected error: {result.get('error')}"
-        assert result.get("module_used") == "ap_repolarization", f"module_used mismatch: {result.get('module_used')}"
-        assert "metrics" in result, "Missing top-level 'metrics' key"
-        assert "Max_Repol_V_s" in result["metrics"], f"Missing 'Max_Repol_V_s' in metrics: {result['metrics']}"
-
-    def test_repol_rate_is_negative(self, ap_module, synthetic_spike):
-        """Max repolarization rate dV/dt must be negative (falling phase)."""
-        data, t, fs = synthetic_spike
-        fn = AnalysisRegistry.get_function("ap_repolarization")
-        result = fn(
-            data,
-            t,
-            fs,
-            window_start=0.0,
-            window_end=1.0,
-            spike_threshold=-20.0,
-        )
-        if "error" not in result:
-            assert result["metrics"]["Max_Repol_V_s"] < 0.0, "Repolarization rate must be negative (falling slope)"
-
-    def test_private_keys_present(self, ap_module, synthetic_spike):
-        """Private _repol_time and _repol_val must be in the result dict."""
-        data, t, fs = synthetic_spike
-        fn = AnalysisRegistry.get_function("ap_repolarization")
-        result = fn(
-            data,
-            t,
-            fs,
-            window_start=0.0,
-            window_end=1.0,
-            spike_threshold=-20.0,
-        )
-        if "error" not in result:
-            assert "_repol_time" in result, "Missing private key '_repol_time'"
-            assert "_repol_val" in result, "Missing private key '_repol_val'"
-
-    def test_empty_data_returns_error(self, ap_module):
-        """Empty array must return an error dict, not raise."""
-        mod = ap_module
-        result = mod.calculate_ap_repolarization(
-            data=np.array([]),
-            time=np.array([]),
-            sampling_rate=10_000.0,
-            window_start=0.0,
-            window_end=1.0,
-            spike_threshold=-20.0,
-        )
-        assert "error" in result, "Expected error dict for empty data"
-
-    def test_no_spike_returns_error(self, ap_module):
-        """A flat sub-threshold trace must produce a graceful error dict."""
-        mod = ap_module
-        fs = 10_000.0
-        t = np.linspace(0, 1.0, 10_000)
-        data = np.full(10_000, -65.0)  # No AP
-
-        result = mod.calculate_ap_repolarization(
-            data=data,
-            time=t,
-            sampling_rate=fs,
-            window_start=0.0,
-            window_end=1.0,
-            spike_threshold=-20.0,
-        )
-        assert "error" in result, "Expected error dict when no spike present"
+        fn = AnalysisRegistry.get_function("miniml_events")
+        assert fn is not None
+        with pytest.raises(AnalysisNotConfigured, match="miniML Events needs"):
+            fn(np.zeros(200), np.arange(200) * 1e-4, 10_000.0)
 
 
 # ---------------------------------------------------------------------------

@@ -202,6 +202,20 @@ class PluginManager:
                 if p_file.name == "__init__.py":
                     continue
                 stem = p_file.stem
+                if is_user_dir and stem == "ap_repolarization":
+                    try:
+                        head = p_file.read_text(encoding="utf-8", errors="ignore")[:512]
+                    except OSError:
+                        head = ""
+                    if _has_legacy_capital_synaptipy_import(p_file) or (
+                        "Maximum Action Potential Repolarization Rate" in head
+                    ):
+                        log.info(
+                            "Skipping retired legacy example plugin '%s' in %s.",
+                            p_file.name,
+                            search_dir,
+                        )
+                        continue
                 if is_user_dir and stem in bundled_map:
                     bundled_file = bundled_map[stem]
                     if _has_legacy_capital_synaptipy_import(p_file) and not _has_legacy_capital_synaptipy_import(

@@ -1061,7 +1061,7 @@ def calculate_n_pulse_ratio(  # noqa: C901
     plots=[
         {"name": "Trace", "type": "trace", "show_events": True},
         {"type": "vlines", "data": "stimulus_onsets"},
-        {"type": "trace_overlay", "start_time": "_first_onset_s", "end_time": "_first_window_end_s"},
+        {"type": "trace_overlay", "start_time": "_window_starts_s", "end_time": "_window_ends_s"},
         {"type": "markers", "x": "_peak_times", "y": "_peak_amps", "role": "primary", "symbol": "d"},
     ],
 )
@@ -1185,6 +1185,8 @@ def run_opto_sync_wrapper(  # noqa: C901
     _peak_times: List[float] = []
     _peak_amps: List[float] = []
     _response_amps: List[float] = []
+    _window_starts_s: List[float] = []
+    _window_ends_s: List[float] = []
     _amp_window_s = amplitude_window_ms / 1000.0
     _blank_s = artifact_blanking_ms / 1000.0
     _baseline_s = baseline_window_ms / 1000.0
@@ -1212,6 +1214,8 @@ def run_opto_sync_wrapper(  # noqa: C901
             _window_data = data[_idx_start:_idx_end]
             if len(_window_data) == 0:
                 continue
+            _window_starts_s.append(_onset_f + _blank_s)
+            _window_ends_s.append(float(min(_win_end_s, float(time[-1]))))
             if response_polarity == "min":
                 _local_idx = int(np.argmin(_window_data))
             elif response_polarity == "abs":
@@ -1253,20 +1257,10 @@ def run_opto_sync_wrapper(  # noqa: C901
             "response_amplitudes": _response_amps,
             "_peak_times": _peak_times,
             "_peak_amps": _peak_amps,
-            "_first_onset_s": (
-                float(result.stimulus_onsets[0]) + _blank_s
-                if result.stimulus_onsets is not None and len(result.stimulus_onsets) > 0
-                else None
-            ),
-            "_first_window_end_s": (
-                min(float(result.stimulus_onsets[0]) + _amp_window_s, float(result.stimulus_onsets[1]))
-                if result.stimulus_onsets is not None and len(result.stimulus_onsets) > 1
-                else (
-                    float(result.stimulus_onsets[0]) + _amp_window_s
-                    if result.stimulus_onsets is not None and len(result.stimulus_onsets) > 0
-                    else None
-                )
-            ),
+            "_window_starts_s": _window_starts_s,
+            "_window_ends_s": _window_ends_s,
+            "_first_onset_s": (_window_starts_s[0] if _window_starts_s else None),
+            "_first_window_end_s": (_window_ends_s[0] if _window_ends_s else None),
         },
     }
 
@@ -1363,11 +1357,17 @@ def _build_stim_onsets(
         {"type": "vlines", "data": "_stim_onsets"},
         {
             "type": "trace_overlay",
+            "role": "baseline_overlay",
             "start_time": "_baseline_start_s",
             "end_time": "_baseline_end_s",
             "color": "#228B22",
             "width": 3,
             "opacity": 50,
+        },
+        {
+            "type": "trace_overlay",
+            "start_time": "_window_starts_s",
+            "end_time": "_window_ends_s",
         },
         {
             "type": "event_fit_overlay",
@@ -1543,12 +1543,28 @@ def run_ppr_wrapper(  # noqa: C901
             peak_amps.append(pv)
 
     n_actual = len(stim_onsets)
+    ppr_blank_s = artifact_blanking_ms / 1000.0
+    ppr_win_s = response_window_ms / 1000.0
+    t_end_max = float(time[-1]) if len(time) > 0 else np.inf
+    ppr_win_starts = [float(stim_onsets[i]) + ppr_blank_s for i in range(n_actual)]
+    ppr_win_ends = [
+        float(
+            min(
+                float(stim_onsets[i]) + ppr_win_s,
+                float(stim_onsets[i + 1]) if i + 1 < n_actual else t_end_max,
+                t_end_max,
+            )
+        )
+        for i in range(n_actual)
+    ]
     metrics: Dict[str, Any] = {
         "n_pulses": n_actual,
         "ppr_error": result["ppr_error"],
         "_stim_onsets": stim_onsets.tolist(),
         "_baseline_start_s": float(stim_onsets[0]) - baseline_window_ms / 1000.0,
         "_baseline_end_s": float(stim_onsets[0]),
+        "_window_starts_s": ppr_win_starts,
+        "_window_ends_s": ppr_win_ends,
         "_peak_times": peak_times,
         "_peak_amps": peak_amps,
     }
@@ -1640,12 +1656,19 @@ def calculate_stimulus_train_stp(  # noqa: C901
     amplitudes: List[float] = []
     peak_times: List[float] = []
     peak_values: List[float] = []
-    for onset in stim_onsets:
-        bl = _baseline(onset)
-        amplitudes.append(_amplitude(onset, bl))
-        pt, pv = _peak_pos_s(data, time, float(onset), polarity, blank_s, win_s)
+    win_starts_s: List[float] = []
+    win_ends_s: List[float] = []
+    t_end_max = float(time[-1])
+    for idx_i, onset in enumerate(stim_onsets):
+        onset_f = float(onset)
+        bl = _baseline(onset_f)
+        amplitudes.append(_amplitude(onset_f, bl))
+        pt, pv = _peak_pos_s(data, time, onset_f, polarity, blank_s, win_s)
         peak_times.append(pt)
         peak_values.append(pv)
+        next_s = float(stim_onsets[idx_i + 1]) if idx_i + 1 < len(stim_onsets) else t_end_max
+        win_starts_s.append(onset_f + blank_s)
+        win_ends_s.append(float(min(onset_f + win_s, next_s, t_end_max)))
 
     n = len(amplitudes)
     pulse_numbers = list(range(1, n + 1))
@@ -1684,6 +1707,8 @@ def calculate_stimulus_train_stp(  # noqa: C901
         "amplitudes_norm": amplitudes_norm,
         "pulse_numbers": pulse_numbers,
         "_stim_onsets": stim_onsets.tolist(),
+        "_window_starts_s": win_starts_s,
+        "_window_ends_s": win_ends_s,
         "_peak_times": peak_times,
         "_peak_amps": peak_values,
     }
@@ -1797,6 +1822,7 @@ def calculate_stimulus_train_stp(  # noqa: C901
     plots=[
         {"name": "Trace", "type": "trace"},
         {"type": "vlines", "data": "_stim_onsets"},
+        {"type": "trace_overlay", "start_time": "_window_starts_s", "end_time": "_window_ends_s"},
         {"type": "markers", "x": "_peak_times", "y": "_peak_amps", "symbol": "d", "color": "#ff6600"},
         {
             "type": "popup_xy",

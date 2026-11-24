@@ -301,7 +301,6 @@ _PLUGIN_BASE_URL = "https://raw.githubusercontent.com/anzalks/synaptipy/main/exa
 
 #: All example plugin files to download.
 _PLUGIN_FILES = [
-    "ap_repolarization.py",
     "miniml_integration.py",
     "opto_jitter.py",
     "spike_interface_integration.py",

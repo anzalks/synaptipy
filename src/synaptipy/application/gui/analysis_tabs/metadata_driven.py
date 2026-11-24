@@ -638,6 +638,9 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 self._artifact_curve_item.setVisible(False)
                 self._artifact_curve_item.setZValue(80)
 
+            elif ptype == "interactive_region":
+                self._viz_interactive_region(pcfg)
+
     def _setup_interactive_regions(self):  # noqa: C901
         """Setup pg.LinearRegionItem for window parameters if they exist."""
         if not self.plot_widget:
@@ -1096,8 +1099,36 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         """
         super()._on_data_plotted()
         self._ensure_custom_items_on_plot()
-        if self._analysis_debounce_timer and not self.metadata.get("run_button"):
+        self._clamp_custom_interactive_region_to_data()
+        if self.metadata.get("run_button"):
+            if self._last_analysis_result is None:
+                tab_label = self.metadata.get("label", self.analysis_name)
+                self._render_message_banner(
+                    [],
+                    [f"{tab_label}: configure parameters and click 'Run Analysis'."],
+                )
+        elif self._analysis_debounce_timer:
             self._analysis_debounce_timer.start(self._debounce_delay_ms)
+
+    def _clamp_custom_interactive_region_to_data(self) -> None:
+        """Keep ``interactive_region`` bounds inside the plotted trace span on initial load."""
+        reg = self._custom_interactive_region
+        if reg is None or not self._current_plot_data:
+            return
+        t_arr = self._current_plot_data.get("time")
+        if t_arr is None or len(t_arr) < 2:
+            return
+        t_min, t_max = float(t_arr[0]), float(t_arr[-1])
+        span = t_max - t_min
+        if span <= 0:
+            return
+        r0, r1 = reg.getRegion()
+        if r0 < t_min or r1 > t_max or r0 >= r1:
+            new_r0 = max(t_min, min(float(r0), t_min + 0.8 * span))
+            new_r1 = min(t_max, float(r1))
+            if new_r1 <= new_r0:
+                new_r0, new_r1 = t_min + 0.05 * span, t_min + 0.55 * span
+            reg.setRegion([new_r0, new_r1])
 
     def _on_param_changed(self):
         """Handle parameter changes."""
@@ -1496,6 +1527,8 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
             return results.as_dict()
 
+        except AnalysisNotConfigured:
+            raise
         except Exception as e:
             log.error(f"Analysis execution failed: {e}")
             raise
@@ -2055,13 +2088,21 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
     def _viz_vlines(self, cfg, result):
         data_key = cfg.get("data")
-        vals = self._val(result, data_key, [])
-        if vals is None and isinstance(result, dict) and "metrics" in result:
-            vals = result["metrics"].get(data_key, [])
+        vals = self._val(result, data_key)
+        if vals is None and isinstance(result, dict):
+            metrics = result.get("metrics")
+            if isinstance(metrics, dict):
+                vals = metrics.get(data_key)
+            if vals is None:
+                payload = result.get("plot_payload")
+                if isinstance(payload, dict):
+                    vals = payload.get(data_key)
         color = cfg.get("color")
-        if isinstance(vals, (int, float)):
-            vals = [vals]
-        for x in vals or []:
+        if isinstance(vals, (int, float, np.number)) and not isinstance(vals, bool):
+            vals = [float(vals)]
+        elif isinstance(vals, np.ndarray) and vals.ndim == 0:
+            vals = [float(vals)]
+        for x in vals if vals is not None else []:
             try:
                 if x is None or not np.isfinite(float(x)):
                     continue
@@ -2485,55 +2526,81 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         self.plot_widget.addItem(fill)
         self._dynamic_plot_items.extend([curve1, curve2, fill])
 
+    @staticmethod
+    def _coerce_time_bounds_pairs(start: Any, end: Any) -> List[Tuple[float, float]]:
+        """Normalise scalar or sequence ``(start, end)`` values into ``[(s0, e0), ...]`` pairs."""
+        if start is None or end is None:
+            return []
+        if isinstance(start, (list, tuple, np.ndarray)) and isinstance(end, (list, tuple, np.ndarray)):
+            s_seq = np.asarray(start, dtype=object).ravel()
+            e_seq = np.asarray(end, dtype=object).ravel()
+            pairs: List[Tuple[float, float]] = []
+            for s_item, e_item in zip(s_seq, e_seq):
+                try:
+                    sf, ef = float(s_item), float(e_item)
+                    if np.isfinite(sf) and np.isfinite(ef) and ef >= sf:
+                        pairs.append((sf, ef))
+                except (TypeError, ValueError):
+                    continue
+            return pairs
+        try:
+            sf, ef = float(start), float(end)
+            return [(sf, ef)] if (np.isfinite(sf) and np.isfinite(ef) and ef >= sf) else []
+        except (TypeError, ValueError):
+            return []
+
     def _viz_trace_overlay(self, cfg, result):
-        """Draw a semi-transparent line segment over the raw trace to highlight an analyzed region.
+        """Draw semi-transparent line segment(s) over the raw trace to highlight analyzed window(s).
 
-        The overlay spans from ``start_time`` to ``end_time`` on the x-axis.
-        Both keys reference float values (seconds) stored in *result*.
-
-        Config keys:
-            start_time -- result key (or literal float) for the region start (s).
-            end_time   -- result key (or literal float) for the region end (s).
-            color      -- pen colour string or (r, g, b) tuple.  Defaults to
-                          the ``trace_overlay`` theme colour.
-            width      -- pen width in pixels (default 3).
-            opacity    -- opacity 0-100 (default 60).
+        ``start_time`` and ``end_time`` may reference either scalar float values
+        (single window) or equal-length sequences of floats (multi-pulse windows,
+        e.g. every stimulus response window in Evoked Sync, PPR, and STP).
         """
         if not self.plot_widget or not self._current_plot_data:
             return
 
-        start = self._val(result, cfg.get("start_time"))
-        end = self._val(result, cfg.get("end_time"))
+        start_key = cfg.get("start_time")
+        end_key = cfg.get("end_time")
+        start = self._val(result, start_key)
+        end = self._val(result, end_key)
+        if isinstance(result, dict) and isinstance(result.get("metrics"), dict):
+            if start is None and isinstance(start_key, str):
+                start = result["metrics"].get(start_key)
+            if end is None and isinstance(end_key, str):
+                end = result["metrics"].get(end_key)
 
-        # Allow literal scalar values in cfg
         if start is None:
-            start = cfg.get("start_time")
+            start = start_key
         if end is None:
-            end = cfg.get("end_time")
+            end = end_key
 
-        if start is None or end is None:
-            return
-
-        try:
-            start = float(start)
-            end = float(end)
-        except (TypeError, ValueError):
-            return
-
-        time_arr = self._current_plot_data["time"]
-        data_arr = self._current_plot_data["data"]
-        mask = (time_arr >= start) & (time_arr <= end)
-        if not np.any(mask):
+        pairs = self._coerce_time_bounds_pairs(start, end)
+        if not pairs:
             return
 
         from synaptipy.shared.plot_customization import get_trace_overlay_pen
 
-        pen = get_trace_overlay_pen()
-        curve = pg.PlotCurveItem(x=time_arr[mask], y=data_arr[mask], pen=pen)
-        curve._synaptipy_role = "trace_overlay"
-        curve.setZValue(60)
-        self.plot_widget.addItem(curve)
-        self._dynamic_plot_items.append(curve)
+        if cfg.get("role") == "baseline_overlay" and cfg.get("color"):
+            c_obj = pg.mkColor(cfg["color"])
+            c_obj.setAlpha(int(round(255.0 * float(cfg.get("opacity", 55)) / 100.0)))
+            pen = pg.mkPen(c_obj, width=float(cfg.get("width", 3)))
+            is_custom_role = False
+        else:
+            pen = get_trace_overlay_pen()
+            is_custom_role = True
+
+        time_arr = self._current_plot_data["time"]
+        data_arr = self._current_plot_data["data"]
+        for s_val, e_val in pairs:
+            mask = (time_arr >= s_val) & (time_arr <= e_val)
+            if not np.any(mask):
+                continue
+            curve = pg.PlotCurveItem(x=time_arr[mask], y=data_arr[mask], pen=pen)
+            if is_custom_role:
+                curve._synaptipy_role = "trace_overlay"
+            curve.setZValue(60)
+            self.plot_widget.addItem(curve)
+            self._dynamic_plot_items.append(curve)
 
     def _viz_event_fit_overlay(self, cfg, result):
         """Overlay fitted event curves (e.g. bi-exponential EPSP fits) on the raw trace."""

@@ -843,14 +843,13 @@ checkouts also include them under `examples/plugins/`).
 | File | Label in GUI | Purpose |
 |---|---|---|
 | `examples/plugins/synaptic_charge.py` | Synaptic Charge (AUC) | Integrates a baseline-subtracted postsynaptic current trace between zero-crossings using `np.trapezoid` to compute total charge (pC), with `fill_between`, peak star marker, and baseline `hlines` overlays. |
-| `examples/plugins/opto_jitter.py` | Opto Latency Jitter | Detects the first spike per sweep following a TTL pulse on a secondary channel (`expects_list=True`) and quantifies trial-to-trial latency standard deviation (jitter). |
-| `examples/plugins/ap_repolarization.py` | Max Repolarization Rate | Computes the steepest falling slope (`dV/dt` minimum, in V/s) of the first action potential in a window, marking the inflection point with `vlines` and `hlines`. |
+| `examples/plugins/opto_jitter.py` | Opto Latency Jitter | Detects evoked spikes or postsynaptic peak deflections per TTL pulse across sweeps (`expects_list=True`) and quantifies trial-to-trial latency standard deviation (jitter). |
 | `examples/plugins/miniml_integration.py` | miniML Events | Runs deep-learning synaptic event detection via miniML using lazy runtime imports (`run_button=True`, `dirpath` and `filepath` Browse controls; optional external dependency). |
 | `examples/plugins/spike_interface_integration.py` | Spike Detection (SpikeInterface) | Wraps extracellular traces in a `SpikeInterface` `NumpyRecording`, bandpass-filters, and detects peaks (`run_button=True`; requires optional `pip install spikeinterface`). |
 
 To activate or customize an example plugin:
 
-1. Select **Help > Download Example Plugins...** to copy the five files into `~/.synaptipy/plugins/`.
+1. Select **Help > Download Example Plugins...** to copy the four files into `~/.synaptipy/plugins/`.
 2. Edit any downloaded file in `~/.synaptipy/plugins/` (changing `name=` and `label=` if creating a new variant).
 3. Toggle **Enable Custom Plugins** in **Edit > Preferences** (**Extensions** group) to hot-reload changed plugin code in-process, and confirm the security prompt when your modified file fingerprint is detected.
 

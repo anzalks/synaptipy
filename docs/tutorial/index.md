@@ -380,8 +380,7 @@ Plugins...**. When **Enable Custom Plugins** is checked in **Edit > Preferences*
 | File | Tab label | What it measures |
 |------|-----------|-----------------|
 | `examples/plugins/synaptic_charge.py` | **Synaptic Charge (AUC)** | Total charge (pC) of a postsynaptic current via trapezoidal integration over a user-defined window; shaded fill overlay marks the integrated area and a star marks the detected peak amplitude. |
-| `examples/plugins/opto_jitter.py` | **Opto Latency Jitter** | Trial-to-trial latency variability for optogenetically evoked spikes; requires a secondary digital/TTL channel. |
-| `examples/plugins/ap_repolarization.py` | **Max Repolarization Rate** | Steepest falling $dV/dt$ of the first action potential in a window (V/s), a proxy for voltage-gated potassium-channel dynamics. |
+| `examples/plugins/opto_jitter.py` | **Opto Latency Jitter** | Trial-to-trial latency variability for evoked spikes or postsynaptic responses; requires a secondary digital/TTL channel. |
 | `examples/plugins/miniml_integration.py` | **miniML Events** | Deep-learning event detection via miniML (optional dependency; requires `tensorflow` + cloned miniML repository). |
 | `examples/plugins/spike_interface_integration.py` | **SpikeInterface Spikes** | Spike detection via SpikeInterface (optional dependency; `pip install spikeinterface`). |
 

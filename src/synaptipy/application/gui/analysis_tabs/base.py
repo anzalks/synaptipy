@@ -2424,6 +2424,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 )
 
             self.plot_widget.setLabel("bottom", "Time", units="s")
+            self.plot_widget.getAxis("bottom").enableAutoSIPrefix(False)
             self.plot_widget.setLabel("left", plot_package.channel_name, units=plot_package.units)
             self.plot_widget.getAxis("left").enableAutoSIPrefix(False)
             self.plot_widget.setTitle(f"{plot_package.channel_name} - {plot_package.label}")
@@ -2694,6 +2695,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 units = getattr(ch_obj, "units", "")
                 chan_name = getattr(ch_obj, "name", None) or f"Ch {chan_id}"
         self.plot_widget.setLabel("bottom", "Time", units="s")
+        self.plot_widget.getAxis("bottom").enableAutoSIPrefix(False)
         self.plot_widget.setLabel("left", chan_name, units=units)
         self.plot_widget.getAxis("left").enableAutoSIPrefix(False)
         self.auto_range_plot()
@@ -2829,6 +2831,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             title = f"Cross-File Average (N={n_files} files){_unequal_warn_msg}"
             self.plot_widget.setTitle(title)
             self.plot_widget.setLabel("bottom", "Time", units="s")
+            self.plot_widget.getAxis("bottom").enableAutoSIPrefix(False)
             self.plot_widget.setLabel("left", chan_name, units=units)
             self.plot_widget.getAxis("left").enableAutoSIPrefix(False)
             self.auto_range_plot()

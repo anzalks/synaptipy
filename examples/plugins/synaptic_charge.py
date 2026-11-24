@@ -152,14 +152,21 @@ def calculate_synaptic_charge(
     # ---- 1. Compute baseline ----
     if baseline_method == "Pre-Window":
         # Local dynamic baseline: use a short window (local_baseline_window_ms)
-        # immediately before the search window onset.  This tracks slow holding-
-        # current drift so that only the fast synaptic charge is integrated.
+        # immediately before the search window onset. When window_start sits at
+        # the very start of the trace, use the initial quiescent slice inside the
+        # window rather than averaging across the entire evoked response.
         local_win_s = max(1e-4, local_baseline_window_ms / 1000.0)
         pre_start = max(time[0], window_start - local_win_s)
         pre_end = window_start
         pre_mask = (time >= pre_start) & (time < pre_end)
         pre_slice = data[pre_mask]
-        baseline_val = float(np.mean(pre_slice)) if pre_slice.size > 0 else float(np.mean(data))
+        if pre_slice.size > 0:
+            baseline_val = float(np.mean(pre_slice))
+        else:
+            fallback_end = min(window_end, time[0] + min(local_win_s, 0.15 * (window_end - window_start)))
+            fb_mask = (time >= time[0]) & (time <= fallback_end)
+            fb_slice = data[fb_mask]
+            baseline_val = float(np.mean(fb_slice)) if fb_slice.size > 0 else float(np.mean(data))
     else:
         baseline_val = float(np.mean(data))
 
@@ -243,13 +250,13 @@ def calculate_synaptic_charge(
     name="synaptic_charge",
     label="Synaptic Charge (AUC)",
     expects_list=False,
-    supported_channel_units=("pA",),
+    supported_channel_units=("pA", "nA"),
     ui_params=[
         {
             "name": "baseline_method",
             "label": "Baseline Method:",
             "type": "choice",
-            "options": ["Pre-Window", "Global"],
+            "choices": ["Pre-Window", "Global"],
             "default": "Pre-Window",
             "tooltip": "Pre-Window uses a short window before the search window; Global uses the entire trace mean.",
         },
@@ -257,7 +264,7 @@ def calculate_synaptic_charge(
             "name": "detection_method",
             "label": "Detection Method:",
             "type": "choice",
-            "options": ["Absolute Peak", "Negative Peak"],
+            "choices": ["Absolute Peak", "Negative Peak"],
             "default": "Absolute Peak",
             "tooltip": "Absolute Peak finds the largest-magnitude deflection; Negative Peak finds the most negative.",
         },
@@ -265,7 +272,7 @@ def calculate_synaptic_charge(
             "name": "window_start",
             "label": "Search Window Start (s):",
             "type": "float",
-            "default": 0.0,
+            "default": 0.02,
             "min": 0.0,
             "max": 1e9,
             "decimals": 4,
@@ -275,7 +282,7 @@ def calculate_synaptic_charge(
             "name": "window_end",
             "label": "Search Window End (s):",
             "type": "float",
-            "default": 0.1,
+            "default": 0.25,
             "min": 0.0,
             "max": 1e9,
             "decimals": 4,

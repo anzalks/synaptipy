@@ -45,7 +45,6 @@ _SPIKE_TRIAL_ANALYSES = {
     "phase_plane_analysis",
     "burst_analysis",
     "train_dynamics",
-    "ap_repolarization",
 }
 
 _EXPECTED_CORE_ANALYSES = {
@@ -330,6 +329,22 @@ def _run_single_method_on_tab(tab: object, m_label: str, qapp: object) -> str:
     if a_name == "tau_analysis" and "tau_model" in widgets:
         _run_tau_biexponential_branch(tab, widgets, qapp)
 
+    if a_name in ("optogenetic_sync", "paired_pulse_ratio", "stimulus_train_stp", "opto_jitter"):
+        import pyqtgraph as pg
+
+        dyn_items = getattr(tab, "_dynamic_plot_items", [])
+        vlines = [it for it in dyn_items if isinstance(it, pg.InfiniteLine) and it.angle == 90]
+        overlays = [
+            it
+            for it in dyn_items
+            if isinstance(it, pg.PlotCurveItem) and getattr(it, "_synaptipy_role", None) == "trace_overlay"
+        ]
+        expected_min = 2 if a_name == "paired_pulse_ratio" else 5
+        assert len(vlines) >= expected_min, f"{a_name}: expected >= {expected_min} trigger vlines, got {len(vlines)}"
+        assert (
+            len(overlays) >= expected_min
+        ), f"{a_name}: expected >= {expected_min} cyan curve overlays, got {len(overlays)}"
+
     tab._update_plot_pens_only()
 
     if a_name != "miniml_events" and tab._last_analysis_result and getattr(tab, "save_button", None):
@@ -352,7 +367,8 @@ def _exercise_analyser_tabs(analyser: object, rec: Recording, qapp: object) -> L
 
         if getattr(tab, "metadata", {}).get("run_button"):
             assert not tab._analysis_debounce_timer.isActive()
-        if tuple(getattr(tab, "metadata", {}).get("supported_channel_units", ())) == ("pA",):
+        supported = tuple(getattr(tab, "metadata", {}).get("supported_channel_units", ()))
+        if supported and set(supported).issubset({"pA", "nA"}):
             assert tab.signal_channel_combobox.currentData() == "1"
 
         qapp.processEvents()

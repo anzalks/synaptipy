@@ -548,17 +548,73 @@ class TestSharedUtilitiesD6:
 class TestPluginsNotebookHelpAndToolingE1E2E4:
     """Verify plugin bug fixes, notebook region keys, offline help missing-link guard, and scripts."""
 
-    def test_ap_repolarization_metrics_and_marker_lists(self, isolated_registry):
-        mod = _load_plugin_module("examples/plugins/ap_repolarization.py", "audit55_ap_repol")
-        fs = 10000.0
-        t = np.arange(0, 0.2, 1.0 / fs)
-        v = np.full_like(t, -70.0)
-        v += 100.0 * np.exp(-0.5 * ((t - 0.05) / 0.0015) ** 2)
-        res = mod.run_ap_repolarization_wrapper(v, t, fs, window_start=0.0, window_end=0.2, spike_threshold=-20.0)
-        assert "Repol_Time_s" in res["metrics"]
-        assert "Repol_Voltage_mV" in res["metrics"]
-        assert isinstance(res["_repol_time"], list) and len(res["_repol_time"]) == 1
-        assert isinstance(res["_repol_val"], list) and len(res["_repol_val"]) == 1
+    def test_evoked_responses_multi_pulse_vlines_and_trace_overlays(self, qapp):
+        import pyqtgraph as pg
+
+        import synaptipy.core.analysis  # noqa: F401
+        from synaptipy.application.gui.analysis_tabs.metadata_driven import MetadataDrivenAnalysisTab
+        from synaptipy.core.data_model import Channel, Recording
+        from synaptipy.infrastructure.file_readers import NeoAdapter
+
+        fs = 20000.0
+        t = np.arange(0.0, 0.6, 1.0 / fs)
+        n = t.size
+        pulse_times = (0.10, 0.25, 0.40)
+        ttl = np.zeros(n, dtype=float)
+        for st in pulse_times:
+            i0 = int(round(st * fs))
+            ttl[i0 : i0 + 40] = 5.0
+
+        sweeps = []
+        for sw in range(3):
+            v = np.full(n, -65.0, dtype=float)
+            for p_idx, st in enumerate(pulse_times):
+                mask = t >= (st + 0.003)
+                rel = t[mask] - (st + 0.003)
+                v[mask] += (8.0 + p_idx * 1.5 + sw * 0.2) * (np.exp(-rel / 0.012) - np.exp(-rel / 0.0015))
+            sweeps.append(v)
+
+        opto_fn = AnalysisRegistry.get_function("optogenetic_sync")
+        ppr_fn = AnalysisRegistry.get_function("paired_pulse_ratio")
+        stp_fn = AnalysisRegistry.get_function("stimulus_train_stp")
+        opto_res = opto_fn(np.mean(sweeps, axis=0), t, fs, ttl_data=ttl, response_window_ms=50.0)
+        ppr_res = ppr_fn(np.mean(sweeps, axis=0), t, fs, ttl_data=ttl)
+        stp_res = stp_fn(np.mean(sweeps, axis=0), t, fs, ttl_data=ttl, n_pulses=3)
+
+        assert len(opto_res["metrics"]["stimulus_onsets"]) == 3
+        assert len(opto_res["metrics"]["_window_starts_s"]) == 3
+        assert len(opto_res["metrics"]["_window_ends_s"]) == 3
+        assert len(ppr_res["metrics"]["_window_starts_s"]) == 2
+        assert len(stp_res["metrics"]["_window_starts_s"]) == 3
+
+        rec = Recording(source_file=PROJECT_ROOT / "examples" / "data" / "2023_04_11_0022.abf")
+        rec.sampling_rate = fs
+        rec.duration = 0.6
+        rec.channels = {
+            "0": Channel("0", "IN0", "mV", fs, sweeps),
+            "1": Channel("1", "FrameTTL", "V", fs, [ttl.copy() for _ in range(3)]),
+        }
+        tab = MetadataDrivenAnalysisTab("optogenetic_sync", NeoAdapter())
+        try:
+            tab._analysis_items = [{"path": rec.source_file, "target_type": "Recording"}]
+            tab._selected_item_index = 0
+            tab._on_item_load_success(rec, seq=tab._item_load_seq)
+            idx = tab._secondary_channel_combobox.findData("1")
+            if idx >= 0:
+                tab._secondary_channel_combobox.setCurrentIndex(idx)
+            tab._trigger_analysis()
+            qapp.processEvents()
+
+            vlines = [it for it in tab._dynamic_plot_items if isinstance(it, pg.InfiniteLine) and it.angle == 90]
+            overlays = [
+                it
+                for it in tab._dynamic_plot_items
+                if isinstance(it, pg.PlotCurveItem) and getattr(it, "_synaptipy_role", None) == "trace_overlay"
+            ]
+            assert len(vlines) == 3
+            assert len(overlays) == 3
+        finally:
+            tab.close()
 
     def test_opto_jitter_handles_ragged_sweep_lists_cleanly(self, isolated_registry):
         mod = _load_plugin_module("examples/plugins/opto_jitter.py", "audit55_opto")

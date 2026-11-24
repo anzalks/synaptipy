@@ -4,13 +4,13 @@
 Tests for the example plugins shipped in examples/plugins/.
 
 Validates:
-1. PluginManager discovers both opto_jitter.py and ap_repolarization.py
-   from the examples/plugins/ directory.
-2. Both plugins register themselves with AnalysisRegistry.
+1. PluginManager discovers opto_jitter.py and synaptic_charge.py
+   from the examples/plugins/ directory (and removed ap_repolarization.py is absent).
+2. Example plugins register themselves with AnalysisRegistry.
 3. The wrapper functions return the required nested schema
-   ``{"module_used": ..., "metrics": {...}}`` alongside flat scalar keys.
-4. Core math is correct for simple synthetic inputs.
-5. Edge cases (empty data, no TTL, no spike) yield graceful error dicts
+   ``{"module_used": ..., "metrics": {...}}`` alongside private overlay keys.
+4. Core math is correct for multi-pulse, mV-TTL, and subthreshold inputs.
+5. Edge cases (empty data, no TTL) yield graceful error dicts
    rather than raising exceptions.
 """
 
@@ -85,11 +85,11 @@ def opto_module():
 
 
 @pytest.fixture
-def ap_module():
-    """Load the ap_repolarization example plugin module."""
-    path = EXAMPLES_PLUGIN_DIR / "ap_repolarization.py"
-    assert path.exists(), f"ap_repolarization.py not found at {path}"
-    return _load_module(path, "synaptipy_plugin_ap_repolarization")
+def sc_module():
+    """Load the synaptic_charge example plugin module."""
+    path = EXAMPLES_PLUGIN_DIR / "synaptic_charge.py"
+    assert path.exists(), f"synaptic_charge.py not found at {path}"
+    return _load_module(path, "synaptipy_plugin_synaptic_charge")
 
 
 @pytest.fixture
@@ -165,19 +165,21 @@ class TestPluginDiscovery:
         """opto_jitter.py must be present in examples/plugins/."""
         assert (EXAMPLES_PLUGIN_DIR / "opto_jitter.py").exists()
 
-    def test_ap_repolarization_file_present(self):
-        """ap_repolarization.py must be present in examples/plugins/."""
-        assert (EXAMPLES_PLUGIN_DIR / "ap_repolarization.py").exists()
+    def test_synaptic_charge_file_present(self):
+        """synaptic_charge.py must be present in examples/plugins/."""
+        assert (EXAMPLES_PLUGIN_DIR / "synaptic_charge.py").exists()
 
-    def test_plugin_manager_loads_both_examples(self):
+    def test_removed_ap_repolarization_absent(self):
+        """Redundant undocumented ap_repolarization.py must remain removed."""
+        assert not (EXAMPLES_PLUGIN_DIR / "ap_repolarization.py").exists()
+
+    def test_plugin_manager_loads_bundled_examples(self):
         """
         PluginManager with EXAMPLES_PLUGIN_DIR patched to examples/plugins/
-        loads both plugins and registers them.
+        loads bundled plugins and registers them without ap_repolarization.
         """
         from synaptipy.application.plugin_manager import PluginManager
 
-        # Patch the EXAMPLES_PLUGIN_DIR used inside PluginManager, and set
-        # user PLUGIN_DIR to a non-existent path to avoid interference.
         fake_user_dir = EXAMPLES_PLUGIN_DIR.parent / "_no_user_plugins_for_test"
 
         with (
@@ -192,9 +194,10 @@ class TestPluginDiscovery:
         assert AnalysisRegistry.get_function("opto_jitter") is not None, (
             "opto_jitter was not registered. " f"Registered: {AnalysisRegistry.list_registered()}"
         )
-        assert AnalysisRegistry.get_function("ap_repolarization") is not None, (
-            "ap_repolarization was not registered. " f"Registered: {AnalysisRegistry.list_registered()}"
+        assert AnalysisRegistry.get_function("synaptic_charge") is not None, (
+            "synaptic_charge was not registered. " f"Registered: {AnalysisRegistry.list_registered()}"
         )
+        assert AnalysisRegistry.get_function("ap_repolarization") is None
 
     def test_user_dir_takes_precedence(self, tmp_path):
         """
@@ -205,10 +208,9 @@ class TestPluginDiscovery:
 
         from synaptipy.application.plugin_manager import PluginManager
 
-        # Copy ap_repolarization.py to a fake user dir
         user_plugins = tmp_path / "user_plugins"
         user_plugins.mkdir()
-        shutil.copy(EXAMPLES_PLUGIN_DIR / "ap_repolarization.py", user_plugins / "ap_repolarization.py")
+        shutil.copy(EXAMPLES_PLUGIN_DIR / "synaptic_charge.py", user_plugins / "synaptic_charge.py")
 
         with (
             patch(
@@ -217,11 +219,9 @@ class TestPluginDiscovery:
             ),
             patch("synaptipy.application.plugin_manager.PLUGIN_DIR", user_plugins),
         ):
-            # The collision warning is logged at WARNING level, not raised as an exception.
             PluginManager.load_plugins()
 
-        # Plugin should still be registered (user copy loaded)
-        assert AnalysisRegistry.get_function("ap_repolarization") is not None
+        assert AnalysisRegistry.get_function("synaptic_charge") is not None
 
 
 # ---------------------------------------------------------------------------
@@ -252,7 +252,8 @@ class TestOptoJitterPlugin:
         assert len(meta["plots"]) >= 1
         assert meta.get("expects_list") is True
         assert meta["requires_secondary_channel"]["param_name"] == "secondary_data"
-        assert meta["protocol_requirements"]["families"] == ("optogenetic",)
+        assert "optogenetic" in meta["protocol_requirements"]["families"]
+        assert "stimulus_train" in meta["protocol_requirements"]["families"]
 
     def test_output_schema(self, opto_module, synthetic_opto):
         """Wrapper returns the nested {module_used, metrics} schema."""
@@ -376,112 +377,49 @@ class TestOptoJitterPlugin:
         assert abs(jitter_val - expected_jitter) < 0.2, f"Jitter {jitter_val:.4f} ms, expected {expected_jitter:.4f} ms"
 
 
-class TestAPRepolarizationPlugin:
-    """Tests for examples/plugins/ap_repolarization.py."""
+class TestOptoJitterMultiPulseAndSubthreshold:
+    """Tests for multi-pulse trains, mV-scaled TTL channels, and subthreshold EPSP fallback."""
 
-    def test_module_has_required_attributes(self, ap_module):
-        """Module exposes logic function and wrapper."""
-        assert hasattr(ap_module, "calculate_ap_repolarization")
-        assert hasattr(ap_module, "run_ap_repolarization_wrapper")
-
-    def test_registry_registration(self, ap_module):
-        """ap_repolarization registers with name='ap_repolarization'."""
-        func = AnalysisRegistry.get_function("ap_repolarization")
-        assert func is not None
-
-    def test_metadata_shape(self, ap_module):
-        """Metadata contains label, ui_params, plots, and expects_list=False."""
-        meta = AnalysisRegistry.get_metadata("ap_repolarization")
-        assert meta.get("label") == "Max Repolarization Rate"
-        assert isinstance(meta.get("ui_params"), list)
-        assert len(meta["ui_params"]) >= 3
-        assert isinstance(meta.get("plots"), list)
-        assert len(meta["plots"]) >= 1
-        assert meta.get("expects_list", False) is False
-
-    def test_output_schema(self, ap_module, synthetic_spike):
-        """Wrapper returns the nested {module_used, metrics} schema."""
-        data, t, fs = synthetic_spike
-        func = AnalysisRegistry.get_function("ap_repolarization")
-        result = func(data, t, fs, window_start=0.0, window_end=1.0, spike_threshold=-20.0)
-        assert isinstance(result, dict), f"Expected dict, got: {type(result)}"
-        assert "error" not in result, f"Unexpected error: {result.get('error')}"
-        assert "module_used" in result, "Missing 'module_used' key"
-        assert result["module_used"] == "ap_repolarization"
-        assert "metrics" in result, "Missing 'metrics' key"
-        assert "Max_Repol_V_s" in result["metrics"], "metrics dict missing 'Max_Repol_V_s'"
-
-    def test_repolarization_rate_is_negative(self, ap_module, synthetic_spike):
-        """Max repolarization rate must be negative (falling phase of AP)."""
-        data, t, fs = synthetic_spike
-        func = AnalysisRegistry.get_function("ap_repolarization")
-        result = func(data, t, fs, window_start=0.0, window_end=1.0, spike_threshold=-20.0)
-        if "error" not in result:
-            assert (
-                result["metrics"]["Max_Repol_V_s"] < 0.0
-            ), f"Expected negative repolarization rate, got {result['metrics']['Max_Repol_V_s']}"
-
-    def test_private_marker_keys_present(self, ap_module, synthetic_spike):
-        """Private _repol_time and _repol_val are returned for the marker overlay."""
-        data, t, fs = synthetic_spike
-        func = AnalysisRegistry.get_function("ap_repolarization")
-        result = func(data, t, fs, window_start=0.0, window_end=1.0, spike_threshold=-20.0)
-        if "error" not in result:
-            assert "_repol_time" in result
-            assert "_repol_val" in result
-
-    def test_empty_data_returns_error(self, ap_module):
-        """Empty data array produces an error dict, not an exception."""
-        func = AnalysisRegistry.get_function("ap_repolarization")
-        result = func(np.array([]), np.array([]), 10000.0)
-        assert "error" in result
-
-    def test_no_spike_in_window_returns_error(self, ap_module):
-        """A flat trace with no spike crossing returns an error dict."""
-        fs = 10_000.0
-        t = np.arange(0, 0.5, 1.0 / fs)
-        data = np.full_like(t, -70.0)  # flat below threshold
-        func = AnalysisRegistry.get_function("ap_repolarization")
-        result = func(data, t, fs, window_start=0.0, window_end=0.5, spike_threshold=-20.0)
-        assert "error" in result
-
-    def test_direct_logic_trapz_math(self, ap_module):
+    def test_multi_pulse_mv_ttl_and_subthreshold_auto_fallback(self, opto_module):
         """
-        Direct test of calculate_ap_repolarization: the minimum dV/dt of a
-        triangular spike is exactly at the most steeply falling sample.
-
-        Construct a symmetric triangle: rises from 0 to 100 mV over 10 samples,
-        falls back to 0 over 10 samples.  The fall rate = -10 mV / sample.
-        With dt = 0.0001 s, that is -10 / 0.0001 = -100,000 V/s.
-        np.gradient uses central differences, so the exact answer is approached
-        within 1% for this ideal triangle.
+        Simulate a 3-sweep x 3-pulse optogenetic recording where FrameTTL is recorded
+        in mV (12..1600 mV) and responses are subthreshold EPSPs (~6 mV above -65 mV).
         """
-        fs = 10_000.0
-        dt = 1.0 / fs
-        # Build a triangular AP: baseline at -70, peak at +30
-        n_base = 50
-        n_rise = 10
-        n_fall = 10
-        n_after = 50
-        baseline = np.full(n_base, -70.0)
-        rise = np.linspace(-70.0, 30.0, n_rise)
-        fall = np.linspace(30.0, -70.0, n_fall)
-        after = np.full(n_after, -70.0)
-        data = np.concatenate([baseline, rise, fall, after])
-        t = np.arange(len(data)) * dt
+        fs = 20_000.0
+        t = np.arange(0.0, 0.5, 1.0 / fs)
+        n_samples = t.size
+        n_sweeps = 3
+        pulse_times = (0.08, 0.20, 0.32)
 
-        result = ap_module.calculate_ap_repolarization(
-            data=data,
-            time=t,
-            sampling_rate=fs,
-            window_start=0.0,
-            window_end=len(data) * dt,
+        data = np.full((n_sweeps, n_samples), -65.0)
+        ttl = np.full((n_sweeps, n_samples), 12.0)  # Resting TTL baseline in mV (> 2.5 V threshold!)
+        for st in pulse_times:
+            i0 = int(round(st * fs))
+            ttl[:, i0 : i0 + 40] = 1600.0
+
+        for sw in range(n_sweeps):
+            for p_idx, st in enumerate(pulse_times):
+                ev_onset = st + 0.004 + (sw * 0.0002) + (p_idx * 0.0001)
+                mask = t >= ev_onset
+                rel = t[mask] - ev_onset
+                data[sw, mask] += 9.0 * (np.exp(-rel / 0.010) - np.exp(-rel / 0.0015))
+
+        fn = AnalysisRegistry.get_function("opto_jitter")
+        res = fn(
+            data,
+            t,
+            fs,
+            secondary_data=ttl,
+            ttl_threshold=2.5,
+            search_start=0.001,
+            search_end=0.040,
             spike_threshold=-20.0,
         )
-        assert "error" not in result, f"Unexpected error: {result.get('error')}"
-        # Expected fall rate: (30 - (-70)) / (n_fall * dt) = 100 / 0.001 = 100,000 mV/s = 100 V/s
-        # Max repolarization is negative: expected ~ -100,000 mV/s = -100 V/s
-        max_repol = result["metrics"]["Max_Repol_V_s"]
-        assert max_repol < 0.0, "Repolarization rate should be negative"
-        # Accept within 10% of -100 V/s
-        assert abs(max_repol) > 80.0, f"Repol rate {max_repol} V/s is suspiciously small"
+        assert "error" not in res, f"Unexpected error: {res.get('error')}"
+        assert res["metrics"]["N_Sweeps_Detected"] == 9
+        assert res["metrics"]["Detection_Mode_Used"] == "Peak Deflection"
+        assert len(res["_stim_onsets"]) == 3
+        assert len(res["_window_starts_s"]) == 3
+        assert len(res["_window_ends_s"]) == 3
+        assert len(res["_detected_times"]) == 3
+        assert res["metrics"]["Jitter_ms"] > 0.0

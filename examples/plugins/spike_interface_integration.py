@@ -29,7 +29,10 @@ This file is part of Synaptipy, licensed under the GNU Affero General Public
 License v3.0.  See the LICENSE file at the repository root for full details.
 """
 
+import contextlib
+import io
 import logging
+import warnings
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -136,14 +139,20 @@ def detect_spikes_spikeinterface(
     # ------------------------------------------------------------------ #
     # 4. Detect peaks                                                      #
     # ------------------------------------------------------------------ #
-    peaks = detect_peaks(
-        recording_f,
-        method="by_channel",
-        detect_threshold=float(threshold_mad),
-        peak_sign=peak_sign,
-        exclude_sweep_ms=float(kwargs.get("exclude_sweep_ms", 5.0)),
-        noise_levels=np.array([noise_estimate]),
-    )
+    with (
+        warnings.catch_warnings(),
+        contextlib.redirect_stdout(io.StringIO()),
+        contextlib.redirect_stderr(io.StringIO()),
+    ):
+        warnings.filterwarnings("ignore", message=".*signature of detect_peaks.*", category=UserWarning)
+        peaks = detect_peaks(
+            recording_f,
+            method="by_channel",
+            detect_threshold=float(threshold_mad),
+            peak_sign=peak_sign,
+            exclude_sweep_ms=float(kwargs.get("exclude_sweep_ms", 5.0)),
+            noise_levels=np.array([noise_estimate]),
+        )
 
     t0 = float(time[0]) if time is not None and len(time) > 0 else 0.0
     sample_indices = [int(i) for i in peaks["sample_index"] if 0 <= int(i) < len(data)]
@@ -291,13 +300,29 @@ def run_spike_interface_wrapper(
     Returns:
         Result dict - see ``detect_spikes_spikeinterface`` for the schema.
     """
-    return detect_spikes_spikeinterface(
+    freq_min_val = float(kwargs.get("freq_min", 300.0))
+    freq_max_val = float(kwargs.get("freq_max", 6000.0))
+    extra_warnings: List[str] = []
+    if np.isfinite(sampling_rate) and sampling_rate > 0:
+        nyq = float(sampling_rate) / 2.0
+        if freq_max_val >= 0.95 * nyq and nyq > freq_min_val + 20.0:
+            clamped_max = round(0.90 * nyq, 1)
+            extra_warnings.append(
+                f"Low-pass cutoff ({freq_max_val:g} Hz) exceeded Nyquist ({nyq:g} Hz) "
+                f"and was clamped to {clamped_max:g} Hz."
+            )
+            freq_max_val = clamped_max
+
+    res = detect_spikes_spikeinterface(
         data=data,
         sampling_rate=sampling_rate,
-        freq_min=float(kwargs.get("freq_min", 300.0)),
-        freq_max=float(kwargs.get("freq_max", 6000.0)),
+        freq_min=freq_min_val,
+        freq_max=freq_max_val,
         threshold_mad=float(kwargs.get("threshold_mad", 5.0)),
         peak_sign=str(kwargs.get("peak_sign", "neg")),
         time=time,
         exclude_sweep_ms=float(kwargs.get("exclude_sweep_ms", 5.0)),
     )
+    if extra_warnings and isinstance(res, dict):
+        res["warnings"] = list(res.get("warnings", [])) + extra_warnings
+    return res
