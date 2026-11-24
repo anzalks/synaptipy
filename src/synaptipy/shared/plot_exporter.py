@@ -176,12 +176,12 @@ class PlotExporter:
         Extracts data directly from pyqtgraph PlotDataItems to match screen appearance.
         """
         import matplotlib
-        import matplotlib.pyplot as plt
 
-        # Use the non-interactive Agg backend for off-screen rendering.
-        # This avoids "matplotlib not found" errors that occur when the Qt backend
-        # tries to create a display window in a headless / embedded context.
+        # Use the non-interactive Agg backend for off-screen rendering before importing pyplot.
+        # This avoids "matplotlib not found" errors or QtAgg initialization when PySide6 is loaded
+        # in a headless / embedded context.
         matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
 
         # Embed TrueType fonts, rather than Type 3 glyph outlines, so labels
         # remain editable text in Illustrator, Affinity Designer, and Inkscape.

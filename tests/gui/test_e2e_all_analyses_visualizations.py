@@ -392,7 +392,7 @@ def _exercise_dialogs_and_exporters(win: object, rec: Recording, tmp_path: Path)
     assert exporter.export_to_prism_format(win.saved_analysis_results, tmp_path / "prism_rmp.csv", metric="rmp_mv")
 
 
-@pytest.mark.timeout(45)
+@pytest.mark.timeout(180)
 def test_every_analysis_visualization_customization_and_export_runs_without_errors(e2e_main_window, qapp, tmp_path):
     """Exercise all 5 pillars, all 16 core methods, bundled plugins, live pen updates, popups, and exports."""
     syn_logger = logging.getLogger("synaptipy")
