@@ -1091,8 +1091,7 @@ adaptive prominence thresholding and quiescent baseline noise estimation. A
 | Quiescent Noise Floor | `use_quiescent_noise_floor` | bool | Estimate noise from quietest detrended window (default `True`) |
 | Quiescent Window (ms) | `quiescent_window_ms` | float (ms) | Sliding window width for quiescent RMS (default `20.0`, visible when enabled) |
 | Compute Kinetics | `compute_kinetics` | bool | Fit mono-/bi-exponential decays per event (default `False`) |
-
-*(Programmatic kwargs `reject_artifacts`, `artifact_slope_threshold`, and `artifact_padding_ms` enable gradient-dilation artifact masking.)*
+| Reject Slope Artifacts | `reject_artifacts` | bool | Mask steep stimulus/capacitive slope transients (default `False`; exposes `artifact_slope_threshold` and `artifact_padding_ms` when enabled) |
 
 #### Methods
 
@@ -1110,7 +1109,9 @@ adaptive prominence thresholding and quiescent baseline noise estimation. A
 #### Visualization
 
 Interactive scatter markers (click to remove; Ctrl+click to add);
-draggable threshold line; artifact overlay.
+draggable holding-offset threshold line; mono-/bi-exponential event decay fit overlays; artifact overlay.
+
+![Event Detection - Per-event kinetic fitting enabled](screenshots/analyser_synaptic_events_baseline_peak_kinetics.png)
 
 ---
 
@@ -1135,6 +1136,7 @@ dendritic cable filtering.
 | Rolling Baseline (ms) | `rolling_baseline_window_ms` | float (ms) | Rolling median baseline window (default `100.0`) |
 | Min Event Distance (ms) | `min_event_distance_ms` | float (ms) | Minimum event separation (`0.0` defaults to `tau_decay`) |
 | Kernel Multipliers | `kernel_multipliers` | string | Comma-separated scaling factors for `tau_decay` (default `"1.0, 2.0, 3.0"`) |
+| Reject Slope Artifacts | `reject_artifacts` | bool | Mask steep stimulus/capacitive slope transients (default `False`; exposes `artifact_slope_threshold` and `artifact_padding_ms` when enabled) |
 
 #### Methods
 
@@ -1572,9 +1574,12 @@ The Preferences dialog organises global settings into two tabs:
 - **General tab**
   - **Scroll Behavior** - `Natural`, `Inverted`, or `System`.
   - **Appearance** - Switch between **Light**, **Dark**, or **System** theme.
-    *Light* and *Dark* apply the cross-platform Fusion style with an explicit
-    palette across macOS, Windows, and Linux; *System* restores the OS-native
-    startup style and palette at runtime without restarting.
+    Synaptipy selects native per-OS widget styles (`macOS` + `NSAppearance` on
+    macOS, `windows11`/`windowsvista`/`Fusion` on Windows, and
+    `Breeze`/`Adwaita`/`Fusion` on Linux) while keeping electrophysiology plot
+    canvases white (`#ffffff`) with black axes (`#000000`). *System* detects the
+    active OS dark/light preference (including GNOME, GTK, and KDE on Linux) and
+    updates live without restarting.
   - **Extensions** - `Enable Custom Plugins` (checked by default). Toggling
     reloads `~/.synaptipy/plugins/` in-process without restarting.
 - **Performance tab**

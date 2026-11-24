@@ -40,7 +40,7 @@ Pre-compiled binaries for Windows, macOS, and Linux are available on the [Releas
 - **Windows (x64):** `Synaptipy_Setup_<version>.exe` - run the setup wizard
 - **macOS (Apple Silicon `arm64`):** `Synaptipy_<version>_macOS_arm64.dmg` - open the disk image and drag `Synaptipy.app` to `Applications`
 - **macOS (Intel `x86_64`):** `Synaptipy_<version>_macOS_x86_64.dmg` - open the disk image and drag `Synaptipy.app` to `Applications`
-- **Linux (x86_64):** `Synaptipy-<version>-x86_64.AppImage` - mark as executable (`chmod +x`) and run
+- **Linux (x86_64):** `Synaptipy-<version>-x86_64.AppImage` - mark as executable (`chmod +x`) and run (on Ubuntu 24.04+ or distros without FUSE 2, install `libfuse2t64`/`libfuse2` or pass `--appimage-extract-and-run`)
 
 ### Advanced: From Source
 

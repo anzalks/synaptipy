@@ -1,6 +1,6 @@
 """Real-data empirical benchmarking pipeline.
 
-Compares SynaptiPy metric extractions against legacy ground-truth measurements
+Compares Synaptipy metric extractions against legacy ground-truth measurements
 (Clampfit / Stimfit) for a reference ABF recording.
 """
 
@@ -87,9 +87,9 @@ def run_real_data_benchmark():
         label="Identity Line (y=x)",
     )
 
-    plt.title("Empirical Validation: SynaptiPy vs. Clampfit")
+    plt.title("Empirical Validation: Synaptipy vs. Clampfit")
     plt.xlabel("Legacy Standard Measurements (Clampfit)")
-    plt.ylabel("SynaptiPy Measurements")
+    plt.ylabel("Synaptipy Measurements")
     plt.legend(loc="upper left")
     plt.tight_layout()
 

@@ -9,9 +9,12 @@ Synaptipy separates application palette management (`src/synaptipy/shared/theme_
 from widget and plot helper utilities (`src/synaptipy/shared/styling.py` and
 `src/synaptipy/shared/plot_factory.py`):
 
-1. **Theme Manager** (`theme_manager.py`) applies Qt's `"Fusion"` style with
-   explicit dark or light `QPalette` definitions and tracks OS color-scheme
-   changes when `ThemeMode.SYSTEM` is selected.
+1. **Theme Manager** (`theme_manager.py`) selects the appropriate native or
+   cross-platform Qt widget style per OS (`"macOS"` + `NSAppearance` on macOS,
+   `"windows11"` / `"windowsvista"` / `"Fusion"` on Windows, and `"Breeze"` /
+   `"Adwaita"` / `"Fusion"` on Linux), applies matching `QPalette` and semantic
+   QSS rules, and tracks OS color-scheme changes (including GNOME, GTK, and KDE
+   preferences on Linux) when `ThemeMode.SYSTEM` is selected.
 2. **Plot Factory** (`plot_factory.py`) constructs all `PyQtGraph` plot widgets
    and layout containers with safe software-rendering defaults and scientific
    axes formatting.
@@ -24,10 +27,10 @@ Application theme state is managed in `src/synaptipy/shared/theme_manager.py`:
 
 - `ThemeMode`: Enum with `LIGHT`, `DARK`, and `SYSTEM` modes.
 - `get_theme_mode()`: Returns the persisted `ThemeMode` from `QSettings`.
-- `set_theme_mode(mode)`: Persists `mode`, applies the resolved palette immediately
-  via `apply_theme(mode)`, and notifies registered listeners.
-- `apply_theme(mode=None)`: Applies Qt `"Fusion"` style with `_apply_dark_palette`
-  or `_apply_light_palette` according to `is_dark_mode()`.
+- `set_theme_mode(mode)`: Persists `mode` to `QSettings` and emits `theme_changed`.
+- `apply_theme(mode=None)`: Resolves `select_platform_style(...)`, applies the
+  light or dark palette/appearance for `is_dark_mode()`, and emits `theme_changed`
+  after updating `QApplication`.
 - `install_system_theme_listener(app)`: Connects to `QStyleHints.colorSchemeChanged`
   so `ThemeMode.SYSTEM` updates live when the OS switches between light and dark
   appearance.
@@ -35,16 +38,17 @@ Application theme state is managed in `src/synaptipy/shared/theme_manager.py`:
 ```python
 from synaptipy.shared.theme_manager import ThemeMode, apply_theme, set_theme_mode
 
-# Switch to dark mode and persist preference
-set_theme_mode(ThemeMode.DARK)
+# Persist dark mode preference and apply immediately
+set_theme_mode(ThemeMode.DARK, emit_signal=False)
+apply_theme(ThemeMode.DARK)
 
 # Re-apply the currently saved preference at startup
 apply_theme()
 ```
 
-Scientific trace canvases keep a white (`"w"`) background with black foreground
-axes (`configure_plot_widget`) regardless of whether the surrounding UI chrome
-uses the dark or light Fusion palette, ensuring publication-consistent contrast.
+Scientific trace canvases keep a white (`"#ffffff"`) background with black
+foreground axes (`configure_plot_widget`) regardless of whether the surrounding
+UI chrome uses a dark or light theme, ensuring publication-consistent contrast.
 
 ## Creating and Styling PyQtGraph Plots
 

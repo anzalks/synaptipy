@@ -105,7 +105,7 @@ Pre-built installers for Windows, macOS, and Linux are published on the [GitHub 
 - **Windows**: Download and execute `Synaptipy_Setup_<version>.exe`.
 - **macOS (Apple Silicon)**: Download `Synaptipy_<version>_macOS_arm64.dmg`, open the disk image, and drag Synaptipy to the `Applications` folder.
 - **macOS (Intel)**: Download `Synaptipy_<version>_macOS_x86_64.dmg`, open the disk image, and drag Synaptipy to the `Applications` folder.
-- **Linux**: Download `Synaptipy-<version>-x86_64.AppImage`, mark it executable (`chmod +x Synaptipy-<version>-x86_64.AppImage`), and launch it.
+- **Linux**: Download `Synaptipy-<version>-x86_64.AppImage`, mark it executable (`chmod +x Synaptipy-<version>-x86_64.AppImage`), and launch it. On distributions without FUSE 2 pre-installed (such as Ubuntu 24.04+), install `libfuse2t64`/`libfuse2` or launch with `./Synaptipy-<version>-x86_64.AppImage --appimage-extract-and-run`.
 
 ### Developer Installation
 
@@ -772,7 +772,7 @@ Open **Edit > Preferences** to configure application settings across two tabs:
 | Tab | Setting | Description |
 |-----|---------|-------------|
 | **General** | **Scroll Behavior** | Choose `Natural`, `Inverted`, or `System` scroll direction for plots. |
-| **General** | **Appearance** | Switch between `Light`, `Dark`, or `System` color theme. **Light** and **Dark** use the cross-platform Fusion style with an explicit color palette. **System** restores the OS-native style and palette from application startup. Switching between all three modes is reversible at runtime without restarting. |
+| **General** | **Appearance** | Switch between `Light`, `Dark`, or `System` color theme. Synaptipy selects native per-OS widget styles (`macOS` + `NSAppearance` on macOS, `windows11`/`windowsvista`/`Fusion` on Windows, and `Breeze`/`Adwaita`/`Fusion` on Linux) while keeping electrophysiology plot canvases white (`#ffffff`) with black axes (`#000000`) across all themes. **System** detects the active OS dark/light preference (including GNOME, GTK, and KDE on Linux), and switching modes updates live without restarting. |
 | **General** | **Extensions (`Enable Custom Plugins`)** | When checked (default), Synaptipy loads Python plugins from `~/.synaptipy/plugins/`. Toggling hot-reloads plugins in-process without restarting. |
 | **Performance** | **Parallel Processing (`Max CPU cores`)** | Number of worker processes used by `BatchAnalysisEngine` (`1` disables multiprocessing; default `1`). |
 | **Performance** | **Memory (`Max RAM allocation`)** | Target RAM ceiling in GB (`0.5` to `512.0 GB`, default `4.0 GB`) used to cap concurrent batch workers alongside per-file `gc.collect()`. |
