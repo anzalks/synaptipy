@@ -31,6 +31,8 @@ The recommended approach for most users is to install Synaptipy directly via pip
 
 ```bash
 pip install synaptipy
+# Optional: include pyabf fallback reader alongside Neo
+pip install "synaptipy[formats]"
 ```
 
 ### Standalone Application
@@ -38,8 +40,8 @@ pip install synaptipy
 Pre-compiled binaries for Windows, macOS, and Linux are available on the [Releases page](https://github.com/anzalks/synaptipy/releases). Download the asset matching your operating system and CPU architecture from the latest release:
 
 - **Windows (x64):** `Synaptipy_Setup_<version>.exe` - run the setup wizard
-- **macOS (Apple Silicon `arm64`):** `Synaptipy_<version>_macOS_arm64.dmg` - open the disk image and drag `Synaptipy.app` to `Applications`
-- **macOS (Intel `x86_64`):** `Synaptipy_<version>_macOS_x86_64.dmg` - open the disk image and drag `Synaptipy.app` to `Applications`
+- **macOS (Apple Silicon `arm64`):** `Synaptipy_<version>_macOS_arm64.dmg` - open the disk image and drag `Synaptipy.app` to `Applications` (if Gatekeeper blocks the unsigned/ad-hoc signed bundle on first launch, run `xattr -cr /Applications/Synaptipy.app` or allow it under **System Settings > Privacy & Security**)
+- **macOS (Intel `x86_64`):** `Synaptipy_<version>_macOS_x86_64.dmg` - open the disk image and drag `Synaptipy.app` to `Applications` (run `xattr -cr /Applications/Synaptipy.app` if prompted by Gatekeeper)
 - **Linux (x86_64):** `Synaptipy-<version>-x86_64.AppImage` - mark as executable (`chmod +x`) and run (on Ubuntu 24.04+ or distros without FUSE 2, install `libfuse2t64`/`libfuse2` or pass `--appimage-extract-and-run`)
 
 ### Advanced: From Source

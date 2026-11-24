@@ -18,6 +18,7 @@ See the LICENSE file in the root of the repository for full license details.
 """
 
 import logging
+import shutil
 import sys
 import urllib.error
 import urllib.request
@@ -458,18 +459,58 @@ class PluginDownloader(QtCore.QThread):
     def _download_all(self, dest_dir: Path) -> tuple:
         """Download every file in :data:`_PLUGIN_FILES` sequentially.
 
+        When network access is unavailable (for example on an offline rig PC
+        running a standalone AppImage, DMG, or Windows installer), falls back
+        to copying bundled example plugins if present locally. Also removes
+        any retired legacy ``ap_repolarization.py`` copy in *dest_dir*.
+
         Returns:
             ``(dest_dir, None)`` on full success, or
-            ``(None, error_message)`` on the first failure.
+            ``(None, error_message)`` on the first failure without fallback.
         """
+        from synaptipy.application.plugin_manager import (
+            _get_bundled_plugin_dir,
+            _has_legacy_capital_synaptipy_import,
+        )
+
+        self._remove_retired_plugins(dest_dir, _has_legacy_capital_synaptipy_import)
+        bundled_dir = _get_bundled_plugin_dir()
+
         for idx, fname in enumerate(_PLUGIN_FILES):
             dest_file = dest_dir / fname
             self.download_progress.emit(idx, len(_PLUGIN_FILES))
             err = self._do_download(dest_file, _PLUGIN_BASE_URL + fname)
             if err:
+                bundled_src = (bundled_dir / fname) if bundled_dir is not None else None
+                if bundled_src is not None and bundled_src.is_file():
+                    try:
+                        shutil.copy2(bundled_src, dest_file)
+                        log.info(
+                            "Copied bundled example plugin '%s' to %s after network failure (%s).",
+                            fname,
+                            dest_dir,
+                            err,
+                        )
+                        continue
+                    except OSError as copy_exc:
+                        log.warning("Bundled plugin fallback failed for '%s': %s", fname, copy_exc)
                 return None, err
         self.download_progress.emit(len(_PLUGIN_FILES), len(_PLUGIN_FILES))
         return dest_dir, None
+
+    @staticmethod
+    def _remove_retired_plugins(dest_dir: Path, legacy_import_checker) -> None:
+        """Remove retired bundled example copies (such as ``ap_repolarization.py``)."""
+        retired_file = dest_dir / "ap_repolarization.py"
+        if not retired_file.is_file():
+            return
+        try:
+            head = retired_file.read_text(encoding="utf-8", errors="ignore")[:512]
+            if legacy_import_checker(retired_file) or ("Maximum Action Potential Repolarization Rate" in head):
+                retired_file.unlink(missing_ok=True)
+                log.info("Removed retired example plugin '%s' from %s.", retired_file.name, dest_dir)
+        except OSError as exc:
+            log.debug("Could not remove retired plugin '%s': %s", retired_file, exc)
 
     def _do_download(self, dest_file: Path, url: str) -> Optional[str]:
         """Stream *url* into *dest_file*.

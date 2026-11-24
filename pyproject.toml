@@ -205,6 +205,7 @@ omit = [
     "*/shared/plot_factory.py",
     "*/shared/styling.py",
     "*/shared/plot_customization.py",
+    "*/shared/draggable_text_item.py",
     # Application entry points (not unit-testable without subprocess)
     "*/__main__.py",
     # Startup / plugin loader (requires full app context)

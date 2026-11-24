@@ -556,3 +556,46 @@ class TestSynapticChargeSchema:
         assert "error" not in res_na
         assert res_na["metrics"]["Charge_pC"] == pytest.approx(-5.0, rel=0.03)
         assert res_na["metrics"]["_baseline_level"] == pytest.approx(0.0, abs=1e-6)
+
+
+class TestPluginDownloaderOfflineFallback:
+    """Verify PluginDownloader cleans up retired plugins and falls back to bundled plugins offline."""
+
+    def test_offline_fallback_copies_bundled_plugins_and_removes_retired(self, tmp_path):
+        from synaptipy.application.gui.welcome_screen import _PLUGIN_FILES, PluginDownloader
+
+        dest_dir = tmp_path / "user_plugins"
+        dest_dir.mkdir()
+        retired = dest_dir / "ap_repolarization.py"
+        retired.write_text('"""Plugin: Maximum Action Potential Repolarization Rate."""\n', encoding="utf-8")
+
+        dl = PluginDownloader()
+        with (
+            patch.object(dl, "_do_download", return_value="Network error: offline"),
+            patch(
+                "synaptipy.application.plugin_manager._get_bundled_plugin_dir",
+                return_value=EXAMPLES_PLUGIN_DIR,
+            ),
+        ):
+            out_dir, err = dl._download_all(dest_dir)
+
+        assert err is None
+        assert out_dir == dest_dir
+        assert not retired.exists(), "Retired ap_repolarization.py should be removed on plugin refresh"
+        for fname in _PLUGIN_FILES:
+            assert (dest_dir / fname).is_file(), f"Missing fallback-copied plugin {fname}"
+
+    def test_offline_without_bundled_dir_reports_error(self, tmp_path):
+        from synaptipy.application.gui.welcome_screen import PluginDownloader
+
+        dest_dir = tmp_path / "user_plugins_empty"
+        dest_dir.mkdir()
+        dl = PluginDownloader()
+        with (
+            patch.object(dl, "_do_download", return_value="Network error: offline"),
+            patch("synaptipy.application.plugin_manager._get_bundled_plugin_dir", return_value=None),
+        ):
+            out_dir, err = dl._download_all(dest_dir)
+
+        assert out_dir is None
+        assert err == "Network error: offline"

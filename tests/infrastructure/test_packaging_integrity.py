@@ -183,8 +183,12 @@ class TestPackagingConfigurations:
             '"black"',
             '"tkinter"',
             '".tests." not in mod',
+            '_safe_collect_submodules("synaptipy")',
+            'not _mod.startswith("synaptipy.templates")',
+            '_PLUGINS_ROOT = os.path.join("examples", "plugins")',
         ):
             assert required_token in spec
+        assert 'datas += [("examples/plugins", "synaptipy/examples/plugins")]' not in spec
 
     def test_windows_inno_setup_enforces_64bit_mode_and_clean_upgrade(self):
         iss = _read("installer/windows_setup.iss")

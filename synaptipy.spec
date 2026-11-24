@@ -81,6 +81,13 @@ for _pkg in (
     "pyabf",
 ):
     hiddenimports += _safe_collect_submodules(_pkg)
+# Ensure every runtime synaptipy module is available for dynamically imported
+# bundled/user plugins (~/.synaptipy/plugins) while omitting copy-only templates.
+hiddenimports += [
+    _mod
+    for _mod in _safe_collect_submodules("synaptipy")
+    if not _mod.startswith("synaptipy.templates")
+]
 
 # Include user-facing local resources while excluding Sphinx build caches and
 # internal development reports.  The rendered HTML manual and QtHelp (.qhc/.qch)
@@ -97,8 +104,18 @@ for _root, _dirs, _files in os.walk(_RESOURCE_ROOT):
         _relative_parent = os.path.relpath(_root, _RESOURCE_ROOT)
         _destination = os.path.join("synaptipy", "resources", _relative_parent)
         datas.append((_source, _destination))
-# Example plugins shipped in-repo -- consumed via EXAMPLES_PLUGIN_DIR in frozen builds
-datas += [("examples/plugins", "synaptipy/examples/plugins")]
+# Example plugins shipped in-repo -- consumed via _get_bundled_plugin_dir() in
+# frozen builds; walk explicitly so __pycache__/.pyc files are never bundled.
+_PLUGINS_ROOT = os.path.join("examples", "plugins")
+if os.path.isdir(_PLUGINS_ROOT):
+    for _filename in sorted(os.listdir(_PLUGINS_ROOT)):
+        if _filename.endswith(".py") and _filename != "__init__.py":
+            datas.append(
+                (
+                    os.path.join(_PLUGINS_ROOT, _filename),
+                    os.path.join("synaptipy", "examples", "plugins"),
+                )
+            )
 for _data_pkg in ("pynwb", "hdmf", "neo", "jsonschema_specifications", "tzdata"):
     datas += _safe_collect_data_files(_data_pkg)
 
