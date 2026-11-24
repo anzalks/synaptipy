@@ -7,10 +7,10 @@
 | src/synaptipy/\_\_init\_\_.py                                       |        5 |        0 |    100% |           |
 | src/synaptipy/application/\_\_init\_\_.py                           |        1 |        0 |    100% |           |
 | src/synaptipy/application/cli/\_\_init\_\_.py                       |        2 |        0 |    100% |           |
-| src/synaptipy/application/cli/main.py                               |       64 |        1 |     98% |        81 |
+| src/synaptipy/application/cli/main.py                               |       74 |        1 |     99% |        93 |
 | src/synaptipy/application/controllers/\_\_init\_\_.py               |        6 |        0 |    100% |           |
 | src/synaptipy/application/controllers/live\_analysis\_controller.py |       65 |        0 |    100% |           |
-| src/synaptipy/application/data\_loader.py                           |       95 |        0 |    100% |           |
+| src/synaptipy/application/data\_loader.py                           |       99 |        0 |    100% |           |
 | src/synaptipy/application/gui/\_\_init\_\_.py                       |        1 |        0 |    100% |           |
 | src/synaptipy/application/gui/analysis\_tabs/\_\_init\_\_.py        |        3 |        0 |    100% |           |
 | src/synaptipy/application/gui/dialogs/\_\_init\_\_.py               |        0 |        0 |    100% |           |
@@ -19,54 +19,55 @@
 | src/synaptipy/application/gui/explorer/toolbar.py                   |       80 |        0 |    100% |           |
 | src/synaptipy/application/gui/widgets/\_\_init\_\_.py               |        0 |        0 |    100% |           |
 | src/synaptipy/application/services/\_\_init\_\_.py                  |        0 |        0 |    100% |           |
-| src/synaptipy/application/services/data\_loader\_service.py         |       36 |        1 |     97% |        92 |
-| src/synaptipy/application/services/methods\_generator.py            |       33 |        0 |    100% |           |
-| src/synaptipy/application/services/parameter\_templates.py          |       42 |        0 |    100% |           |
-| src/synaptipy/application/session\_manager.py                       |      190 |        0 |    100% |           |
+| src/synaptipy/application/services/data\_loader\_service.py         |       88 |        3 |     97% |119-120, 153 |
+| src/synaptipy/application/services/methods\_generator.py            |       42 |        1 |     98% |        46 |
+| src/synaptipy/application/services/parameter\_templates.py          |       61 |        7 |     89% | 33, 42-47 |
+| src/synaptipy/application/session\_manager.py                       |      214 |        2 |     99% |     86-87 |
 | src/synaptipy/core/\_\_init\_\_.py                                  |        2 |        0 |    100% |           |
-| src/synaptipy/core/analysis/\_\_init\_\_.py                         |       15 |        0 |    100% |           |
-| src/synaptipy/core/analysis/batch\_engine.py                        |      807 |       95 |     88% |189, 192-195, 197, 633, 640-642, 653, 717, 759, 777, 971-972, 974, 1022-1024, 1063-1064, 1138, 1154, 1163, 1187, 1229-1231, 1260-1270, 1279, 1282, 1299-1300, 1341, 1349-1402, 1413-1417, 1436-1437, 1462-1464, 1495-1497, 1517-1518, 1576, 1588, 1668-1674, 1679, 1685, 1693-1696, 1717, 1732-1744, 1747-1759, 1803-1805, 1894 |
-| src/synaptipy/core/analysis/contracts.py                            |       34 |        0 |    100% |           |
+| src/synaptipy/core/analysis/\_\_init\_\_.py                         |       16 |        0 |    100% |           |
+| src/synaptipy/core/analysis/batch\_engine.py                        |      958 |      102 |     89% |122, 133, 145, 155, 275, 278-281, 283, 731, 739, 753, 763-770, 772-773, 794-804, 820, 826-837, 872, 878, 916, 938, 962, 971-972, 982, 1022-1023, 1192-1193, 1195, 1243-1245, 1278-1279, 1289-1290, 1350, 1407, 1422, 1433, 1470-1472, 1506-1508, 1556-1558, 1566-1590, 1598-1599, 1606-1610, 1616-1620, 1639-1640, 1665-1667, 1698-1700, 1720-1721, 1768-1770, 1782, 1875, 1877-1878, 1885, 1891, 1904, 1941-1953, 1956-1968, 1985, 2019-2021, 2111 |
+| src/synaptipy/core/analysis/contracts.py                            |       50 |        1 |     98% |        38 |
 | src/synaptipy/core/analysis/cross\_file\_utils.py                   |      234 |        1 |     99% |       388 |
-| src/synaptipy/core/analysis/epoch\_manager.py                       |      107 |        3 |     97% |54, 290, 296 |
-| src/synaptipy/core/analysis/evoked\_responses.py                    |      593 |       19 |     97% |430, 434, 588, 604, 698, 723-736, 1087, 1155, 1179-1180, 1260, 1271, 1273, 1758, 1781, 1810 |
-| src/synaptipy/core/analysis/firing\_dynamics.py                     |      292 |        0 |    100% |           |
-| src/synaptipy/core/analysis/passive\_properties.py                  |      798 |       18 |     98% |156, 352-356, 393, 759-763, 1014, 1144-1150, 1208-1209 |
+| src/synaptipy/core/analysis/epoch\_manager.py                       |      109 |        3 |     97% |54, 302, 308 |
+| src/synaptipy/core/analysis/evoked\_responses.py                    |      658 |       37 |     94% |469, 473, 620, 627, 746, 753-754, 757-780, 801-802, 1130, 1216, 1235-1236, 1321, 1332, 1334, 1536-1543, 1694, 1870, 1893, 1922 |
+| src/synaptipy/core/analysis/firing\_dynamics.py                     |      310 |        1 |     99% |       693 |
+| src/synaptipy/core/analysis/passive\_properties.py                  |      872 |       24 |     97% |174, 279, 294, 401-405, 442, 808-812, 1080, 1152, 1245, 1282-1283, 2107-2110, 2489 |
+| src/synaptipy/core/analysis/preprocessing.py                        |       75 |       38 |     49% |23-34, 53, 55-57, 59-62, 68, 84-87, 93-97, 105-107, 113-117, 125-128 |
 | src/synaptipy/core/analysis/registry.py                             |      128 |        2 |     98% |   192-196 |
-| src/synaptipy/core/analysis/single\_spike.py                        |      428 |       13 |     97% |165, 188-189, 489, 587, 718-724, 1001-1003 |
-| src/synaptipy/core/analysis/synaptic\_events.py                     |      453 |       21 |     95% |280-282, 334, 417, 420-444, 857-858, 977, 993 |
+| src/synaptipy/core/analysis/single\_spike.py                        |      563 |       28 |     95% |197-198, 510, 541, 585, 591, 643, 671, 801-807, 873, 882-884, 891, 1131-1137, 1203-1205, 1302, 1329-1331 |
+| src/synaptipy/core/analysis/synaptic\_events.py                     |      520 |       25 |     95% |303-304, 351, 432, 435-459, 915-916, 982, 989, 1009, 1071, 1088, 1119 |
 | src/synaptipy/core/averaging.py                                     |       32 |        1 |     97% |        46 |
 | src/synaptipy/core/constants.py                                     |       15 |        0 |    100% |           |
-| src/synaptipy/core/data\_model.py                                   |      276 |        5 |     98% |216-217, 278-280 |
+| src/synaptipy/core/data\_model.py                                   |      310 |        7 |     98% |142, 144, 161-163, 304, 329 |
 | src/synaptipy/core/error\_handler.py                                |       77 |        1 |     99% |       138 |
-| src/synaptipy/core/processing\_pipeline.py                          |      157 |        0 |    100% |           |
+| src/synaptipy/core/processing\_pipeline.py                          |      184 |       13 |     93% |179-183, 261-272 |
 | src/synaptipy/core/protocols.py                                     |      191 |        2 |     99% |   296-297 |
 | src/synaptipy/core/results.py                                       |      149 |        0 |    100% |           |
-| src/synaptipy/core/signal\_processor.py                             |      395 |        0 |    100% |           |
+| src/synaptipy/core/signal\_processor.py                             |      459 |        8 |     98% |202-203, 213, 231, 241, 250, 503, 513 |
 | src/synaptipy/core/source\_interfaces.py                            |        2 |        0 |    100% |           |
-| src/synaptipy/core/trial\_qc.py                                     |       30 |        0 |    100% |           |
+| src/synaptipy/core/trial\_qc.py                                     |       32 |        1 |     97% |        47 |
 | src/synaptipy/infrastructure/\_\_init\_\_.py                        |        1 |        0 |    100% |           |
 | src/synaptipy/infrastructure/exporters/\_\_init\_\_.py              |        2 |        0 |    100% |           |
-| src/synaptipy/infrastructure/exporters/csv\_exporter.py             |      310 |        2 |     99% |     22-23 |
-| src/synaptipy/infrastructure/exporters/nwb\_exporter.py             |      362 |       38 |     90% |36-37, 103-121, 380-381, 410, 428-429, 503, 522-524, 651-666, 716-717, 731, 762-763, 781-782, 789-792 |
+| src/synaptipy/infrastructure/exporters/csv\_exporter.py             |      378 |        5 |     99% |22-23, 60-61, 298 |
+| src/synaptipy/infrastructure/exporters/nwb\_exporter.py             |      428 |       53 |     88% |36-37, 103-121, 273, 277, 295-298, 463-464, 493, 511-512, 525-526, 529, 600, 619-621, 667-669, 679-681, 756-771, 854-855, 869, 900-901, 921-922, 929-932 |
 | src/synaptipy/infrastructure/file\_readers/\_\_init\_\_.py          |        2 |        0 |    100% |           |
 | src/synaptipy/infrastructure/file\_readers/abf\_reader.py           |        0 |        0 |    100% |           |
 | src/synaptipy/infrastructure/file\_readers/format\_support.py       |       12 |        0 |    100% |           |
-| src/synaptipy/infrastructure/file\_readers/neo\_adapter.py          |      591 |      144 |     76% |55-56, 158, 171-173, 215, 240, 268-270, 280-282, 338, 341, 347, 351, 397, 400, 536-539, 573-574, 604-646, 655-750, 770-773, 784-787, 796, 813, 847-848, 850-851, 855-863, 877, 885, 889, 953-954, 1162-1164, 1224-1228 |
-| src/synaptipy/infrastructure/file\_readers/neo\_source\_handle.py   |       50 |        0 |    100% |           |
-| src/synaptipy/infrastructure/neo\_patches.py                        |      154 |        3 |     98% |89-90, 188 |
+| src/synaptipy/infrastructure/file\_readers/neo\_adapter.py          |      719 |      112 |     84% |55-56, 158-159, 165, 170-175, 181, 185, 221, 234-236, 278, 303, 331-333, 343-345, 401, 404, 410, 414, 460, 463, 599-602, 636-637, 673-690, 706-709, 734, 747-757, 760, 834-837, 855, 920-931, 933-934, 943-946, 960, 970, 1038-1039, 1122, 1146, 1172-1179, 1185, 1219-1220, 1229-1231, 1272-1273, 1295-1297, 1348-1351, 1393, 1395 |
+| src/synaptipy/infrastructure/file\_readers/neo\_source\_handle.py   |       69 |        7 |     90% |43-47, 60-61 |
+| src/synaptipy/infrastructure/neo\_patches.py                        |      161 |        7 |     96% |79-80, 93-94, 135-139, 201 |
 | src/synaptipy/shared/\_\_init\_\_.py                                |       16 |        0 |    100% |           |
 | src/synaptipy/shared/constants.py                                   |       11 |        0 |    100% |           |
-| src/synaptipy/shared/cursor\_manager.py                             |      185 |       16 |     91% |47-54, 72, 99, 103, 113, 117, 130-131, 214-215 |
+| src/synaptipy/shared/cursor\_manager.py                             |      196 |       17 |     91% |72-79, 95, 97, 101, 125, 130, 134, 144, 148, 162-163 |
 | src/synaptipy/shared/data\_cache.py                                 |      154 |        1 |     99% |        55 |
 | src/synaptipy/shared/error\_handling.py                             |       20 |        0 |    100% |           |
-| src/synaptipy/shared/logging\_config.py                             |       65 |        1 |     98% |        53 |
+| src/synaptipy/shared/logging\_config.py                             |       88 |        4 |     95% |121-122, 153-154 |
 | src/synaptipy/shared/scroll\_settings.py                            |       53 |        1 |     98% |        93 |
 | src/synaptipy/shared/utils.py                                       |       84 |        6 |     93% |     80-85 |
-| src/synaptipy/shared/xlsx\_exporter.py                              |       62 |        0 |    100% |           |
+| src/synaptipy/shared/xlsx\_exporter.py                              |       97 |        7 |     93% |73, 80-81, 95-96, 115, 117 |
 | src/synaptipy/templates/\_\_init\_\_.py                             |        0 |        0 |    100% |           |
-| src/synaptipy/templates/plugin\_template.py                         |       12 |        0 |    100% |           |
-| **TOTAL**                                                           | **8150** |  **410** | **95%** |           |
+| src/synaptipy/templates/plugin\_template.py                         |       13 |        0 |    100% |           |
+| **TOTAL**                                                           | **9357** |  **544** | **94%** |           |
 
 
 ## Setup coverage badge
