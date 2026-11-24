@@ -862,6 +862,11 @@ def get_event_fit_overlay_pen():
     return pg.mkPen(color=color, width=mgr._safe_width(prefs.get("width", 2), default=2.0))
 
 
+def get_overlay_fit_pen():
+    """Get the pen for primary fitted curve overlays (e.g. Tau, PPR, Capacitance exponential fits)."""
+    return get_event_fit_overlay_pen()
+
+
 def get_plot_pens(is_average: bool, trial_index: int = 0) -> pg.Qt.QtGui.QPen:
     """
     Creates a QPen object based on the current customization settings.

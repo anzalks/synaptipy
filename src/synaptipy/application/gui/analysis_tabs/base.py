@@ -1727,12 +1727,13 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
                 if self.analysis_region in self.plot_widget.items:
                     self.plot_widget.removeItem(self.analysis_region)
 
-        # Trigger re-analysis
-        self._trigger_analysis()
+        # Trigger re-analysis (unless manual Run Analysis button is configured)
+        if not (getattr(self, "metadata", None) or {}).get("run_button"):
+            self._trigger_analysis()
 
     def _on_region_changed(self):
         """Handle region drag."""
-        if self._analysis_debounce_timer:
+        if self._analysis_debounce_timer and not (getattr(self, "metadata", None) or {}).get("run_button"):
             self._analysis_debounce_timer.start(self._debounce_delay_ms)
 
     # --- PHASE 2: Abstract Methods for Template Method Pattern ---
@@ -2138,7 +2139,16 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             return
 
         self.signal_channel_combobox.setEnabled(True)
-        self.signal_channel_combobox.setCurrentIndex(0)
+        default_chan_idx = 0
+        supported_units = tuple((getattr(self, "metadata", None) or {}).get("supported_channel_units", ()))
+        if supported_units and self._selected_item_recording and self._selected_item_recording.channels:
+            for combo_idx in range(self.signal_channel_combobox.count()):
+                cid = self.signal_channel_combobox.itemData(combo_idx)
+                ch_obj = self._selected_item_recording.channels.get(cid)
+                if ch_obj is not None and str(getattr(ch_obj, "units", "")) in supported_units:
+                    default_chan_idx = combo_idx
+                    break
+        self.signal_channel_combobox.setCurrentIndex(default_chan_idx)
 
         # Populate Data Source ComboBox
         selected_item_details = (
@@ -2147,8 +2157,11 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         item_type = selected_item_details.get("target_type")
         item_trial_index = selected_item_details.get("trial_index")
 
-        # Get trial info from first channel
-        first_channel = next(iter(self._selected_item_recording.channels.values()), None)
+        # Get trial info from selected channel (falling back to first channel)
+        selected_cid = self.signal_channel_combobox.currentData()
+        first_channel = self._selected_item_recording.channels.get(selected_cid) or next(
+            iter(self._selected_item_recording.channels.values()), None
+        )
         num_trials = 0
 
         if first_channel:
@@ -3050,7 +3063,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
         Called when a parameter widget changes.
         Starts/restarts the debounce timer to trigger analysis after a delay.
         """
-        if self._analysis_debounce_timer:
+        if self._analysis_debounce_timer and not (getattr(self, "metadata", None) or {}).get("run_button"):
             self._analysis_debounce_timer.start(self._debounce_delay_ms)
             log.debug(f"{self.__class__.__name__}: Parameter changed, debounce timer started")
 

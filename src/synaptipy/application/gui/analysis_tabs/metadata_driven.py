@@ -501,8 +501,19 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
         # Apply channel-aware defaults for the newly generated widgets, then
         # re-run so the tab shows results for the method that is now selected.
+        supported_units = tuple(self.metadata.get("supported_channel_units", ()))
+        if supported_units and self._selected_item_recording and self.signal_channel_combobox:
+            cur_ch = self._selected_item_recording.channels.get(self.signal_channel_combobox.currentData())
+            if cur_ch is None or str(getattr(cur_ch, "units", "")) not in supported_units:
+                for combo_idx in range(self.signal_channel_combobox.count()):
+                    cid = self.signal_channel_combobox.itemData(combo_idx)
+                    ch_obj = self._selected_item_recording.channels.get(cid)
+                    if ch_obj is not None and str(getattr(ch_obj, "units", "")) in supported_units:
+                        self.signal_channel_combobox.setCurrentIndex(combo_idx)
+                        break
+
         self._update_parameter_visibility()
-        if self._current_plot_data and self._analysis_debounce_timer:
+        if self._current_plot_data and self._analysis_debounce_timer and not self.metadata.get("run_button"):
             self._analysis_debounce_timer.start(self._debounce_delay_ms)
 
         # Scroll the left panel so the Parameters group is visible.
@@ -1077,7 +1088,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         """
         super()._on_data_plotted()
         self._ensure_custom_items_on_plot()
-        if self._analysis_debounce_timer:
+        if self._analysis_debounce_timer and not self.metadata.get("run_button"):
             self._analysis_debounce_timer.start(self._debounce_delay_ms)
 
     def _on_param_changed(self):
@@ -1085,7 +1096,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         # Re-evaluate visibility in case a choice/bool param controls others
         if hasattr(self, "param_generator"):
             self._update_parameter_visibility()
-        if self._analysis_debounce_timer:
+        if self._analysis_debounce_timer and not self.metadata.get("run_button"):
             self._analysis_debounce_timer.start(self._debounce_delay_ms)
 
     def _gather_analysis_parameters(self) -> Dict[str, Any]:
@@ -1319,7 +1330,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                 supported = ", ".join(supported_units)
                 analysis_label = metadata.get("label", self.analysis_name)
                 actual_units = channel_units or "unknown units"
-                raise ValueError(f"{analysis_label} requires a channel in {supported}, not {actual_units}.")
+                raise AnalysisNotConfigured(f"{analysis_label} requires a channel in {supported}, not {actual_units}.")
 
         protocol_contexts = self._update_protocol_readiness(data)
         incompatible = [context for context in protocol_contexts if context.status == "incompatible"]
