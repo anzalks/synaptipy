@@ -17,7 +17,7 @@ from the AnalysisRegistry.  It also provides built-in support for:
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pyqtgraph as pg
@@ -86,6 +86,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         # --- Result h-lines & dynamic overlays ---
         self._result_hlines: Dict[str, pg.InfiniteLine] = {}
         self._dynamic_plot_items: List[Any] = []
+        self._overlay_label_offsets: Dict[str, Tuple[float, float]] = {}
 
         # --- Popup plot handles (keyed per sub-method + plot title) ---
         self._popup_plot: Optional[pg.PlotItem] = None
@@ -575,6 +576,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         self._custom_interactive_regions.clear()
         self._interactive_region_created = False
         self._result_hlines.clear()
+        self._overlay_label_offsets.clear()
 
     def _setup_custom_plot_items(self):
         """
@@ -861,7 +863,10 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         if self._event_count_text_item is not None:
             self._event_count_text_item.setText(f"Events: {count}")
             if len(time_arr) > 0 and len(data_arr) > 0:
-                self._event_count_text_item.setPos(float(np.nanmax(time_arr)), float(np.nanmax(data_arr)))
+                if hasattr(self._event_count_text_item, "set_default_pos"):
+                    self._event_count_text_item.set_default_pos(float(np.nanmax(time_arr)), float(np.nanmax(data_arr)))
+                else:
+                    self._event_count_text_item.setPos(float(np.nanmax(time_arr)), float(np.nanmax(data_arr)))
             self._event_count_text_item.setVisible(count > 0)
 
         # Update results table and _last_analysis_result with curated stats
@@ -1031,6 +1036,9 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
     def _on_channel_changed(self, index=None):
         """Handle channel selection change."""
+        self._overlay_label_offsets.clear()
+        if self._event_count_text_item is not None and hasattr(self._event_count_text_item, "user_moved"):
+            self._event_count_text_item.user_moved = False
         # Trigger visibility update (channel units might have changed)
         self._update_parameter_visibility()
 
@@ -2214,7 +2222,9 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                     self._detector_uses_signed_amplitudes = True
 
             if self._event_count_text_item is None and self.plot_widget is not None:
-                self._event_count_text_item = pg.TextItem(
+                from synaptipy.shared.draggable_text_item import DraggableTextItem
+
+                self._event_count_text_item = DraggableTextItem(
                     text=f"Events: {len(idx_arr)}",
                     anchor=(1, 1),
                     color=(255, 255, 255),
@@ -2287,6 +2297,47 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             elif key in self._result_hlines:
                 self._result_hlines[key].setVisible(False)
 
+    def _on_overlay_label_offset_changed(self, label_key: str, dx: Optional[float], dy: Optional[float]) -> None:
+        """Persist or clear user-dragged ``(dx, dy)`` offset for a dynamic overlay label."""
+        if dx is None or dy is None:
+            self._overlay_label_offsets.pop(label_key, None)
+        else:
+            self._overlay_label_offsets[label_key] = (float(dx), float(dy))
+
+    def _add_fit_tau_badge(self, cfg: Dict[str, Any], tau_val: float, x_arr: np.ndarray, y_arr: np.ndarray) -> None:
+        """Render a draggable ``tau = ... ms`` annotation badge with a leader line to the fit curve."""
+        from synaptipy.shared.draggable_text_item import DraggableTextItem
+
+        valid_idx = np.flatnonzero(np.isfinite(x_arr) & np.isfinite(y_arr))
+        mid_i = int(valid_idx[len(valid_idx) // 2]) if len(valid_idx) > 0 else len(x_arr) // 2
+        anchor_xy = (float(x_arr[mid_i]), float(y_arr[mid_i]))
+
+        x_min, x_max = float(np.nanmin(x_arr)), float(np.nanmax(x_arr))
+        y_min, y_max = float(np.nanmin(y_arr)), float(np.nanmax(y_arr))
+        default_x = x_min + 0.55 * (x_max - x_min)
+        default_y = y_min + 0.85 * (y_max - y_min)
+
+        label_key = f"{self.analysis_name}:{cfg.get('x')}:{cfg.get('y')}:{cfg.get('tau_key') or 'primary'}"
+        text_item = DraggableTextItem(
+            text=f"tau = {float(tau_val):.2f} ms",
+            anchor=(0, 1),
+            color=(255, 255, 255),
+            fill=(0, 0, 0, 175),
+            on_offset_changed=lambda dx, dy, k=label_key: self._on_overlay_label_offset_changed(k, dx, dy),
+        )
+        text_item.setZValue(95)
+        text_item.bind_leader(self.plot_widget, anchor_xy)
+        text_item.set_default_pos(default_x, default_y, leader_target=anchor_xy)
+        if label_key in self._overlay_label_offsets:
+            saved_dx, saved_dy = self._overlay_label_offsets[label_key]
+            text_item.apply_offset(saved_dx, saved_dy)
+
+        try:
+            self.plot_widget.addItem(text_item, ignoreBounds=True)
+        except TypeError:
+            self.plot_widget.addItem(text_item)
+        self._dynamic_plot_items.append(text_item)
+
     def _viz_overlay_fit(self, cfg, result):
         """Draw a fit curve overlay on the main plot (e.g. exponential fit for Tau)."""
         from synaptipy.shared.plot_customization import get_overlay_fit_pen
@@ -2319,28 +2370,16 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         self.plot_widget.addItem(curve)
         self._dynamic_plot_items.append(curve)
 
-        # Statistical annotation positioned cleanly within the fitted span (safe for negative mV)
+        # Statistical annotation positioned cleanly within the fitted span (draggable by user)
         tau_key = cfg.get("tau_key")
         tau = self._val(result, tau_key) if tau_key else None
         if tau is None and cfg.get("role") != "secondary_fit":
-            tau = self._val(result, "tau_ms")
-            if tau is None:
-                tau = self._val(result, "tau_fast_ms")
-            if tau is None:
-                tau = self._val(result, "tau")
+            for fallback_key in ("tau_ms", "tau_fast_ms", "tau"):
+                tau = self._val(result, fallback_key)
+                if tau is not None:
+                    break
         if tau is not None and np.isfinite(float(tau)):
-            text_item = pg.TextItem(
-                text=f"tau = {float(tau):.2f} ms",
-                anchor=(0, 1),
-                color=(255, 255, 255),
-                fill=(0, 0, 0, 175),
-            )
-            x_min, x_max = float(np.nanmin(x_arr)), float(np.nanmax(x_arr))
-            y_min, y_max = float(np.nanmin(y_arr)), float(np.nanmax(y_arr))
-            text_item.setPos(x_min + 0.55 * (x_max - x_min), y_min + 0.85 * (y_max - y_min))
-            text_item.setZValue(95)
-            self.plot_widget.addItem(text_item)
-            self._dynamic_plot_items.append(text_item)
+            self._add_fit_tau_badge(cfg, float(tau), x_arr, y_arr)
 
     # ------------------------------------------------------------------
     # fill_between helpers
@@ -2656,7 +2695,10 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
                         break
 
             if "stat_text" not in curves:
-                text_item = pg.TextItem(anchor=(0, 1), color=(255, 255, 255), fill=(0, 0, 0, 175))
+                from synaptipy.shared.draggable_text_item import DraggableTextItem
+
+                text_item = DraggableTextItem(anchor=(0, 1), color=(255, 255, 255), fill=(0, 0, 0, 175))
+                text_item.setZValue(95)
                 popup_plot.addItem(text_item)
                 curves["stat_text"] = text_item
             stats_lines = [f"Slope = {float(slope):.3g}"]
@@ -2665,7 +2707,11 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             curves["stat_text"].setText("\n".join(stats_lines))
             x_span = max(px) - min(px) or 1.0
             y_span = max(py) - min(py) or 1.0
-            curves["stat_text"].setPos(min(px) + 0.04 * x_span, max(py) - 0.04 * y_span)
+            def_x, def_y = min(px) + 0.04 * x_span, max(py) - 0.04 * y_span
+            if hasattr(curves["stat_text"], "set_default_pos"):
+                curves["stat_text"].set_default_pos(def_x, def_y)
+            else:
+                curves["stat_text"].setPos(def_x, def_y)
         else:
             curves["fit"].setData([], [])
             if "stat_text" in curves:
@@ -2792,16 +2838,22 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
         if threshold_v is not None and max_dvdt is not None and np.isfinite(float(threshold_v)):
             if "phase_stats" not in curves:
-                text_item = pg.TextItem(anchor=(0, 1), color=(255, 255, 255), fill=(0, 0, 0, 175))
+                from synaptipy.shared.draggable_text_item import DraggableTextItem
+
+                text_item = DraggableTextItem(anchor=(0, 1), color=(255, 255, 255), fill=(0, 0, 0, 175))
+                text_item.setZValue(95)
                 popup_plot.addItem(text_item)
                 curves["phase_stats"] = text_item
             stats_text = f"Threshold: {float(threshold_v):.1f} {unit}\nMax dV/dt: {float(max_dvdt):.1f} {unit_s}"
             curves["phase_stats"].setText(stats_text)
             v_range = float(np.nanmax(voltage) - np.nanmin(voltage)) or 1.0
             dvdt_range = float(np.nanmax(dvdt) - np.nanmin(dvdt)) or 1.0
-            curves["phase_stats"].setPos(
-                float(np.nanmin(voltage)) + 0.04 * v_range, float(np.nanmax(dvdt)) - 0.04 * dvdt_range
-            )
+            def_x = float(np.nanmin(voltage)) + 0.04 * v_range
+            def_y = float(np.nanmax(dvdt)) - 0.04 * dvdt_range
+            if hasattr(curves["phase_stats"], "set_default_pos"):
+                curves["phase_stats"].set_default_pos(def_x, def_y)
+            else:
+                curves["phase_stats"].setPos(def_x, def_y)
         elif "phase_stats" in curves:
             curves["phase_stats"].setText("")
         popup_plot.autoRange()

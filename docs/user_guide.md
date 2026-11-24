@@ -282,8 +282,9 @@ screen. The default widths are 320 px (left), 800 px (centre), and 360 px
 - **Downsampling**: Enable/disable automatic downsampling for large datasets
 - **Interactive Cursor**: Enable crosshair cursors to place persistent markers at
   specific (time, amplitude) coordinates on the trace. In **Delta Mode**, successive
-  cursor placements report the difference ($\Delta t$, $\Delta V$ or $\Delta I$) between points. Use
-  **Undo** and **Clear** to manage placed cursors.
+  cursor placements report the difference ($\Delta t$, $\Delta V$ or $\Delta I$) between points.
+  Placed readout labels can be left-dragged away from traces (with a dashed leader line)
+  and double-clicked to reset; use **Undo** and **Clear** to manage placed cursors.
 - **Trial Quality Metrics**: Displays series resistance ($R_s$), membrane capacitance
   ($C_m$), and signal-to-noise ratio (SNR) for the current trial, extracted from the
   recording metadata. Values update automatically during trial navigation.
@@ -331,9 +332,11 @@ All analysis sub-tabs share the following interface behaviours:
   Switching to **Manual** mode unlocks all spinboxes for direct entry.
 - **Conditional parameter visibility** - Parameters irrelevant to the current
   clamp mode or analysis type are hidden automatically.
-- **Statistical annotations on popup plots** - Popup scatter and curve-fit plots
-  display quantitative annotations ($R^2$, regression slope, $\tau$, event counts)
-  directly on the figure for immediate reference.
+- **Draggable statistical annotations** - Main-plot and popup curve-fit overlays
+  display quantitative badges ($R^2$, regression slope, $\tau$, event counts)
+  directly on the figure. Left-drag any badge to move it off underlying traces
+  (revealing a dashed leader line to its fitted curve), or double-click the badge
+  to snap it back to its default position.
 
 ### Input Resistance/Conductance Analysis
 

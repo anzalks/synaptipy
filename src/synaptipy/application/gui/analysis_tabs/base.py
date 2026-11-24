@@ -974,7 +974,7 @@ class BaseAnalysisTab(QtWidgets.QWidget, ABC, metaclass=QABCMeta):
             items = self.plot_widget.items if hasattr(self.plot_widget, "items") else []
             for item in items:
                 role = getattr(item, "_synaptipy_role", None)
-                if role == "cursor_connector":
+                if role in ("cursor_connector", "annotation_leader"):
                     continue
                 if role == "trace_overlay":
                     item.setPen(overlay_pen)

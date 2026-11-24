@@ -1,11 +1,36 @@
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pyqtgraph as pg
 from PySide6 import QtCore, QtWidgets
 
 log = logging.getLogger(__name__)
+_ORIG_PG_TEXT_ITEM = pg.TextItem
+
+
+def _make_cursor_text_item(
+    text: str,
+    fg_color: Any,
+    bg_color: Any,
+    target_plot: Any,
+    pos_xy: Tuple[float, float],
+) -> Any:
+    """Create a draggable cursor readout label (falling back to ``pg.TextItem`` when mocked in unit tests)."""
+    if pg.TextItem is not _ORIG_PG_TEXT_ITEM:
+        item = pg.TextItem(text=text, color=fg_color, fill=pg.mkBrush(bg_color), anchor=(0.5, 1.2))
+        target_plot.addItem(item, ignoreBounds=True)
+        item.setPos(pos_xy[0], pos_xy[1])
+        return item
+
+    from synaptipy.shared.draggable_text_item import DraggableTextItem
+
+    item = DraggableTextItem(text=text, color=fg_color, fill=pg.mkBrush(bg_color), anchor=(0.5, 1.2))
+    item.setZValue(98)
+    item.bind_leader(target_plot, pos_xy)
+    item.set_default_pos(pos_xy[0], pos_xy[1], leader_target=pos_xy)
+    target_plot.addItem(item, ignoreBounds=True)
+    return item
 
 
 class CursorToolManager(QtCore.QObject):
@@ -68,7 +93,7 @@ class CursorToolManager(QtCore.QObject):
         for item in items:
             if callable(getattr(item, "isVisible", None)) and item.isVisible() is False:
                 continue
-            if getattr(item, "_synaptipy_role", None) == "cursor_connector":
+            if getattr(item, "_synaptipy_role", None) in ("cursor_connector", "annotation_leader"):
                 continue
             xData = getattr(item, "xData", None)
             yData = getattr(item, "yData", None)
@@ -95,6 +120,8 @@ class CursorToolManager(QtCore.QObject):
         if not self._cursor_mode_enabled:
             return
         if event.button() != QtCore.Qt.MouseButton.LeftButton:
+            return
+        if getattr(event, "isAccepted", lambda: False)() is True:
             return
 
         pos = event.scenePos()
@@ -150,14 +177,13 @@ class CursorToolManager(QtCore.QObject):
             marker = pg.ScatterPlotItem(x=[x_val], y=[y_val], size=10, pen=pg.mkPen(None), brush=pg.mkBrush(bg_color))
             target_plot.addItem(marker, ignoreBounds=True)
 
-            text_item = pg.TextItem(
-                text=f"[Pair {pair_id} Start] X: {x_val:.4g}\nY: {y_val:.4g}",
-                color=fg_color,
-                fill=pg.mkBrush(bg_color),
-                anchor=(0.5, 1.2),
+            text_item = _make_cursor_text_item(
+                f"[Pair {pair_id} Start] X: {x_val:.4g}\nY: {y_val:.4g}",
+                fg_color,
+                bg_color,
+                target_plot,
+                (x_val, y_val),
             )
-            target_plot.addItem(text_item, ignoreBounds=True)
-            text_item.setPos(x_val, y_val)
 
             self._delta_anchor = {"x": x_val, "y": y_val, "marker": marker, "text": text_item, "plot": target_plot}
         else:
@@ -177,14 +203,13 @@ class CursorToolManager(QtCore.QObject):
             marker2 = pg.ScatterPlotItem(x=[x_val], y=[y_val], size=10, pen=pg.mkPen(None), brush=pg.mkBrush(bg_color))
             target_plot.addItem(marker2, ignoreBounds=True)
 
-            text2 = pg.TextItem(
-                text=f"[Pair {pair_id} End] X: {x_val:.4g}\nY: {y_val:.4g}",
-                color=fg_color,
-                fill=pg.mkBrush(bg_color),
-                anchor=(0.5, 1.2),
+            text2 = _make_cursor_text_item(
+                f"[Pair {pair_id} End] X: {x_val:.4g}\nY: {y_val:.4g}",
+                fg_color,
+                bg_color,
+                target_plot,
+                (x_val, y_val),
             )
-            target_plot.addItem(text2, ignoreBounds=True)
-            text2.setPos(x_val, y_val)
 
             line = pg.PlotDataItem([x1, x_val], [y1, y_val], pen=pg.mkPen(bg_color, style=QtCore.Qt.DashLine))
             line._synaptipy_role = "cursor_connector"
@@ -193,16 +218,15 @@ class CursorToolManager(QtCore.QObject):
             dx = x_val - x1
             dy = y_val - y1
 
-            mid_text = pg.TextItem(
-                text=f"[Pair {pair_id}]\nΔX: {dx:.4g}\nΔY: {dy:.4g}",
-                color=fg_color,
-                fill=pg.mkBrush(bg_color),
-                anchor=(0.5, 1.2),
-            )
             mid_x = (x1 + x_val) / 2
             mid_y = (y1 + y_val) / 2
-            target_plot.addItem(mid_text, ignoreBounds=True)
-            mid_text.setPos(mid_x, mid_y)
+            mid_text = _make_cursor_text_item(
+                f"[Pair {pair_id}]\nΔX: {dx:.4g}\nΔY: {dy:.4g}",
+                fg_color,
+                bg_color,
+                target_plot,
+                (mid_x, mid_y),
+            )
 
             self._cursor_history.append(
                 {
@@ -223,11 +247,13 @@ class CursorToolManager(QtCore.QObject):
         marker = pg.ScatterPlotItem(x=[x_val], y=[y_val], size=10, pen=pg.mkPen(None), brush=pg.mkBrush(bg_color))
         target_plot.addItem(marker, ignoreBounds=True)
 
-        text_item = pg.TextItem(
-            text=f"X: {x_val:.4g}\nY: {y_val:.4g}", color=fg_color, fill=pg.mkBrush(bg_color), anchor=(0.5, 1.2)
+        text_item = _make_cursor_text_item(
+            f"X: {x_val:.4g}\nY: {y_val:.4g}",
+            fg_color,
+            bg_color,
+            target_plot,
+            (x_val, y_val),
         )
-        target_plot.addItem(text_item, ignoreBounds=True)
-        text_item.setPos(x_val, y_val)
 
         self._cursor_history.append(
             {"type": "single", "items": [marker, text_item], "plot": target_plot, "data": (x_val, y_val)}
