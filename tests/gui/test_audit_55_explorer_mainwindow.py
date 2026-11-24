@@ -55,9 +55,9 @@ def _make_recording(path: Path, num_trials: int = 4, dual_channel: bool = True) 
     return rec
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def shared_mw(qapp):
-    """Module-scoped MainWindow to avoid multi-instance offscreen C++ teardown races."""
+    """Session-scoped MainWindow to avoid mid-session PlotItem C++ teardown races."""
     from synaptipy.application.gui.main_window import MainWindow
 
     with (
@@ -76,12 +76,6 @@ def shared_mw(qapp):
         qapp.processEvents()
 
     yield win
-
-    if hasattr(win, "data_loader_thread") and win.data_loader_thread:
-        win.data_loader_thread.quit()
-        win.data_loader_thread.wait(2000)
-    win.close()
-    qapp.processEvents()
 
 
 @pytest.fixture(autouse=True)
