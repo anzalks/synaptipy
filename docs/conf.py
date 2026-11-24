@@ -238,6 +238,8 @@ linkcheck_ignore = [
     r"https://digital-library\.theiet\.org/",  # IET Digital Library - blocks crawler checks with 403
     r"https://github\.com/anzalks/synaptipy#dependencies-and-citations",  # anchor check can be flaky in CI
     r"https://codecov\.io/",  # badge endpoint returns 504 under CI load
+    r"https://img\.shields\.io/",  # dynamic badge endpoint times out under CI load
+    r"https://flat\.badgen\.net/",  # dynamic badge endpoint times out under CI load
     # DOI links whose publisher blocks automated checks. Include both publisher
     # domains above and doi.org prefixes here so Sphinx 7/8 and Sphinx 9 both
     # ignore crawler-blocked publisher redirects cleanly.
