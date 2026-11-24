@@ -40,7 +40,8 @@ import logging
 import os
 import sys
 import traceback
-from typing import Any, Dict, Optional
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -48,6 +49,61 @@ from synaptipy.core.analysis.registry import AnalysisRegistry
 
 log = logging.getLogger(__name__)
 _loaded_miniml_core_path: Optional[str] = None
+_SETTINGS_CORE_KEY = "plugins/miniml/core_path"
+_SETTINGS_MODEL_KEY = "plugins/miniml/model_path"
+
+
+def _load_saved_miniml_paths() -> Tuple[str, str]:
+    """Return persisted ``(core_path, model_path)`` from QSettings or standard local clone if present."""
+    core_default = ""
+    model_default = ""
+    try:
+        from PySide6.QtCore import QSettings
+
+        from synaptipy.shared.constants import APP_NAME, SETTINGS_SECTION
+
+        settings = QSettings(APP_NAME, SETTINGS_SECTION)
+        core_default = str(settings.value(_SETTINGS_CORE_KEY, "", type=str) or "").strip()
+        model_default = str(settings.value(_SETTINGS_MODEL_KEY, "", type=str) or "").strip()
+    except Exception:
+        pass
+
+    if not core_default:
+        for cand in (
+            Path.home() / "PycharmProjects" / "miniML" / "core",
+            Path.home() / "miniML" / "core",
+        ):
+            if (cand / "miniML.py").is_file():
+                core_default = str(cand)
+                break
+    return core_default, model_default
+
+
+def _save_miniml_paths(core_path: str, model_path: str) -> None:
+    """Persist validated miniML directory and model file paths in QSettings."""
+    try:
+        from PySide6.QtCore import QSettings
+
+        from synaptipy.shared.constants import APP_NAME, SETTINGS_SECTION
+
+        settings = QSettings(APP_NAME, SETTINGS_SECTION)
+        settings.setValue(_SETTINGS_CORE_KEY, core_path)
+        settings.setValue(_SETTINGS_MODEL_KEY, model_path)
+    except Exception:
+        pass
+
+
+def _normalize_core_dir(raw_core_path: str) -> str:
+    """Expand ``~`` and auto-descend into ``core/`` if the user selected the miniML repository root."""
+    cleaned = os.path.expanduser(str(raw_core_path or "").strip())
+    if not cleaned:
+        return ""
+    p = Path(cleaned)
+    if (p / "miniML.py").is_file():
+        return str(p.resolve())
+    if (p / "core" / "miniML.py").is_file():
+        return str((p / "core").resolve())
+    return os.path.abspath(cleaned)
 
 
 class _StreamToLogger(io.TextIOBase):
@@ -94,7 +150,7 @@ def _import_miniml(miniml_core_path: str):
     """
     global _loaded_miniml_core_path
 
-    core_path = miniml_core_path.strip()
+    core_path = _normalize_core_dir(miniml_core_path)
     if not core_path:
         raise ImportError(
             "miniML core/ path is empty. "
@@ -192,18 +248,86 @@ def _validate_miniml_inputs(
         )
     if not model_path.strip():
         return "No model path provided. Paste the full path to your .h5 model file into the 'Model Path' field."
+    expanded_model = os.path.expanduser(model_path.strip())
+    if os.path.sep in expanded_model or expanded_model.startswith("."):
+        if not os.path.isfile(expanded_model):
+            return f"Model file not found: '{expanded_model}'."
     return None
 
 
-def _build_minitrace(mini_trace_cls: Any, data: np.ndarray, sampling_interval: float) -> Any:
+def _build_minitrace(mini_trace_cls: Any, data: np.ndarray, sampling_interval: float, y_unit: str = "") -> Any:
     """Instantiate MiniTrace across legacy (`sampling`) and current (`sampling_interval`) APIs."""
     try:
-        return mini_trace_cls(data=data, sampling_interval=sampling_interval)
+        return mini_trace_cls(data=data, sampling_interval=sampling_interval, y_unit=y_unit)
     except TypeError:
-        return mini_trace_cls(data=data, sampling=sampling_interval)
+        try:
+            return mini_trace_cls(data=data, sampling_interval=sampling_interval)
+        except TypeError:
+            return mini_trace_cls(data=data, sampling=sampling_interval)
 
 
-def run_miniml_detection(
+def _extract_event_positions_and_amplitudes(
+    detector: Any,
+    data: np.ndarray,
+    time: np.ndarray,
+    ev_locs: np.ndarray,
+    valid_mask: np.ndarray,
+    direction: str,
+    window_size: int,
+    sampling_interval: float,
+) -> Tuple[List[float], List[float], List[float]]:
+    """Return ``(ev_times_s, raw_trace_peaks, baseline_subtracted_amplitudes)``."""
+    peak_locs = getattr(detector, "event_peak_locations", None)
+    if peak_locs is not None and len(peak_locs) == len(ev_locs):
+        pk_arr = np.asarray(peak_locs, dtype=np.int64)[valid_mask]
+        pk_arr = np.clip(pk_arr, 0, max(0, len(data) - 1))
+        ev_times = np.asarray(time, dtype=float)[pk_arr].tolist() if len(pk_arr) > 0 else []
+        ev_peaks = data[pk_arr].astype(float).tolist() if len(pk_arr) > 0 else []
+    else:
+        ev_times, ev_peaks = _locate_event_peaks(
+            data, ev_locs, valid_mask, direction, window_size, sampling_interval, float(time[0]), time=time
+        )
+
+    stats = getattr(detector, "event_stats", None)
+    stat_amps = getattr(stats, "amplitudes", None) if stats is not None else None
+    if stat_amps is not None and len(stat_amps) == int(np.sum(valid_mask)):
+        ev_amps = np.asarray(stat_amps, dtype=float).tolist()
+    elif len(ev_peaks) > 0:
+        valid_onsets = ev_locs[valid_mask]
+        pre_n = max(5, int(round(0.005 / max(sampling_interval, 1e-6))))
+        ev_amps = []
+        for k, pk_val in enumerate(ev_peaks):
+            on_i = int(valid_onsets[k]) if k < len(valid_onsets) else 0
+            b0 = max(0, on_i - pre_n)
+            base = float(np.median(data[b0 : max(b0 + 1, on_i)])) if len(data) > 0 else 0.0
+            ev_amps.append(float(pk_val) - base)
+    else:
+        ev_amps = []
+    return ev_times, ev_peaks, ev_amps
+
+
+def _extract_optional_kinetics_ms(detector: Any) -> Tuple[Optional[float], Optional[float]]:
+    """Extract mean rise time (ms) and mean half-decay time (ms) from ``detector.event_stats`` if present."""
+    stats = getattr(detector, "event_stats", None)
+    if stats is None:
+        return None, None
+    mean_rise_ms = None
+    mean_halfdecay_ms = None
+    for attr_name, target in (("risetimes", "rise"), ("halfdecays", "decay")):
+        vals = getattr(stats, attr_name, None)
+        if vals is not None and len(vals) > 0:
+            arr = np.asarray(vals, dtype=float)
+            finite = arr[np.isfinite(arr)]
+            if finite.size > 0:
+                val_ms = round(float(np.mean(finite)) * 1000.0, 4)
+                if target == "rise":
+                    mean_rise_ms = val_ms
+                else:
+                    mean_halfdecay_ms = val_ms
+    return mean_rise_ms, mean_halfdecay_ms
+
+
+def run_miniml_detection(  # noqa: C901
     data: np.ndarray,
     time: np.ndarray,
     sampling_rate: float,
@@ -214,61 +338,29 @@ def run_miniml_detection(
     batch_size: int = 512,
     window_size: int = 600,
     rel_prom_cutoff: float = 0.25,
-    convolve_win: int = 20,
-    gradient_convolve_win: int = 40,
+    convolve_win: int = 0,
+    gradient_convolve_win: int = 0,
+    channel_units: str = "pA",
 ) -> Dict[str, Any]:
-    """Run miniML inference on a single trial and return event metrics.
-
-    Parameters
-    ----------
-    data:
-        Raw voltage or current trace (1-D NumPy array).
-    time:
-        Corresponding time vector (seconds).
-    sampling_rate:
-        Acquisition sampling rate in Hz.
-    threshold:
-        miniML model_threshold in [0, 1]. Higher values reduce false positives.
-    direction:
-        ``"negative"`` for inward currents; ``"positive"`` for outward events.
-    model_path:
-        Absolute path to the miniML ``.h5`` model file.
-    miniml_core_path:
-        Absolute path to the miniML ``core/`` directory.
-    batch_size:
-        Inference batch size. Larger values are faster but use more RAM.
-    window_size:
-        Detection window size in samples.
-    rel_prom_cutoff:
-        Sensitivity for overlapping events (relative prominence cutoff).
-    convolve_win:
-        Smoothing filter window size in samples.
-    gradient_convolve_win:
-        Gradient filter window size in samples.
-
-    Returns
-    -------
-    dict
-        ``Event_Count``, ``Frequency_Hz``, ``Model_Used`` are shown in the
-        results table. ``_event_times`` and ``_event_peaks`` drive the marker
-        overlay on the plot.
-    """
+    """Run miniML inference on a single trial and return baseline-subtracted event metrics."""
     validation_err = _validate_miniml_inputs(data, time, sampling_rate, model_path)
     if validation_err is not None:
         return {"error": validation_err}
 
-    active_model = model_path.strip()
+    active_model = os.path.expanduser(model_path.strip())
+    resolved_core = _normalize_core_dir(miniml_core_path)
 
     try:
-        MiniTrace, EventDetection = _import_miniml(miniml_core_path)
+        MiniTrace, EventDetection = _import_miniml(resolved_core)
     except ImportError as exc:
         return {"error": str(exc)}
 
-    log.info("miniML: libraries imported from '%s'", miniml_core_path.strip())
+    _save_miniml_paths(resolved_core, active_model)
+    log.info("miniML: libraries imported from '%s'", resolved_core)
 
     try:
         sampling_interval = 1.0 / sampling_rate  # seconds per sample
-        trace = _build_minitrace(MiniTrace, data, sampling_interval)
+        trace = _build_minitrace(MiniTrace, data, sampling_interval, y_unit=str(channel_units or ""))
         log.info(
             "miniML: trace - %.3f s at %.0f Hz (%d samples)",
             float(time[-1] - time[0]),
@@ -291,13 +383,16 @@ def run_miniml_detection(
         )
         _stdout_capture = _StreamToLogger(log, logging.INFO)
         _stderr_capture = _StreamToLogger(log, logging.WARNING)
+        detect_kwargs: Dict[str, Any] = {
+            "eval": True,
+            "rel_prom_cutoff": rel_prom_cutoff,
+        }
+        if int(convolve_win) > 0:
+            detect_kwargs["convolve_win"] = int(convolve_win)
+        if int(gradient_convolve_win) > 0:
+            detect_kwargs["gradient_convolve_win"] = int(gradient_convolve_win)
         with contextlib.redirect_stdout(_stdout_capture), contextlib.redirect_stderr(_stderr_capture):
-            detector.detect_events(
-                eval=True,
-                rel_prom_cutoff=rel_prom_cutoff,
-                convolve_win=convolve_win,
-                gradient_convolve_win=gradient_convolve_win,
-            )
+            detector.detect_events(**detect_kwargs)
         _stdout_capture.flush()
         _stderr_capture.flush()
         log.info(
@@ -308,28 +403,27 @@ def run_miniml_detection(
         log.error("miniML detection failed:\n%s", traceback.format_exc())
         return {"error": f"miniML inference error: {str(e)}"}
 
-    # event_locations: 1-D int array of onset sample indices (steepest-slope point).
-    # Shift each marker to the amplitude peak within the next window_size//2 samples.
-    ev_locs = np.asarray(detector.event_locations, dtype=np.int64)
+    raw_locs = getattr(detector, "event_locations", None)
+    ev_locs = np.asarray(raw_locs if raw_locs is not None else [], dtype=np.int64)
     valid_mask = (ev_locs >= 0) & (ev_locs < len(data))
-    ev_times, ev_peaks = _locate_event_peaks(
-        data, ev_locs, valid_mask, direction, window_size, sampling_interval, time[0], time=time
+    ev_times, ev_peaks, ev_amps = _extract_event_positions_and_amplitudes(
+        detector, data, time, ev_locs, valid_mask, direction, window_size, sampling_interval
     )
+    mean_rise_ms, mean_halfdecay_ms = _extract_optional_kinetics_ms(detector)
 
     duration = float(time[-1] - time[0]) if len(time) > 1 else 0.0
     freq = float(len(ev_times)) / duration if duration > 0 else 0.0
     model_label = active_model.replace("\\", "/").split("/")[-1]
 
-    # Per-event amplitudes: data values at amplitude-peak positions.
-    if len(ev_peaks) > 0:
-        amps_arr = np.array(ev_peaks)
-        mean_amp = round(float(np.mean(amps_arr)), 4)
-        std_amp = round(float(np.std(amps_arr)), 4)
+    if len(ev_amps) > 0:
+        amps_arr = np.asarray(ev_amps, dtype=float)
+        finite_amps = amps_arr[np.isfinite(amps_arr)]
+        mean_amp = round(float(np.mean(finite_amps)), 4) if finite_amps.size > 0 else None
+        std_amp = round(float(np.std(finite_amps)), 4) if finite_amps.size > 0 else None
     else:
         mean_amp = None
         std_amp = None
 
-    # Inter-event intervals in milliseconds.
     if len(ev_times) >= 2:
         iei_arr = np.diff(np.array(ev_times)) * 1000.0
         mean_iei = round(float(np.mean(iei_arr)), 4)
@@ -338,52 +432,59 @@ def run_miniml_detection(
         mean_iei = None
         std_iei = None
 
-    # Per-event model confidence scores (miniML >= certain versions).
     ev_scores, mean_score, min_score = _compute_event_scores(detector, ev_locs, valid_mask)
+    u_norm = str(channel_units or "pA").strip().lower().replace("\u00b5", "u").replace("\u03bc", "u")
+    amp_suffix = "mV" if u_norm in ("mv", "v", "uv") else "pA"
 
-    log.info(
-        "miniML: %d events | %.2f Hz | mean amplitude %.1f pA | mean IEI %.1f ms",
-        len(ev_times),
-        freq,
-        mean_amp if mean_amp is not None else float("nan"),
-        mean_iei if mean_iei is not None else float("nan"),
-    )
-    if mean_score is not None:
-        log.info("miniML: mean model score = %.3f (min = %.3f)", mean_score, min_score)
-
-    return {
+    metrics: Dict[str, Any] = {
         "Event_Count": len(ev_times),
         "Frequency_Hz": round(freq, 2),
         "Model_Used": model_label,
-        "Mean_Amplitude_pA": mean_amp,
-        "Std_Amplitude_pA": std_amp,
+        f"Mean_Amplitude_{amp_suffix}": mean_amp,
+        f"Std_Amplitude_{amp_suffix}": std_amp,
+        "Mean_Rise_Time_ms": mean_rise_ms,
+        "Mean_Half_Decay_ms": mean_halfdecay_ms,
         "Mean_IEI_ms": mean_iei,
         "Std_IEI_ms": std_iei,
         "Mean_Score": mean_score,
         "Min_Score": min_score,
+    }
+    warnings_list: List[str] = []
+    if len(ev_times) == 0:
+        warnings_list.append(
+            "0 events detected above threshold. Verify Direction ('negative' for inward EPSC/IPSC, "
+            "'positive' for depolarizing EPSP) and ensure the selected .h5 model matches this recording type."
+        )
+
+    return {
+        "module_used": "miniml_events",
+        "metrics": metrics,
+        "warnings": warnings_list,
         "_event_times": ev_times,
         "_event_peaks": ev_peaks,
         "_event_scores": ev_scores,
-        "_event_amplitudes": ev_peaks,
+        "_event_amplitudes": ev_amps,
     }
+
+
+_DEFAULT_CORE_PATH, _DEFAULT_MODEL_PATH = _load_saved_miniml_paths()
 
 
 @AnalysisRegistry.register(
     name="miniml_events",
     label="miniML Events",
     expects_list=False,
-    supported_channel_units=("pA", "nA", "mV", "V", "uV"),
+    supported_channel_units=("pA", "nA", "uA", "A", "mV", "V", "uV"),
     run_button=True,
     ui_params=[
         {
             "name": "miniml_core_path",
             "label": "miniML core/ Path:",
             "type": "dirpath",
-            "default": "",
+            "default": _DEFAULT_CORE_PATH,
             "placeholder": "/path/to/miniML/core",
             "tooltip": (
-                "Absolute path to the miniML/core/ directory "
-                "(the folder containing miniML.py). "
+                "Path to the miniML/core/ directory (or miniML repo root). "
                 "Clone miniML from https://github.com/delvendahl/miniML"
             ),
         },
@@ -391,10 +492,10 @@ def run_miniml_detection(
             "name": "model_path",
             "label": "Model Path (.h5):",
             "type": "filepath",
-            "default": "",
+            "default": _DEFAULT_MODEL_PATH,
             "placeholder": "/path/to/miniML/models/GC_lstm_model.h5",
             "tooltip": (
-                "Absolute path to the miniML Keras model file (.h5). "
+                "Path to the miniML Keras model file (.h5). "
                 "Model files live in the miniML/models/ directory of the cloned repo."
             ),
         },
@@ -414,7 +515,8 @@ def run_miniml_detection(
             "type": "choice",
             "choices": ["negative", "positive"],
             "default": "negative",
-            "tooltip": "negative = inward currents (mEPSCs/IPSCs); positive = outward events.",
+            "default_by_clamp_mode": {"voltage_clamp": "negative", "current_clamp": "positive"},
+            "tooltip": "negative = inward currents/IPSPs; positive = depolarizing EPSPs/outward currents.",
         },
         {
             "name": "batch_size",
@@ -448,19 +550,19 @@ def run_miniml_detection(
             "name": "convolve_win",
             "label": "Convolve Window:",
             "type": "int",
-            "default": 20,
+            "default": 0,
             "min": 0,
             "max": 1000,
-            "tooltip": "Hann window size for smoothing (miniML default: 20; 0 = use lowpass filter instead)",
+            "tooltip": "Smoothing window in samples (0 = automatic miniML rate-adaptive filter).",
         },
         {
             "name": "gradient_convolve_win",
             "label": "Gradient Convolve Window:",
             "type": "int",
-            "default": 40,
-            "min": 1,
-            "max": 500,
-            "tooltip": "Hann window size for gradient smoothing (miniML default: 2 x convolve_win = 40)",
+            "default": 0,
+            "min": 0,
+            "max": 1000,
+            "tooltip": "Gradient smoothing window in samples (0 = automatic miniML rate-adaptive filter).",
         },
     ],
     plots=[
@@ -480,32 +582,7 @@ def run_miniml_events_wrapper(
     sampling_rate: float,
     **kwargs: Any,
 ) -> Dict[str, Any]:
-    """Synaptipy registry wrapper for miniML event detection.
-
-    Delegates to :func:`run_miniml_detection`.  All keyword arguments are
-    populated automatically from the ``ui_params`` widgets when the user
-    clicks **Run Analysis**.
-
-    Columns returned in the results table / CSV export:
-
-    ========================  ================================================
-    Key                       Description
-    ========================  ================================================
-    ``Event_Count``           Number of detected events
-    ``Frequency_Hz``          Event frequency (events / recording duration)
-    ``Model_Used``            Filename of the .h5 model
-    ``Mean_Amplitude_pA``     Mean amplitude at the peak of each event
-    ``Std_Amplitude_pA``      Standard deviation of per-event amplitudes
-    ``Mean_IEI_ms``           Mean inter-event interval in milliseconds
-    ``Std_IEI_ms``            Standard deviation of IEI in milliseconds
-    ``Mean_Score``            Mean miniML model confidence score (if available)
-    ``Min_Score``             Minimum confidence score (quality filter proxy)
-    ``_event_times``          Per-event peak times (s) - drives marker overlay
-    ``_event_peaks``          Per-event amplitude values - drives marker overlay
-    ``_event_scores``         Per-event confidence scores list (private)
-    ``_event_amplitudes``     Per-event amplitudes list (private, same as peaks)
-    ========================  ================================================
-    """
+    """Synaptipy registry wrapper for miniML event detection."""
     core_path_str = str(kwargs.get("miniml_core_path", "") or "").strip()
     model_path_str = str(kwargs.get("model_path", "") or "").strip()
     if not core_path_str or not model_path_str:
@@ -531,6 +608,7 @@ def run_miniml_events_wrapper(
         miniml_core_path=core_path_str,
         window_size=kwargs.get("window_size", 600),
         rel_prom_cutoff=kwargs.get("rel_prom_cutoff", 0.25),
-        convolve_win=kwargs.get("convolve_win", 20),
-        gradient_convolve_win=kwargs.get("gradient_convolve_win", 40),
+        convolve_win=int(kwargs.get("convolve_win", 0)),
+        gradient_convolve_win=int(kwargs.get("gradient_convolve_win", 0)),
+        channel_units=str(kwargs.get("channel_units", "pA") or "pA"),
     )

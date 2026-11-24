@@ -344,6 +344,66 @@ class TestMiniMLPluginUX:
         with pytest.raises(AnalysisNotConfigured, match="miniML Events needs"):
             fn(np.zeros(200), np.arange(200) * 1e-4, 10_000.0)
 
+    def test_repo_root_resolution_and_baseline_subtracted_event_stats(self, miniml_module, tmp_path):
+        """miniML resolves repo_root/core, uses event_peak_locations + event_stats.amplitudes, and labels units."""
+        repo_root = tmp_path / "miniML_repo"
+        core_dir = repo_root / "core"
+        core_dir.mkdir(parents=True)
+        model_file = repo_root / "GC_mEPSP.h5"
+        model_file.write_bytes(b"H5")
+        (core_dir / "miniML.py").write_text(
+            "import numpy as np\n"
+            "class MiniTrace:\n"
+            "    def __init__(self, data, sampling_interval=1.0, y_unit=''):\n"
+            "        self.data = data\n"
+            "class _Stats:\n"
+            "    amplitudes = np.array([0.65, 0.45])\n"
+            "    risetimes = np.array([0.0012, 0.0016])\n"
+            "    halfdecays = np.array([0.0090, 0.0110])\n"
+            "class EventDetection:\n"
+            "    def __init__(self, **kw):\n"
+            "        self.kw = kw\n"
+            "    def detect_events(self, **dkw):\n"
+            "        self.dkw = dkw\n"
+            "        self.event_locations = np.array([100, 500])\n"
+            "        self.event_peak_locations = np.array([115, 520])\n"
+            "        self.event_scores = np.array([0.92, 0.88])\n"
+            "        self.event_stats = _Stats()\n",
+            encoding="utf-8",
+        )
+        fs = 20_000.0
+        t = np.arange(1000) / fs
+        v = np.full(1000, -65.0)
+        v[115] = -64.35
+        v[520] = -64.55
+
+        saved_path = list(sys.path)
+        try:
+            with patch.object(miniml_module, "_save_miniml_paths"):
+                res = miniml_module.run_miniml_events_wrapper(
+                    v,
+                    t,
+                    fs,
+                    miniml_core_path=str(repo_root),  # Repo root auto-resolves to repo_root/core!
+                    model_path=str(model_file),
+                    direction="positive",
+                    channel_units="mV",
+                )
+        finally:
+            sys.path[:] = saved_path
+            sys.modules.pop("miniML", None)
+
+        assert res["module_used"] == "miniml_events"
+        m = res["metrics"]
+        assert m["Event_Count"] == 2
+        # Must report true baseline-subtracted amplitude (~0.55 mV), NOT resting potential (-64.45 mV)!
+        assert m["Mean_Amplitude_mV"] == pytest.approx(0.55, abs=1e-4)
+        assert m["Mean_Rise_Time_ms"] == pytest.approx(1.4, abs=1e-4)
+        assert m["Mean_Half_Decay_ms"] == pytest.approx(10.0, abs=1e-4)
+        # Markers still sit on the raw DC-offset trace (-64.35, -64.55 mV) at exact event_peak_locations
+        assert res["_event_times"] == pytest.approx([115 / fs, 520 / fs])
+        assert res["_event_peaks"] == pytest.approx([-64.35, -64.55])
+
 
 # ---------------------------------------------------------------------------
 # Fixtures: synaptic_charge

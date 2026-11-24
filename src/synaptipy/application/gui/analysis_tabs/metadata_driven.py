@@ -2148,7 +2148,9 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             if color is None:
                 pen = get_hv_line_pen()
             else:
-                pen = pg.mkPen(color, width=2, style=QtCore.Qt.DashLine)
+                c_obj = pg.mkColor(color)
+                c_obj.setAlpha(int(cfg.get("alpha", 115)))
+                pen = pg.mkPen(c_obj, width=float(cfg.get("width", 1.2)), style=QtCore.Qt.DashLine)
             line = pg.InfiniteLine(pos=float(x), angle=90, pen=pen)
             if color is None:
                 line._synaptipy_role = "hv_line"

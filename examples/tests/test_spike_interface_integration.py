@@ -344,6 +344,46 @@ class TestBandpassFilter:
         assert kw["freq_min"] == pytest.approx(500.0)
         assert kw["freq_max"] == pytest.approx(3000.0)
 
+    def test_low_freq_min_passes_ignore_low_freq_error_and_safe_margin(self, si_mocks, synthetic_trace, fs):
+        """freq_min < 100 Hz (e.g. 10 Hz for intracellular APs) sets ignore_low_freq_error=True and bounded margin."""
+        t = np.arange(len(synthetic_trace)) / fs
+        res = run_spike_interface_wrapper(
+            synthetic_trace, t, fs, freq_min=10.0, freq_max=500.0, peak_sign="pos", exclude_sweep_ms=2.0
+        )
+        assert "error" not in res
+        kw = si_mocks["spp"].bandpass_filter.call_args.kwargs
+        assert kw["freq_min"] == pytest.approx(10.0)
+        assert kw["freq_max"] == pytest.approx(500.0)
+        assert kw["ignore_low_freq_error"] is True
+        assert 5.0 <= kw["margin_ms"] <= 200.0
+
+    def test_low_freq_max_snaps_shifted_index_to_raw_spike_peak(self, si_mocks, fs):
+        """When freq_max < 2000 Hz introduces filter phase lag, markers snap to the true raw AP peak."""
+        n = int(fs * 0.5)
+        t = np.arange(n) / fs
+        trace = np.full(n, -65.0, dtype=np.float64)
+        # True AP peak at sample 2000 (+42 mV); filtered peak lagged to sample 2004 (+29 mV)
+        trace[1996:2005] = np.array([-40.0, -10.0, 15.0, 35.0, 42.0, 38.0, 34.0, 31.0, 29.0])
+        filt_2d = np.where(np.arange(n) % 2 == 0, 1.0, -1.0).astype(np.float32).reshape(-1, 1)
+        filt_2d[2004, 0] = 60.0
+        si_mocks["filtered"].get_traces.return_value = filt_2d
+        si_mocks["pd"].detect_peaks.return_value = _make_peaks_array([2004])
+
+        res = run_spike_interface_wrapper(
+            trace, t, fs, freq_min=10.0, freq_max=500.0, peak_sign="pos", exclude_sweep_ms=2.0
+        )
+        assert "error" not in res
+        assert res["_spike_times"] == pytest.approx([2000 / fs])
+        assert res["_spike_amplitudes"] == pytest.approx([42.0])
+
+    def test_bandpass_filter_exception_returns_error_dict_without_raising(self, si_mocks, synthetic_trace, fs):
+        """Unexpected SpikeInterface filter errors return {'error': ...} instead of crashing the GUI."""
+        si_mocks["spp"].bandpass_filter.side_effect = ValueError("filter failure")
+        t = np.arange(len(synthetic_trace)) / fs
+        res = run_spike_interface_wrapper(synthetic_trace, t, fs, freq_min=10.0, freq_max=500.0)
+        assert "error" in res
+        assert "filter failure" in res["error"]
+
 
 # ---------------------------------------------------------------------------
 # Tests: detect_peaks delegation

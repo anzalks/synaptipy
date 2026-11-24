@@ -310,6 +310,58 @@ def _run_tau_biexponential_branch(tab: object, widgets: dict, qapp: object) -> N
     qapp.processEvents()
 
 
+def _exercise_plugin_branches(tab: object, a_name: str, widgets: dict, qapp: object) -> None:
+    """Exercise current-clamp EPSP AUC and low-frequency intracellular SpikeInterface branches."""
+    import pyqtgraph as pg
+
+    if a_name == "synaptic_charge":
+        _select_combo_by_data(tab.signal_channel_combobox, "0")
+        _select_combo_by_data(tab.data_source_combobox, 3)
+        if "window_start" in widgets and "window_end" in widgets:
+            widgets["window_start"].setValue(0.195)
+            widgets["window_end"].setValue(0.245)
+        tab._trigger_analysis()
+        qapp.processEvents()
+        dyn_auc = getattr(tab, "_dynamic_plot_items", [])
+        assert any(isinstance(it, pg.FillBetweenItem) for it in dyn_auc), "Missing AUC FillBetweenItem on mV trace"
+        assert "AUC (mV*ms)" in (tab._last_analysis_result or {}).get("metrics", {})
+    elif a_name == "spike_interface_detection":
+        _select_combo_by_data(tab.signal_channel_combobox, "0")
+        _select_combo_by_data(tab.data_source_combobox, 2)
+        if "freq_min" in widgets and "freq_max" in widgets:
+            widgets["freq_min"].setValue(10.0)
+            widgets["freq_max"].setValue(500.0)
+        if "peak_sign" in widgets:
+            pos_i = widgets["peak_sign"].findText("pos")
+            if pos_i >= 0:
+                widgets["peak_sign"].setCurrentIndex(pos_i)
+        if "exclude_sweep_ms" in widgets:
+            widgets["exclude_sweep_ms"].setValue(2.0)
+        tab._trigger_analysis()
+        qapp.processEvents()
+        si_metrics = (tab._last_analysis_result or {}).get("metrics", {})
+        assert "error" not in si_metrics, f"SpikeInterface low freq_min failed: {si_metrics}"
+        assert si_metrics.get("Spike_Count", 0) >= 8
+
+
+def _assert_evoked_overlays_and_vlines(tab: object, a_name: str) -> None:
+    """Verify multi-pulse trigger lines and cyan response overlays on evoked tabs."""
+    import pyqtgraph as pg
+
+    dyn_items = getattr(tab, "_dynamic_plot_items", [])
+    vlines = [it for it in dyn_items if isinstance(it, pg.InfiniteLine) and it.angle == 90]
+    overlays = [
+        it
+        for it in dyn_items
+        if isinstance(it, pg.PlotCurveItem) and getattr(it, "_synaptipy_role", None) == "trace_overlay"
+    ]
+    expected_min = 2 if a_name == "paired_pulse_ratio" else 5
+    assert len(vlines) >= expected_min, f"{a_name}: expected >= {expected_min} trigger vlines, got {len(vlines)}"
+    assert (
+        len(overlays) >= expected_min
+    ), f"{a_name}: expected >= {expected_min} cyan curve overlays, got {len(overlays)}"
+
+
 def _run_single_method_on_tab(tab: object, m_label: str, qapp: object) -> str:
     """Configure and execute a single analysis sub-method on *tab*, returning its registry key."""
     method_combo = getattr(tab, "method_combobox", None)
@@ -331,36 +383,11 @@ def _run_single_method_on_tab(tab: object, m_label: str, qapp: object) -> str:
     if a_name == "tau_analysis" and "tau_model" in widgets:
         _run_tau_biexponential_branch(tab, widgets, qapp)
 
-    if a_name == "synaptic_charge":
-        import pyqtgraph as pg
-
-        # Also exercise current-clamp EPSP AUC on channel '0' (Vm [mV], trial 3 has evoked EPSPs at 0.202..0.402s)
-        _select_combo_by_data(tab.signal_channel_combobox, "0")
-        _select_combo_by_data(tab.data_source_combobox, 3)
-        if "window_start" in widgets and "window_end" in widgets:
-            widgets["window_start"].setValue(0.195)
-            widgets["window_end"].setValue(0.245)
-        tab._trigger_analysis()
-        qapp.processEvents()
-        dyn_auc = getattr(tab, "_dynamic_plot_items", [])
-        assert any(isinstance(it, pg.FillBetweenItem) for it in dyn_auc), "Missing AUC FillBetweenItem on mV trace"
-        assert "AUC (mV*ms)" in (tab._last_analysis_result or {}).get("metrics", {})
+    if a_name in ("synaptic_charge", "spike_interface_detection"):
+        _exercise_plugin_branches(tab, a_name, widgets, qapp)
 
     if a_name in ("optogenetic_sync", "paired_pulse_ratio", "stimulus_train_stp", "opto_jitter"):
-        import pyqtgraph as pg
-
-        dyn_items = getattr(tab, "_dynamic_plot_items", [])
-        vlines = [it for it in dyn_items if isinstance(it, pg.InfiniteLine) and it.angle == 90]
-        overlays = [
-            it
-            for it in dyn_items
-            if isinstance(it, pg.PlotCurveItem) and getattr(it, "_synaptipy_role", None) == "trace_overlay"
-        ]
-        expected_min = 2 if a_name == "paired_pulse_ratio" else 5
-        assert len(vlines) >= expected_min, f"{a_name}: expected >= {expected_min} trigger vlines, got {len(vlines)}"
-        assert (
-            len(overlays) >= expected_min
-        ), f"{a_name}: expected >= {expected_min} cyan curve overlays, got {len(overlays)}"
+        _assert_evoked_overlays_and_vlines(tab, a_name)
 
     tab._update_plot_pens_only()
 

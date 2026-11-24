@@ -47,6 +47,58 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
+def _run_bandpass_filter(spp: Any, recording: Any, freq_min: float, freq_max: float, duration_s: float) -> Any:
+    """Apply SpikeInterface bandpass filter safely across high- and low-cutoff regimes."""
+    filter_kwargs: Dict[str, Any] = {
+        "freq_min": float(freq_min),
+        "freq_max": float(freq_max),
+    }
+    if float(freq_min) < 100.0:
+        duration_ms = max(20.0, float(duration_s) * 1000.0)
+        safe_margin_ms = min(max(5.0, 1000.0 / max(float(freq_min), 1.0)), max(5.0, 0.20 * duration_ms))
+        filter_kwargs["ignore_low_freq_error"] = True
+        filter_kwargs["margin_ms"] = float(safe_margin_ms)
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message=".*margin size.*", category=UserWarning)
+        try:
+            return spp.bandpass_filter(recording, **filter_kwargs)
+        except TypeError:
+            filter_kwargs.pop("ignore_low_freq_error", None)
+            filter_kwargs.pop("margin_ms", None)
+            return spp.bandpass_filter(recording, **filter_kwargs)
+
+
+def _snap_low_freq_indices_to_raw_peaks(
+    data: np.ndarray,
+    sample_indices: List[int],
+    sampling_rate: float,
+    freq_max: float,
+    peak_sign: str,
+    exclude_sweep_ms: float,
+) -> List[int]:
+    """Refine filtered peak indices to raw waveform extrema when low-pass smoothing introduces phase lag."""
+    if float(freq_max) >= 2000.0 or not sample_indices:
+        return sample_indices
+    max_half_s = min(0.5 / max(float(freq_max), 1.0), 0.0015, 0.45 * max(float(exclude_sweep_ms), 0.5) / 1000.0)
+    half_win = max(1, int(round(max_half_s * float(sampling_rate))))
+    med_val = float(np.median(data))
+    snapped: List[int] = []
+    for idx in sample_indices:
+        lo = max(0, idx - half_win)
+        hi = min(len(data), idx + half_win + 1)
+        seg = data[lo:hi]
+        if seg.size == 0:
+            snapped.append(idx)
+        elif peak_sign == "pos":
+            snapped.append(lo + int(np.argmax(seg)))
+        elif peak_sign == "neg":
+            snapped.append(lo + int(np.argmin(seg)))
+        else:
+            snapped.append(lo + int(np.argmax(np.abs(seg - med_val))))
+    return snapped
+
+
 def detect_spikes_spikeinterface(
     data: np.ndarray,
     sampling_rate: float,
@@ -105,65 +157,73 @@ def detect_spikes_spikeinterface(
         return {"error": f"SpikeInterface is not installed: {exc}"}
 
     log.info("SpikeInterface: starting sorting pipeline")
+    duration_s = float(data.size) / float(sampling_rate)
 
-    # ------------------------------------------------------------------ #
-    # 1. Wrap the numpy trace in a NumpyRecording (1 channel, 1 segment)  #
-    # ------------------------------------------------------------------ #
-    traces_2d = data.astype(np.float32).reshape(-1, 1)
-    recording = sc.NumpyRecording(
-        traces_list=[traces_2d],
-        sampling_frequency=float(sampling_rate),
-    )
-
-    # ------------------------------------------------------------------ #
-    # 2. Bandpass filter                                                   #
-    # ------------------------------------------------------------------ #
-    log.info("SpikeInterface: running sorter 'bandpass_filter'...")
-    recording_f = spp.bandpass_filter(
-        recording,
-        freq_min=float(freq_min),
-        freq_max=float(freq_max),
-    )
-
-    # ------------------------------------------------------------------ #
-    # 3. Noise estimate via MAD on the filtered trace                      #
-    # ------------------------------------------------------------------ #
-    filt_traces: np.ndarray = recording_f.get_traces(segment_index=0).astype(np.float64).ravel()
-    noise_estimate = float(np.median(np.abs(filt_traces)) / 0.6745)
-
-    if noise_estimate < 1e-12:
-        return {"error": "Noise estimate is effectively zero - check the input trace"}
-
-    threshold_absolute = threshold_mad * noise_estimate
-
-    # ------------------------------------------------------------------ #
-    # 4. Detect peaks                                                      #
-    # ------------------------------------------------------------------ #
-    with (
-        warnings.catch_warnings(),
-        contextlib.redirect_stdout(io.StringIO()),
-        contextlib.redirect_stderr(io.StringIO()),
-    ):
-        warnings.filterwarnings("ignore", message=".*signature of detect_peaks.*", category=UserWarning)
-        peaks = detect_peaks(
-            recording_f,
-            method="by_channel",
-            detect_threshold=float(threshold_mad),
-            peak_sign=peak_sign,
-            exclude_sweep_ms=float(kwargs.get("exclude_sweep_ms", 5.0)),
-            noise_levels=np.array([noise_estimate]),
+    try:
+        # ------------------------------------------------------------------ #
+        # 1. Wrap the numpy trace in a NumpyRecording (1 channel, 1 segment) #
+        # ------------------------------------------------------------------ #
+        traces_2d = data.astype(np.float32).reshape(-1, 1)
+        recording = sc.NumpyRecording(
+            traces_list=[traces_2d],
+            sampling_frequency=float(sampling_rate),
         )
 
+        # ------------------------------------------------------------------ #
+        # 2. Bandpass filter                                                 #
+        # ------------------------------------------------------------------ #
+        log.info("SpikeInterface: running sorter 'bandpass_filter'...")
+        recording_f = _run_bandpass_filter(spp, recording, float(freq_min), float(freq_max), duration_s)
+
+        # ------------------------------------------------------------------ #
+        # 3. Noise estimate via MAD on the filtered trace                    #
+        # ------------------------------------------------------------------ #
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message=".*smaller than the recommended margin.*", category=UserWarning)
+            warnings.filterwarnings("ignore", message=".*margin size.*", category=UserWarning)
+            filt_traces: np.ndarray = recording_f.get_traces(segment_index=0).astype(np.float64).ravel()
+        noise_estimate = float(np.median(np.abs(filt_traces)) / 0.6745)
+
+        if not np.isfinite(noise_estimate) or noise_estimate < 1e-12:
+            return {"error": "Noise estimate is effectively zero - check the input trace or filter band"}
+
+        threshold_absolute = threshold_mad * noise_estimate
+        exclude_ms = float(kwargs.get("exclude_sweep_ms", 5.0))
+
+        # ------------------------------------------------------------------ #
+        # 4. Detect peaks                                                    #
+        # ------------------------------------------------------------------ #
+        with (
+            warnings.catch_warnings(),
+            contextlib.redirect_stdout(io.StringIO()),
+            contextlib.redirect_stderr(io.StringIO()),
+        ):
+            warnings.filterwarnings("ignore", message=".*signature of detect_peaks.*", category=UserWarning)
+            warnings.filterwarnings("ignore", message=".*margin size.*", category=UserWarning)
+            peaks = detect_peaks(
+                recording_f,
+                method="by_channel",
+                detect_threshold=float(threshold_mad),
+                peak_sign=peak_sign,
+                exclude_sweep_ms=exclude_ms,
+                noise_levels=np.array([noise_estimate]),
+            )
+    except Exception as exc:
+        log.warning("SpikeInterface detection error: %s", exc)
+        return {"error": f"SpikeInterface filter/detection failed: {exc}"}
+
     t0 = float(time[0]) if time is not None and len(time) > 0 else 0.0
-    sample_indices = [int(i) for i in peaks["sample_index"] if 0 <= int(i) < len(data)]
+    raw_indices = [int(i) for i in peaks["sample_index"] if 0 <= int(i) < len(data)]
+    sample_indices = _snap_low_freq_indices_to_raw_peaks(
+        data, raw_indices, float(sampling_rate), float(freq_max), peak_sign, exclude_ms
+    )
     if time is not None and len(time) == len(data):
         spike_times_s: List[float] = [float(time[i]) for i in sample_indices]
     else:
         spike_times_s = [float(i) / float(sampling_rate) + t0 for i in sample_indices]
     spike_trace_y: List[float] = [float(data[i]) for i in sample_indices]
-    spike_filtered_amplitudes: List[float] = [float(filt_traces[i]) for i in sample_indices if i < len(filt_traces)]
+    spike_filtered_amplitudes: List[float] = [float(filt_traces[i]) for i in raw_indices if i < len(filt_traces)]
     spike_count = len(spike_times_s)
-    duration_s = float(data.size) / float(sampling_rate)
     firing_rate_hz = float(spike_count) / duration_s if duration_s > 0 else 0.0
 
     log.info("SpikeInterface: sorting complete - %d units found", spike_count)
@@ -206,7 +266,8 @@ def detect_spikes_spikeinterface(
             "max": 10000.0,
             "decimals": 1,
             "tooltip": (
-                "Lower cutoff of the bandpass pre-filter.  " "Removes low-frequency LFP and drift (typical: 300 Hz)."
+                "Lower cutoff of the bandpass pre-filter "
+                "(typical: 300 Hz for extracellular spikes; 10-50 Hz for intracellular APs)."
             ),
         },
         {
