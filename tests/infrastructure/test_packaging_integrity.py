@@ -242,9 +242,11 @@ class TestPackagingConfigurations:
         assert "--appimage-extract-and-run --smoke-test" in installer_yml
         assert ".[dev,docs,formats]" in installer_yml
 
-        # Release workflow libegl1 + boolean dry_run safety + timeout + fast-fail + dual DMG download
+        # Release workflow libegl1 + job-safe dry_run check + pypi_only + timeout + fast-fail + dual DMG download
         assert "libegl1" in release_yml
-        assert "(inputs.dry_run == false || github.event.inputs.dry_run == 'false')" in release_yml
+        assert "(github.event.inputs.dry_run == 'false' || github.event.inputs.dry_run == false)" in release_yml
+        assert "(inputs.dry_run" not in release_yml
+        assert "pypi_only" in release_yml
         assert "github.event.inputs.dry_run != 'false'" not in release_yml
         assert "timeout-minutes: 75" in release_yml
         assert "finished with non-success conclusion" in release_yml

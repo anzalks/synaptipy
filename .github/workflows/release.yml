@@ -12,6 +12,12 @@ on:
           publishing. The dist wheel/sdist are uploaded as run artifacts instead.
         type: boolean
         default: true
+      pypi_only:
+        description: >
+          Publish wheel/sdist to TestPyPI and PyPI only (skip waiting for
+          installer.yml and skip creating/updating the GitHub Release).
+        type: boolean
+        default: false
 
 # Top-level permissions are intentionally minimal. Each job that needs
 # elevated access declares its own permissions block.
@@ -245,7 +251,10 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.dry_run == false || github.event.inputs.dry_run == 'false'))
+    # Note: Do NOT reference `inputs.*` in job-level `if:` (only defined for
+    # `workflow_call`, causing `workflow_dispatch` jobs to skip). Use
+    # `github.event.inputs.*`, which is populated at both job and step levels.
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.dry_run == 'false' || github.event.inputs.dry_run == false))
     continue-on-error: true
     environment:
       name: testpypi
@@ -273,7 +282,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     if: >
-      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.dry_run == false || github.event.inputs.dry_run == 'false'))) &&
+      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.dry_run == 'false' || github.event.inputs.dry_run == false))) &&
       needs.testpypi-publish.result == 'success'
 
     steps:
@@ -313,7 +322,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: >
-      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.dry_run == false || github.event.inputs.dry_run == 'false'))) &&
+      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.dry_run == 'false' || github.event.inputs.dry_run == false))) &&
       needs.smoke_test_testpypi.result == 'success'
     environment:
       name: pypi
@@ -340,7 +349,8 @@ jobs:
     if: >-
       always() &&
       needs.build.result == 'success' &&
-      (needs.pypi-publish.result == 'success' || needs.pypi-publish.result == 'skipped')
+      (needs.pypi-publish.result == 'success' || needs.pypi-publish.result == 'skipped') &&
+      !(github.event_name == 'workflow_dispatch' && (github.event.inputs.pypi_only == 'true' || github.event.inputs.pypi_only == true))
     permissions:
       actions: read
       contents: write   # needed to create/update GitHub Releases
@@ -358,7 +368,7 @@ jobs:
 
       - name: Find installer workflow run for this commit
         id: installer_run
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.dry_run == false || github.event.inputs.dry_run == 'false'))
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.dry_run == 'false' || github.event.inputs.dry_run == false))
         uses: actions/github-script@v9
         with:
           script: |
@@ -403,7 +413,7 @@ jobs:
             core.setOutput('run_id', String(run.id));
 
       - name: Download Synaptipy-Linux.AppImage artifact
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.dry_run == false || github.event.inputs.dry_run == 'false'))
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.dry_run == 'false' || github.event.inputs.dry_run == false))
         uses: actions/download-artifact@v4
         with:
           repository: ${{ github.repository }}
@@ -413,7 +423,7 @@ jobs:
           path: installer-artifacts/
 
       - name: Download Synaptipy_Setup.exe artifact
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.dry_run == false || github.event.inputs.dry_run == 'false'))
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.dry_run == 'false' || github.event.inputs.dry_run == false))
         uses: actions/download-artifact@v4
         with:
           repository: ${{ github.repository }}
@@ -423,7 +433,7 @@ jobs:
           path: installer-artifacts/
 
       - name: Download Synaptipy-macOS-arm64.dmg artifact
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.dry_run == false || github.event.inputs.dry_run == 'false'))
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.dry_run == 'false' || github.event.inputs.dry_run == false))
         uses: actions/download-artifact@v4
         with:
           repository: ${{ github.repository }}
@@ -433,7 +443,7 @@ jobs:
           path: installer-artifacts/
 
       - name: Download Synaptipy-macOS-x86_64.dmg artifact
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.dry_run == false || github.event.inputs.dry_run == 'false'))
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.dry_run == 'false' || github.event.inputs.dry_run == false))
         uses: actions/download-artifact@v4
         with:
           repository: ${{ github.repository }}
@@ -470,7 +480,7 @@ jobs:
           echo "notes_file=release_notes.md" >> "$GITHUB_OUTPUT"
 
       - name: Create or update GitHub Release
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (inputs.dry_run == false || github.event.inputs.dry_run == 'false'))
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.dry_run == 'false' || github.event.inputs.dry_run == false))
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
@@ -487,7 +497,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: "Dry-run: upload dist as run artifact"
-        if: github.event_name == 'workflow_dispatch' && !(inputs.dry_run == false || github.event.inputs.dry_run == 'false')
+        if: github.event_name == 'workflow_dispatch' && !(github.event.inputs.dry_run == 'false' || github.event.inputs.dry_run == false)
         uses: actions/upload-artifact@v4
         with:
           name: dry-run-dist-${{ github.run_id }}
