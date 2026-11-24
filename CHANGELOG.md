@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-11-25
+
+
 ### Added
 
 - Registered standard trace preprocessing stages (`baseline_subtraction`, `lowpass_filter`, `highpass_filter`, `bandpass_filter`, `notch_filter`, `comb_filter`, and `detrend_filter`) in `AnalysisRegistry` so GUI preprocessing pipelines execute identically in `BatchAnalysisEngine` and `synaptipy-batch`.
@@ -991,7 +994,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Examples need further development
 - No support for all possible Neo file formats (depends on installed backends)
 
-[Unreleased]: https://github.com/anzalks/synaptipy/compare/v0.1.8...HEAD
+[Unreleased]: https://github.com/anzalks/synaptipy/compare/v0.1.9...HEAD
+[0.1.9]: https://github.com/anzalks/synaptipy/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/anzalks/synaptipy/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/anzalks/synaptipy/compare/v0.1.6.1...v0.1.7
 [0.1.6.1]: https://github.com/anzalks/synaptipy/releases/tag/v0.1.6.1

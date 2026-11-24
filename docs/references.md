@@ -504,7 +504,7 @@ using the metadata in the repository `CITATION.cff` file:
 
 ```text
 Shahul, A. K. (2026). Synaptipy: An Open-Source Electrophysiology
-Visualization and Analysis Suite (v0.1.8).
+Visualization and Analysis Suite (v0.1.9).
 https://github.com/anzalks/synaptipy
 ```
 
