@@ -245,6 +245,8 @@ class TestPackagingConfigurations:
         # Release workflow libegl1 + job-safe dry_run check + pypi_only + timeout + fast-fail + dual DMG download
         assert "libegl1" in release_yml
         assert "(github.event.inputs.dry_run == 'false' || github.event.inputs.dry_run == false)" in release_yml
+        assert "needs.testpypi-publish.result == 'success'" in release_yml
+        assert "needs.smoke_test_testpypi.result == 'success'" in release_yml
         assert "(inputs.dry_run" not in release_yml
         assert "pypi_only" in release_yml
         assert "github.event.inputs.dry_run != 'false'" not in release_yml

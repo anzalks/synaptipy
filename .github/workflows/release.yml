@@ -31,6 +31,7 @@ jobs:
     timeout-minutes: 45
     permissions:
       actions: read
+      contents: read
     outputs:
       run_fallback_tests: ${{ steps.ci_check.outputs.run_fallback_tests }}
     steps:
@@ -57,7 +58,27 @@ jobs:
                 per_page: 20,
               });
 
-              const latest = runs.data.workflow_runs[0];
+              let latest = runs.data.workflow_runs[0];
+              if (!latest && i >= 1) {
+                const commitInfo = await github.rest.repos.getCommit({ owner, repo, ref: context.sha });
+                const files = (commitInfo.data.files || []).map((f) => f.filename);
+                const parentSha = (commitInfo.data.parents && commitInfo.data.parents[0]) ? commitInfo.data.parents[0].sha : null;
+                const releaseOnlyEdit = files.length > 0 && files.every(
+                  (f) => f === '.github/workflows/release.yml' || f === 'tests/infrastructure/test_packaging_integrity.py'
+                );
+                if (releaseOnlyEdit && parentSha) {
+                  const parentRuns = await github.rest.actions.listWorkflowRuns({
+                    owner,
+                    repo,
+                    workflow_id: 'test.yml',
+                    head_sha: parentSha,
+                    per_page: 20,
+                  });
+                  if (parentRuns.data.workflow_runs[0] && parentRuns.data.workflow_runs[0].conclusion === 'success') {
+                    latest = parentRuns.data.workflow_runs[0];
+                  }
+                }
+              }
               if (!latest) {
                 if (i >= 1) {
                   core.info(`No test.yml run found for ${context.sha}; enabling fallback 3x3 test matrix.`);
@@ -251,10 +272,13 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Note: Do NOT reference `inputs.*` in job-level `if:` (only defined for
-    # `workflow_call`, causing `workflow_dispatch` jobs to skip). Use
-    # `github.event.inputs.*`, which is populated at both job and step levels.
-    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.dry_run == 'false' || github.event.inputs.dry_run == false))
+    # Note: `always()` is mandatory because `build` has a skipped ancestor
+    # (`test`) whenever `verify-ci` reuses a green `test.yml` run; without
+    # `always()`, GitHub Actions propagates `skipped` to downstream jobs.
+    if: >-
+      always() &&
+      needs.build.result == 'success' &&
+      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.dry_run == 'false' || github.event.inputs.dry_run == false)))
     continue-on-error: true
     environment:
       name: testpypi
@@ -281,9 +305,10 @@ jobs:
     needs: testpypi-publish
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: >
-      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.dry_run == 'false' || github.event.inputs.dry_run == false))) &&
-      needs.testpypi-publish.result == 'success'
+    if: >-
+      always() &&
+      needs.testpypi-publish.result == 'success' &&
+      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.dry_run == 'false' || github.event.inputs.dry_run == false)))
 
     steps:
       - uses: actions/checkout@v5
@@ -321,9 +346,10 @@ jobs:
     needs: smoke_test_testpypi
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: >
-      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.dry_run == 'false' || github.event.inputs.dry_run == false))) &&
-      needs.smoke_test_testpypi.result == 'success'
+    if: >-
+      always() &&
+      needs.smoke_test_testpypi.result == 'success' &&
+      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.dry_run == 'false' || github.event.inputs.dry_run == false)))
     environment:
       name: pypi
       url: https://pypi.org/p/synaptipy
