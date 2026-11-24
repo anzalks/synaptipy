@@ -253,7 +253,7 @@ Source checkouts and desktop bundles also include these files in
 
 | Plugin file | Tab label | Purpose |
 |---|---|---|
-| `synaptic_charge.py` | Synaptic Charge (AUC) | Integrates postsynaptic current between zero-crossings to compute total charge (pC) |
+| `synaptic_charge.py` | Synaptic Charge (AUC) | Integrates postsynaptic current (`pC`) or potential (`mV*ms`) between zero-crossings |
 | `opto_jitter.py` | Opto Latency Jitter | Trial-to-trial evoked response latency variability after TTL pulses |
 | `miniml_integration.py` | miniML Events | Deep-learning event detection via miniML (optional dependency; requires TensorFlow and cloned miniML repository) |
 | `spike_interface_integration.py` | Spike Detection (SpikeInterface) | Extracellular spike detection via SpikeInterface (optional dependency; `pip install spikeinterface`) |

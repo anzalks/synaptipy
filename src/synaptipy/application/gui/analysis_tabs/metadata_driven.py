@@ -16,6 +16,7 @@ from the AnalysisRegistry.  It also provides built-in support for:
 * **Result-aware h-lines**: horizontal lines positioned by result dict keys.
 """
 
+import inspect
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -1124,11 +1125,30 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
             return
         r0, r1 = reg.getRegion()
         if r0 < t_min or r1 > t_max or r0 >= r1:
-            new_r0 = max(t_min, min(float(r0), t_min + 0.8 * span))
-            new_r1 = min(t_max, float(r1))
-            if new_r1 <= new_r0:
-                new_r0, new_r1 = t_min + 0.05 * span, t_min + 0.55 * span
-            reg.setRegion([new_r0, new_r1])
+            if r0 >= t_max or r1 <= t_min or r0 >= r1:
+                new_r0, new_r1 = t_min + 0.02 * span, t_min + 0.25 * span
+            else:
+                new_r0 = max(t_min, float(r0))
+                new_r1 = min(t_max, float(r1))
+                if new_r1 <= new_r0:
+                    new_r0, new_r1 = t_min + 0.02 * span, t_min + 0.25 * span
+            self._syncing_regions = True
+            try:
+                reg.setRegion([new_r0, new_r1])
+                if hasattr(self, "param_generator"):
+                    w_map = self.param_generator.widgets
+                    for p_cfg in self.metadata.get("plots", []):
+                        if p_cfg.get("type") == "interactive_region":
+                            p_keys = p_cfg.get("data", [])
+                            if len(p_keys) >= 2:
+                                for pk, nv in ((p_keys[0], new_r0), (p_keys[1], new_r1)):
+                                    if pk in w_map:
+                                        blk = w_map[pk].blockSignals(True)
+                                        w_map[pk].setValue(nv)
+                                        w_map[pk].blockSignals(blk)
+                            break
+            finally:
+                self._syncing_regions = False
 
     def _on_param_changed(self):
         """Handle parameter changes."""
@@ -1362,14 +1382,28 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         metadata = AnalysisRegistry.get_metadata(self.analysis_name)
         requires_multi_trial = metadata.get("requires_multi_trial", False)
         supported_units = tuple(metadata.get("supported_channel_units", ()))
+        channel_obj = (
+            self._selected_item_recording.channels.get(self.signal_channel_combobox.currentData())
+            if (self._selected_item_recording and self.signal_channel_combobox)
+            else None
+        )
+        fallback_units = data.get("units", "") if isinstance(data, dict) else ""
+        channel_units = str(getattr(channel_obj, "units", "") or fallback_units or "")
         if supported_units and self._selected_item_recording and self.signal_channel_combobox:
-            channel = self._selected_item_recording.channels.get(self.signal_channel_combobox.currentData())
-            channel_units = str(getattr(channel, "units", "")) if channel is not None else ""
             if channel_units not in supported_units:
                 supported = ", ".join(supported_units)
                 analysis_label = metadata.get("label", self.analysis_name)
                 actual_units = channel_units or "unknown units"
                 raise AnalysisNotConfigured(f"{analysis_label} requires a channel in {supported}, not {actual_units}.")
+
+        if channel_units and "channel_units" not in params:
+            try:
+                sig = inspect.signature(func)
+                has_var_kw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
+                if has_var_kw or "channel_units" in sig.parameters:
+                    params["channel_units"] = channel_units
+            except (TypeError, ValueError):
+                pass
 
         protocol_contexts = self._update_protocol_readiness(data)
         incompatible = [context for context in protocol_contexts if context.status == "incompatible"]
@@ -1677,8 +1711,11 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         "mohm": "(MOhm)",
         "kohm": "(kOhm)",
         "mv": "(mV)",
+        "uv": "(uV)",
         "pa": "(pA)",
         "na": "(nA)",
+        "pc": "(pC)",
+        "nc": "(nC)",
         "pf": "(pF)",
         "us": "(uS)",
         "ms": "(ms)",
@@ -2029,7 +2066,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
 
             color = cfg.get("color")
             use_custom_primary = color is None or cfg.get("role") == "primary"
-            scatter_size = get_scatter_size()
+            scatter_size = int(cfg.get("size", get_scatter_size()))
             if use_custom_primary:
                 scatter_pen, scatter_brush = get_scatter_pen_and_brush()
                 symbol = cfg.get("symbol") or get_scatter_symbol()
@@ -2518,6 +2555,7 @@ class MetadataDrivenAnalysisTab(BaseAnalysisTab):
         curve1 = pg.PlotCurveItem(x=x_arr, y=y1_arr, pen=pen_none)
         curve2 = pg.PlotCurveItem(x=x_arr, y=y2_arr, pen=pen_none)
         fill = pg.FillBetweenItem(curve1, curve2, brush=brush)
+        fill.setZValue(25)
         if cfg.get("brush") is None and cfg.get("color") is None:
             fill._synaptipy_role = "auc_fill"
 

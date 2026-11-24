@@ -464,3 +464,35 @@ class TestSynapticChargeSchema:
             window_end=0.05 + 5e-6,  # 5 microseconds = 0.05 samples
         )
         assert "error" in result, "Expected error dict for sub-sample window"
+
+    def test_current_clamp_mv_epsp_auc_and_na_scaling(self, sc_module):
+        """Voltage traces (mV) report EPSP AUC (mV*ms / mV*s), and nA traces scale Charge_pC by 1000x."""
+        fn = AnalysisRegistry.get_function("synaptic_charge")
+        fs = 20_000.0
+        t = np.arange(0.0, 1.0, 1.0 / fs)
+
+        # Depolarizing EPSP on a -65.5 mV resting baseline: +7.0 mV rectangular pulse of 20 ms -> 140 mV*ms
+        v_trace = np.full_like(t, -65.5)
+        v_trace[(t >= 0.200) & (t < 0.220)] += 7.0
+        res_mv = fn(
+            v_trace,
+            t,
+            fs,
+            window_start=0.195,
+            window_end=0.240,
+            detection_method="Positive Peak",
+            channel_units="mV",
+        )
+        assert "error" not in res_mv
+        assert res_mv["metrics"]["AUC (mV*ms)"] == pytest.approx(140.0, rel=0.03)
+        assert res_mv["metrics"]["AUC (mV*s)"] == pytest.approx(0.140, rel=0.03)
+        assert res_mv["metrics"]["Baseline_mV"] == pytest.approx(-65.5, abs=1e-3)
+        assert res_mv["metrics"]["_baseline_level"] == pytest.approx(-65.5, abs=1e-3)
+
+        # Inward EPSC recorded in nA: -0.5 nA (-500 pA) for 10 ms -> -5.0 pC
+        i_na = np.zeros_like(t)
+        i_na[(t >= 0.200) & (t < 0.210)] = -0.5
+        res_na = fn(i_na, t, fs, window_start=0.195, window_end=0.230, channel_units="nA")
+        assert "error" not in res_na
+        assert res_na["metrics"]["Charge_pC"] == pytest.approx(-5.0, rel=0.03)
+        assert res_na["metrics"]["_baseline_level"] == pytest.approx(0.0, abs=1e-6)

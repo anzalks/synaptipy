@@ -275,6 +275,8 @@ def e2e_main_window(qapp):
             setattr(QtWidgets.QMessageBox, name, orig)
 
     yield win
+    win.close()
+    qapp.processEvents()
 
 
 def _select_combo_by_data(combo: QtWidgets.QComboBox | None, target_data: object) -> None:
@@ -328,6 +330,21 @@ def _run_single_method_on_tab(tab: object, m_label: str, qapp: object) -> str:
 
     if a_name == "tau_analysis" and "tau_model" in widgets:
         _run_tau_biexponential_branch(tab, widgets, qapp)
+
+    if a_name == "synaptic_charge":
+        import pyqtgraph as pg
+
+        # Also exercise current-clamp EPSP AUC on channel '0' (Vm [mV], trial 3 has evoked EPSPs at 0.202..0.402s)
+        _select_combo_by_data(tab.signal_channel_combobox, "0")
+        _select_combo_by_data(tab.data_source_combobox, 3)
+        if "window_start" in widgets and "window_end" in widgets:
+            widgets["window_start"].setValue(0.195)
+            widgets["window_end"].setValue(0.245)
+        tab._trigger_analysis()
+        qapp.processEvents()
+        dyn_auc = getattr(tab, "_dynamic_plot_items", [])
+        assert any(isinstance(it, pg.FillBetweenItem) for it in dyn_auc), "Missing AUC FillBetweenItem on mV trace"
+        assert "AUC (mV*ms)" in (tab._last_analysis_result or {}).get("metrics", {})
 
     if a_name in ("optogenetic_sync", "paired_pulse_ratio", "stimulus_train_stp", "opto_jitter"):
         import pyqtgraph as pg

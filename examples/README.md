@@ -33,7 +33,7 @@ scripts and are not executed directly from the command line.
 
 | Plugin file | Analyser tab label | What it measures |
 |---|---|---|
-| `plugins/synaptic_charge.py` | Synaptic Charge (AUC) | Postsynaptic charge (pC) via trapezoidal integration; shaded fill, baseline line, and peak star overlay |
+| `plugins/synaptic_charge.py` | Synaptic Charge (AUC) | Postsynaptic charge (`pC`) or potential AUC (`mV*ms`) via trapezoidal integration; shaded fill, baseline line, and peak star overlay |
 | `plugins/opto_jitter.py` | Opto Latency Jitter | Trial-to-trial evoked spike or EPSP/EPSC latency jitter after TTL pulses (requires a TTL channel) |
 | `plugins/miniml_integration.py` | miniML Events | Deep-learning synaptic event detection via `delvendahl/miniML` using a pre-trained Keras model |
 | `plugins/spike_interface_integration.py` | Spike Detection (SpikeInterface) | Extracellular spike detection and sorting wrapper integrating `SpikeInterface` pipelines |

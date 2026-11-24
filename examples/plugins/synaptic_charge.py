@@ -94,6 +94,49 @@ def _find_zero_crossing_right(baseline_subtracted: np.ndarray, peak_idx: int) ->
     return n - 1
 
 
+_CURRENT_TO_PA = {"pa": 1.0, "na": 1e3, "ua": 1e6, "a": 1e9}
+_VOLTAGE_TO_MV = {"mv": 1.0, "v": 1e3, "uv": 1e-3}
+
+
+def _build_unit_aware_auc_metrics(
+    raw_auc_s: float,
+    peak_raw_abs: float,
+    peak_raw_bs: float,
+    baseline_val: float,
+    int_start_s: float,
+    int_end_s: float,
+    channel_units: str,
+) -> Dict[str, Any]:
+    """Build unit-accurate metrics for voltage-clamp (Charge in pC) or current-clamp (AUC in mV*ms)."""
+    u_norm = str(channel_units or "pA").strip().lower().replace("\u00b5", "u").replace("\u03bc", "u")
+    if u_norm in _VOLTAGE_TO_MV:
+        scale_mv = _VOLTAGE_TO_MV[u_norm]
+        auc_mv_s = raw_auc_s * scale_mv
+        auc_mv_ms = auc_mv_s * 1000.0
+        return {
+            "AUC (mV*ms)": round(auc_mv_ms, 4),
+            "AUC (mV*s)": round(auc_mv_s, 6),
+            "Peak_Amp_mV": round(peak_raw_abs * scale_mv, 4),
+            "Peak_Amp_Baseline_Subtracted_mV": round(peak_raw_bs * scale_mv, 4),
+            "Baseline_mV": round(baseline_val * scale_mv, 4),
+            "Integration_Start_s": round(int_start_s, 6),
+            "Integration_End_s": round(int_end_s, 6),
+            "_baseline_level": float(baseline_val),
+        }
+
+    scale_pa = _CURRENT_TO_PA.get(u_norm, 1.0)
+    charge_pc = raw_auc_s * scale_pa
+    return {
+        "Charge_pC": round(charge_pc, 6),
+        "Peak_Amp": round(peak_raw_abs, 4),
+        "Peak_Amp_Baseline_Subtracted": round(peak_raw_bs, 4),
+        "Baseline_pA": round(baseline_val * scale_pa, 4),
+        "Integration_Start_s": round(int_start_s, 6),
+        "Integration_End_s": round(int_end_s, 6),
+        "_baseline_level": float(baseline_val),
+    }
+
+
 def calculate_synaptic_charge(
     data: np.ndarray,
     time: np.ndarray,
@@ -104,6 +147,7 @@ def calculate_synaptic_charge(
     detection_method: str = "Absolute Peak",
     pre_window_duration: float = 0.05,
     local_baseline_window_ms: float = 10.0,
+    channel_units: str = "pA",
 ) -> Dict[str, Any]:
     """
     Compute synaptic charge using peak-to-baseline zero-crossing integration.
@@ -191,6 +235,8 @@ def calculate_synaptic_charge(
     # ---- 4. Find the peak ----
     if detection_method == "Negative Peak":
         peak_idx_rel = int(np.argmin(win_bs))
+    elif detection_method == "Positive Peak":
+        peak_idx_rel = int(np.argmax(win_bs))
     else:
         peak_idx_rel = int(np.argmax(np.abs(win_bs)))
 
@@ -215,19 +261,20 @@ def calculate_synaptic_charge(
     if int_x.size < 2:
         return {"error": "Integration region too narrow after zero-crossing search"}
 
-    # ---- 7. Integrate (trapezoidal rule, pA*s = pC) ----
-    charge_pc = float(np.trapezoid(int_y_bs, int_x))
+    # ---- 7. Integrate (trapezoidal rule: pA*s = pC in VC, mV*s / mV*ms in CC) ----
+    raw_auc_s = float(np.trapezoid(int_y_bs, int_x))
 
-    metrics: Dict[str, Any] = {  # Public metrics visible in results table
-        "Charge_pC": round(charge_pc, 6),
-        "Peak_Amp": round(peak_v_abs, 4),
-        "Peak_Amp_Baseline_Subtracted": round(peak_v_bs, 4),
-        "Baseline_pA": round(baseline_val, 4),
-        "Integration_Start_s": round(float(int_x[0]), 6),
-        "Integration_End_s": round(float(int_x[-1]), 6),
-    }
+    metrics = _build_unit_aware_auc_metrics(
+        raw_auc_s=raw_auc_s,
+        peak_raw_abs=peak_v_abs,
+        peak_raw_bs=peak_v_bs,
+        baseline_val=baseline_val,
+        int_start_s=float(int_x[0]),
+        int_end_s=float(int_x[-1]),
+        channel_units=channel_units,
+    )
 
-    log.info("Synaptic charge: charge = %.4f pC", charge_pc)
+    log.info("Synaptic charge / AUC: raw integral = %.6f (%s*s)", raw_auc_s, channel_units or "pA")
 
     return {
         "module_used": "synaptic_charge",
@@ -250,7 +297,7 @@ def calculate_synaptic_charge(
     name="synaptic_charge",
     label="Synaptic Charge (AUC)",
     expects_list=False,
-    supported_channel_units=("pA", "nA"),
+    supported_channel_units=("pA", "nA", "uA", "A", "mV", "V", "uV"),
     ui_params=[
         {
             "name": "baseline_method",
@@ -264,9 +311,12 @@ def calculate_synaptic_charge(
             "name": "detection_method",
             "label": "Detection Method:",
             "type": "choice",
-            "choices": ["Absolute Peak", "Negative Peak"],
+            "choices": ["Absolute Peak", "Negative Peak", "Positive Peak"],
             "default": "Absolute Peak",
-            "tooltip": "Absolute Peak finds the largest-magnitude deflection; Negative Peak finds the most negative.",
+            "tooltip": (
+                "Absolute Peak finds the largest-magnitude deflection; "
+                "Negative Peak targets inward currents/IPSPs; Positive Peak targets EPSPs/outward currents."
+            ),
         },
         {
             "name": "window_start",
@@ -326,7 +376,6 @@ def calculate_synaptic_charge(
             "x": "_int_x",
             "y1": "_int_y",
             "y2": "_baseline",
-            "brush": [0, 150, 255, 100],
         },
         {
             "type": "markers",
@@ -334,10 +383,11 @@ def calculate_synaptic_charge(
             "y": "_peak_v",
             "color": "r",
             "symbol": "star",
+            "size": 13,
         },
         {
             "type": "hlines",
-            "data": ["Baseline_pA"],
+            "data": ["_baseline_level"],
             "color": "b",
             "styles": ["dash"],
         },
@@ -349,7 +399,7 @@ def run_synaptic_charge_wrapper(
     sampling_rate: float,
     **kwargs: Any,
 ) -> Dict[str, Any]:
-    """Registry wrapper for synaptic charge analysis."""
+    """Registry wrapper for synaptic charge / postsynaptic AUC analysis."""
     return calculate_synaptic_charge(
         data=data,
         time=time,
@@ -360,4 +410,5 @@ def run_synaptic_charge_wrapper(
         detection_method=kwargs.get("detection_method", "Absolute Peak"),
         pre_window_duration=kwargs.get("pre_window_duration", 0.05),
         local_baseline_window_ms=float(kwargs.get("local_baseline_window_ms", 10.0)),
+        channel_units=str(kwargs.get("channel_units", "pA") or "pA"),
     )
