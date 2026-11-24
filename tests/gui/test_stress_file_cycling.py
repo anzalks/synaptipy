@@ -56,10 +56,7 @@ def _make_recording(num_channels: int, num_trials: int = 3) -> Recording:
 @pytest.fixture(scope="session")
 def stress_canvas(qapp):
     """Session-scoped ExplorerPlotCanvas for stress tests."""
-    canvas = ExplorerPlotCanvas()
-    yield canvas
-    # Final teardown: clear before session ends.
-    canvas.clear()
+    return ExplorerPlotCanvas()
 
 
 @pytest.fixture(autouse=True)

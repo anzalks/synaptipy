@@ -121,6 +121,28 @@ def _drain_qt_events_after_test():
 
 
 _LAST_SESSION = None
+_SESSION_FIXTURE_KEEPALIVE: list = []
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_fixture_setup(fixturedef, request):
+    """Retain session-scoped fixture objects in offscreen mode until os._exit.
+
+    pytest tears down session-scoped fixtures inside the final test item's
+    ``pytest_runtest_teardown(nextitem=None)`` -- *before* ``pytest_sessionfinish``
+    and ``pytest_unconfigure`` run.  Dropping refcounts on session-scoped Qt /
+    PyQtGraph widgets (MainWindow, ExplorerTab, PlotCanvas) at that moment runs
+    C++ ``~QWidget`` / ``~PlotItem`` destructors against cross-referenced view
+    registries, causing intermittent SIGSEGV (exit 139) on macOS at ``[100%]``.
+    Keeping a strong reference here defers C++ destruction until ``pytest_unconfigure``
+    flushes terminal/coverage summaries and calls ``os._exit(exitstatus)``.
+    """
+    outcome = yield
+    if os.environ.get("QT_QPA_PLATFORM") == "offscreen" and getattr(fixturedef, "scope", None) == "session":
+        try:
+            _SESSION_FIXTURE_KEEPALIVE.append(outcome.get_result())
+        except Exception:
+            pass
 
 
 @pytest.hookimpl(trylast=True)
