@@ -148,15 +148,6 @@ discoverable through Neo are experimental until they receive equivalent
 end-to-end fixtures and validation tests. The extension list therefore
 describes reader discovery, not equal validation status for every format.
 
-### Empirical Comparison Example
-
-![Example empirical comparison with Clampfit](tutorial/screenshots/empirical_validation.png)
-
-`validation/benchmark_real_data.py` generates this comparison from its fixed
-benchmark inputs. It is an example validation artifact, not a claim that every
-recording or every analysis method will agree exactly with another package;
-inspect the script, inputs, and its recorded tolerances when reproducing it.
-
 ## Version Pinning Rationale
 
 | Dependency | Pin | Reason |

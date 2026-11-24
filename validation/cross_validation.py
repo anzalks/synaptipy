@@ -1,27 +1,20 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """
-Cross-Validation Framework for Synaptipy
-=========================================
+Analytical Benchmark and Concordance Framework for Synaptipy
+============================================================
 
-Compares Synaptipy analysis outputs against reference values derived from
-established electrophysiology software (Clampfit, Stimfit, EasyElectrophysiology)
-and public datasets (Allen Cell Types Database, NeuroElectro).
+Evaluates Synaptipy spike detection and passive property recovery across
+controlled signal-to-noise (SNR) and Gaussian noise sweeps using synthetic
+waveforms with exact analytical ground truth, and provides statistical
+concordance utilities (Pearson r, ICC(3,1), and Bland-Altman limits of
+agreement) used by the manifest-driven eFEL/IPFX empirical benchmark pipeline
+in ``paper/scripts/generate_paper_tables.py``.
 
 Usage::
 
     python validation/cross_validation.py --report
     python validation/cross_validation.py --snr-sweep
-
-Reference Data Sources:
-
-- Allen Cell Types Database: https://celltypes.brain-map.org/
-- NeuroElectro: https://neuroelectro.org/
-- Clements & Bekkers (1997) / Pernia-Andrade et al. (2012) (event detection benchmark)
-
-The framework generates synthetic traces with known ground-truth properties
-and evaluates Synaptipy's detection performance across multiple SNR levels.
-For real-data comparisons, reference values from published datasets are
-stored in the REFERENCE_VALUES dict below.
 """
 
 import argparse
@@ -37,59 +30,8 @@ from synaptipy.core.analysis.passive_properties import calculate_rin, calculate_
 from synaptipy.core.analysis.single_spike import detect_spikes_threshold
 
 # ---------------------------------------------------------------------------
-# Reference values from published datasets / established software
-# ---------------------------------------------------------------------------
-
-REFERENCE_VALUES = {
-    "allen_ctdb_mouse_vip": {
-        "source": "Allen Cell Types Database (VIP+ interneurons, mouse visual cortex)",
-        "url": "https://celltypes.brain-map.org/",
-        "rin_mohm": {"mean": 350, "sd": 120, "n": 42},
-        "tau_ms": {"mean": 18.5, "sd": 7.2, "n": 42},
-        "rmp_mv": {"mean": -68.5, "sd": 4.8, "n": 42},
-        "rheobase_pa": {"mean": 65, "sd": 35, "n": 42},
-    },
-    "allen_ctdb_mouse_pvalb": {
-        "source": "Allen Cell Types Database (PV+ interneurons, mouse visual cortex)",
-        "url": "https://celltypes.brain-map.org/",
-        "rin_mohm": {"mean": 95, "sd": 45, "n": 58},
-        "tau_ms": {"mean": 7.2, "sd": 3.1, "n": 58},
-        "rmp_mv": {"mean": -72.0, "sd": 3.9, "n": 58},
-        "rheobase_pa": {"mean": 230, "sd": 95, "n": 58},
-    },
-    "neuroelectro_ca1_pyramidal": {
-        "source": "NeuroElectro (CA1 pyramidal neurons, rat)",
-        "url": "https://neuroelectro.org/neuron/129/",
-        "rin_mohm": {"mean": 180, "sd": 80, "n": 156},
-        "tau_ms": {"mean": 25.0, "sd": 10.0, "n": 98},
-        "rmp_mv": {"mean": -65.0, "sd": 5.0, "n": 200},
-        "ap_threshold_mv": {"mean": -48.0, "sd": 5.0, "n": 120},
-        "ap_amplitude_mv": {"mean": 85.0, "sd": 12.0, "n": 120},
-    },
-}
-
-
-# ---------------------------------------------------------------------------
 # Data classes
 # ---------------------------------------------------------------------------
-
-
-@dataclass
-class CrossValidationResult:
-    """Single cross-validation comparison."""
-
-    metric_name: str
-    synaptipy_value: float
-    reference_value: float
-    reference_source: str
-    percent_error: float = 0.0
-    within_tolerance: bool = False
-    tolerance_pct: float = 10.0
-
-    def __post_init__(self):
-        if abs(self.reference_value) > 1e-12:
-            self.percent_error = abs(self.synaptipy_value - self.reference_value) / abs(self.reference_value) * 100
-        self.within_tolerance = self.percent_error <= self.tolerance_pct
 
 
 @dataclass
@@ -416,25 +358,10 @@ def generate_validation_report(output_dir: Optional[Path] = None) -> str:
     passive_results = run_passive_properties_benchmark()
     for r in passive_results:
         lines.append(
-            f"| {r['noise_sd_mv']:.1f} | {r['snr_passive']:.1f}× | "
-            f"{r['rin_mean_pct_error']:.1f} ± {r['rin_sd_pct_error']:.1f} | "
-            f"{r['rmp_mean_abs_error_mv']:.2f} ± {r['rmp_sd_abs_error_mv']:.2f} |"
+            f"| {r['noise_sd_mv']:.1f} | {r['snr_passive']:.1f}x | "
+            f"{r['rin_mean_pct_error']:.1f} +/- {r['rin_sd_pct_error']:.1f} | "
+            f"{r['rmp_mean_abs_error_mv']:.2f} +/- {r['rmp_sd_abs_error_mv']:.2f} |"
         )
-
-    lines.append("\n## 3. Reference Dataset Concordance\n")
-    lines.append(
-        "Reference values from Allen Cell Types Database and NeuroElectro.\n"
-        "These serve as plausibility checks — Synaptipy values from synthetic\n"
-        "traces with matching properties should fall within the published ranges.\n"
-    )
-    for dataset_name, ref in REFERENCE_VALUES.items():
-        lines.append(f"\n### {ref['source']}\n")
-        lines.append(f"Source: {ref['url']}\n")
-        lines.append("| Metric | Reference (mean ± SD) | N |")
-        lines.append("|--------|----------------------|---|")
-        for key, val in ref.items():
-            if isinstance(val, dict) and "mean" in val:
-                lines.append(f"| {key} | {val['mean']:.1f} ± {val['sd']:.1f} | {val['n']} |")
 
     report_text = "\n".join(lines)
 
