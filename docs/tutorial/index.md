@@ -373,16 +373,16 @@ overlays automatically from the decorator metadata.
 
 #### Downloadable Example Plugins
 
-Download five ready-to-run example plugins from **Help > Download Example
+Download four ready-to-run example plugins from **Help > Download Example
 Plugins...**. When **Enable Custom Plugins** is checked in **Edit > Preferences**
 (enabled by default), they appear automatically as sub-tabs in the Analyser:
 
 | File | Tab label | What it measures |
 |------|-----------|-----------------|
 | `examples/plugins/synaptic_charge.py` | **Synaptic Charge (AUC)** | Total synaptic charge (`pC`) in voltage-clamp or postsynaptic potential AUC (`mV*ms`) in current-clamp via trapezoidal integration over a user-defined window; shaded fill overlay marks the integrated area and a star marks the detected peak amplitude. |
-| `examples/plugins/opto_jitter.py` | **Opto Latency Jitter** | Trial-to-trial latency variability for evoked spikes or postsynaptic responses; requires a secondary digital/TTL channel. |
-| `examples/plugins/miniml_integration.py` | **miniML Events** | Deep-learning event detection via miniML (optional dependency; requires `tensorflow` + cloned miniML repository). |
-| `examples/plugins/spike_interface_integration.py` | **SpikeInterface Spikes** | Spike detection via SpikeInterface (optional dependency; `pip install spikeinterface`). |
+| `examples/plugins/opto_jitter.py` | **Opto Latency Jitter** | Trial-to-trial latency variability for evoked spikes or postsynaptic responses across TTL pulses; requires a secondary digital/TTL channel. |
+| `examples/plugins/miniml_integration.py` | **miniML Events** | Deep-learning event detection via miniML reporting baseline-subtracted event amplitudes (`pA`/`mV`) and kinetics (optional dependency; requires `tensorflow` + cloned miniML repository). |
+| `examples/plugins/spike_interface_integration.py` | **Spike Detection (SpikeInterface)** | Bandpass filtering and spike detection via SpikeInterface for extracellular or intracellular traces (optional dependency; `pip install spikeinterface`). |
 
 ![Analyser tab overview](screenshots/analyser_tab.png)
 
@@ -1200,8 +1200,9 @@ on `Event Type`.
 
 #### Visualization
 
-Detected event markers and diamond response-peak markers on the trace; vertical
-lines at TTL stimulus onsets.
+Dashed vertical trigger lines at all TTL stimulus onsets; cyan `trace_overlay`
+curve highlights across every post-stimulus response window; detected event
+markers and red diamond response-peak markers on the trace.
 
 ---
 
@@ -1246,9 +1247,10 @@ pulses' fitted decays at the current pulse's peak timestamp.
 
 #### Visualization
 
-Vertical lines at all $N$ stimulus onsets; dark green baseline `trace_overlay`;
-amber exponential decay `event_fit_overlay` per pulse; red diamond markers at
-each peak position.
+Dashed vertical trigger lines at all $N$ stimulus onsets; dark green baseline
+`trace_overlay`; cyan response-window `trace_overlay` highlights across all $N$
+pulses; amber exponential decay `event_fit_overlay` per pulse; red diamond
+markers at each peak position.
 
 ---
 
@@ -1292,7 +1294,8 @@ steady-state plasticity and biphasic/facilitation/depression classification.
 
 #### Visualization
 
-Vertical lines at each stimulus onset; orange diamond scatter markers at each
+Dashed vertical trigger lines at each stimulus onset; cyan response-window
+`trace_overlay` highlights across all pulses; diamond scatter markers at each
 peak; popup `STP Profile` scatter plot of normalised amplitude ($R_n / R_1$) vs.
 pulse number.
 

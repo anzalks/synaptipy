@@ -245,7 +245,7 @@ Synaptipy supports two ways to add analysis functionality:
    wrapper inside the appropriate pillar module in `src/synaptipy/core/analysis/`,
    wire it into that pillar's `method_selector`, and add unit tests in `tests/core/`.
 
-Five example plugins are available from **Help > Download Example Plugins...**.
+Four example plugins are available from **Help > Download Example Plugins...**.
 They are saved to `~/.synaptipy/plugins/` and load when **Enable Custom
 Plugins** is checked under **Edit > Preferences** (**Extensions** group).
 Source checkouts and desktop bundles also include these files in

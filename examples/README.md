@@ -109,14 +109,20 @@ Then open Synaptipy, go to **Edit > Preferences > Extensions**, and check
 
 ### Step 4 - Use the miniML Events tab
 
-1. Open a recording in the Explorer tab and switch to the Analyser tab.
+1. Open a voltage-clamp (`pA`/`nA`) or current-clamp (`mV`/`V`) recording in the
+   Explorer tab and switch to the Analyser tab (**Direction** defaults
+   automatically to `"negative"` in voltage-clamp and `"positive"` in
+   current-clamp).
 2. Select the **miniML Events** sub-tab.
-3. Click **Browse...** next to **miniML core/ Path** and select the `core/`
-   sub-directory inside the cloned miniML repo (e.g. `~/miniML/core/`).
+3. Click **Browse...** next to **miniML core/ Path** and select either the cloned
+   miniML root directory or its `core/` sub-directory (e.g. `~/miniML/core/`).
+   Standard clones under `~/PycharmProjects/miniML/core` or `~/miniML/core` are
+   auto-detected automatically.
 4. Click **Browse...** next to **Model Path (.h5)** and select a `.h5` model
-   file in `models/` (e.g. `~/miniML/models/GC_lstm_model.h5`).
-5. Adjust **Prediction Threshold** and **Direction** as needed.
-6. Click **Run Analysis**.
+   file in `models/` (e.g. `~/miniML/models/GC_lstm_model.h5` for mEPSCs or
+   `~/miniML/models/transfer_learning/GC_mEPSP/lstm_transfer.h5` for mEPSPs).
+5. Adjust **Prediction Threshold** and **Direction** as needed, then click
+   **Run Analysis**. Validated paths are saved in `QSettings` across sessions.
 
 ### Conda environment / NumPy version notes
 

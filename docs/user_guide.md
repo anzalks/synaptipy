@@ -825,7 +825,7 @@ shows one non-blocking summary dialog.
 
 #### Included Example Plugins
 
-Download five ready-to-run example plugins from **Help > Download Example
+Download four ready-to-run example plugins from **Help > Download Example
 Plugins...**. With **Enable Custom Plugins** active they load automatically from
 `~/.synaptipy/plugins/`:
 
@@ -833,8 +833,8 @@ Plugins...**. With **Enable Custom Plugins** active they load automatically from
 |-------------|--------------------|------------------|
 | `synaptic_charge.py` | Synaptic Charge (AUC) | Postsynaptic current charge (`pC`) in voltage-clamp or EPSP/IPSP area (`mV*ms`) in current-clamp; shaded AUC fill + peak star overlay |
 | `opto_jitter.py` | Opto Latency Jitter | Trial-to-trial variability in evoked spike or postsynaptic response latency after TTL pulses |
-| `miniml_integration.py` | miniML Events | Deep-learning miniature event detection via [miniML](https://github.com/delvendahl/miniML); requires optional dependencies (see [Writing Custom Analysis Plugins](extending_synaptipy.md)) |
-| `spike_interface_integration.py` | SpikeInterface Spikes | Spike detection via [SpikeInterface](https://spikeinterface.readthedocs.io/en/stable/); requires `pip install spikeinterface` (see [Writing Custom Analysis Plugins](extending_synaptipy.md)) |
+| `miniml_integration.py` | miniML Events | Deep-learning miniature event detection via [miniML](https://github.com/delvendahl/miniML); reports baseline-subtracted amplitudes (`pA`/`mV`) and kinetics (see [Writing Custom Analysis Plugins](extending_synaptipy.md)) |
+| `spike_interface_integration.py` | Spike Detection (SpikeInterface) | Bandpass filtering and spike detection via [SpikeInterface](https://spikeinterface.readthedocs.io/en/stable/); requires `pip install spikeinterface` (see [Writing Custom Analysis Plugins](extending_synaptipy.md)) |
 
 Edit a downloaded copy in `~/.synaptipy/plugins/` to create a personalised
 variant without modifying the Synaptipy installation.

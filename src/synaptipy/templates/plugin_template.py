@@ -18,10 +18,10 @@ No core Synaptipy files need to be modified.
 
 FULL EXAMPLES
 -------------
-- ``examples/plugins/opto_jitter.py``                 - optogenetic latency jitter
-- ``examples/plugins/synaptic_charge.py``             - postsynaptic charge transfer
+- ``examples/plugins/opto_jitter.py``                 - optogenetic / evoked latency jitter
+- ``examples/plugins/synaptic_charge.py``             - postsynaptic charge (pC) & EPSP AUC (mV*ms)
 - ``examples/plugins/miniml_integration.py``          - miniML deep-learning events
-- ``examples/plugins/spike_interface_integration.py`` - SpikeInterface sorting wrapper
+- ``examples/plugins/spike_interface_integration.py`` - SpikeInterface spike detection wrapper
 
 DOCUMENTATION
 -------------

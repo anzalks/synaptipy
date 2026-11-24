@@ -168,7 +168,7 @@ The batch processing engine implements a composable pipeline architecture in whi
 
 The software architecture comprises a central `AnalysisRegistry` that maps named analysis functions to the graphical interface and batch engine via a decorator pattern. Python scripts placed in `~/.synaptipy/plugins/` that use the `@AnalysisRegistry.register` decorator are discovered at startup and integrated into both the interactive analyser and batch pipeline without modification to the core package.
 
-A documented template at `src/synaptipy/templates/analysis_template.py` defines the required function signature and return schema.
+A documented template at `src/synaptipy/templates/plugin_template.py` defines the required function signature and return schema.
 
 ```python
 @AnalysisRegistry.register(

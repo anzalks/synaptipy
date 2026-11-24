@@ -347,7 +347,7 @@ your wrapper:
 
 | Value | `data` / `time` passed to wrapper | When to use |
 |---|---|---|
-| `False` (default) | Single 1-D `np.ndarray` (individual sweep or time-aligned trial average) | Single-trace metrics (charge transfer, AP repolarization rate, tau, peak amplitude) |
+| `False` (default) | Single 1-D `np.ndarray` (individual sweep or time-aligned trial average) | Single-trace metrics (charge transfer, EPSP AUC, tau, peak amplitude) |
 | `True` | Python `list[np.ndarray]` containing one 1-D array per sweep | Trial-to-trial variability metrics (optogenetic latency jitter, failure rate across sweeps) |
 
 When the batch pipeline scope is `"all_trials"` and `expects_list=False`, the
@@ -552,6 +552,7 @@ These optional keys apply to any `ui_params` entry:
 | `"tooltip"` | `str` | Hover tooltip explaining the parameter's scientific role. |
 | `"hidden"` | `bool` | When `True`, omits the widget from the GUI while keeping the default in metadata. |
 | `"visible_when"` | `dict` | Shows or hides the widget dynamically based on another parameter or clamp context. |
+| `"default_by_clamp_mode"` | `dict` | Re-defaults the parameter automatically for `"voltage_clamp"` vs. `"current_clamp"` channels (for example `{"voltage_clamp": "negative", "current_clamp": "positive"}`). |
 
 ### 4.9 Conditional Visibility (`visible_when`)
 
@@ -778,8 +779,8 @@ Draws a semi-transparent coloured segment directly over the plotted trace betwee
 
 | Field | Type | Description |
 |---|---|---|
-| `start_time` | `str` or `float` | Result key or literal float giving the region start time (s). |
-| `end_time` | `str` or `float` | Result key or literal float giving the region end time (s). |
+| `start_time` | `str`, `float`, or `Sequence[float]` | Result key or literal float(s) giving the window start time(s) in seconds. Pass equal-length sequences for multi-pulse windows. |
+| `end_time` | `str`, `float`, or `Sequence[float]` | Result key or literal float(s) giving the window end time(s) in seconds. |
 | `color` | `str` | Hex or named colour. Falls back to the **Trace Overlay** tab in **View > Plot Customization...** when omitted. |
 | `width` | `int` | Pen width in pixels (default `3`). |
 | `opacity` | `int` | Opacity percentage `0`-`100` (default `60`). |
@@ -832,9 +833,9 @@ return {
 
 ### Option A: Downloadable and Bundled Example Plugins
 
-Synaptipy provides five annotated example plugins covering single-sweep
-integration, multi-trial TTL jitter, derivative kinetics, deep-learning event
-detection, and extracellular spike detection. Install them into
+Synaptipy provides four annotated example plugins covering single-sweep
+current/voltage AUC integration, multi-trial TTL latency jitter, deep-learning
+event detection, and SpikeInterface spike detection. Install them into
 `~/.synaptipy/plugins/` via **Help > Download Example Plugins...** (source
 checkouts also include them under `examples/plugins/`).
 
@@ -842,10 +843,10 @@ checkouts also include them under `examples/plugins/`).
 
 | File | Label in GUI | Purpose |
 |---|---|---|
-| `examples/plugins/synaptic_charge.py` | Synaptic Charge (AUC) | Integrates a baseline-subtracted postsynaptic current trace between zero-crossings using `np.trapezoid` to compute total charge (pC), with `fill_between`, peak star marker, and baseline `hlines` overlays. |
-| `examples/plugins/opto_jitter.py` | Opto Latency Jitter | Detects evoked spikes or postsynaptic peak deflections per TTL pulse across sweeps (`expects_list=True`) and quantifies trial-to-trial latency standard deviation (jitter). |
-| `examples/plugins/miniml_integration.py` | miniML Events | Runs deep-learning synaptic event detection via miniML using lazy runtime imports (`run_button=True`, `dirpath` and `filepath` Browse controls; optional external dependency). |
-| `examples/plugins/spike_interface_integration.py` | Spike Detection (SpikeInterface) | Wraps extracellular traces in a `SpikeInterface` `NumpyRecording`, bandpass-filters, and detects peaks (`run_button=True`; requires optional `pip install spikeinterface`). |
+| `examples/plugins/synaptic_charge.py` | Synaptic Charge (AUC) | Integrates baseline-subtracted postsynaptic currents (`Charge_pC` in `pA`/`nA`) or potentials (`AUC (mV*ms)` in `mV`/`V`) between zero-crossings using `np.trapezoid`, with customizable `auc_fill`, peak `star` marker, and `_baseline_level` `hlines`. |
+| `examples/plugins/opto_jitter.py` | Opto Latency Jitter | Detects evoked spikes or subthreshold EPSP/EPSC peaks per TTL pulse across sweeps (`expects_list=True`, adaptive V/mV TTL midpoint threshold) with trigger `vlines`, multi-pulse `trace_overlay`, peak `markers`, and `popup_xy`. |
+| `examples/plugins/miniml_integration.py` | miniML Events | Runs deep-learning synaptic event detection via miniML (`run_button=True`, `dirpath`/`filepath` Browse controls, `QSettings` path persistence, clamp-mode auto-polarity, and baseline-subtracted amplitudes + kinetics from `detector.event_stats`). |
+| `examples/plugins/spike_interface_integration.py` | Spike Detection (SpikeInterface) | Wraps traces in a `SpikeInterface` `NumpyRecording`, bandpass-filters (with automatic `ignore_low_freq_error` for `< 100 Hz` intracellular AP bands and Nyquist clamping), and detects peaks (`run_button=True`; `pip install spikeinterface`). |
 
 To activate or customize an example plugin:
 
@@ -1139,13 +1140,13 @@ def calculate_synaptic_charge(
     name="synaptic_charge",
     label="Synaptic Charge (AUC)",
     expects_list=False,
-    supported_channel_units=("pA",),
+    supported_channel_units=("pA", "nA", "uA", "A", "mV", "V", "uV"),
     ui_params=[
         {
             "name": "baseline_method",
             "label": "Baseline Method:",
             "type": "choice",
-            "options": ["Pre-Window", "Global"],
+            "choices": ["Pre-Window", "Global"],
             "default": "Pre-Window",
             "tooltip": "Pre-Window averages a short window before window_start; Global uses trace mean.",
         },
@@ -1153,14 +1154,14 @@ def calculate_synaptic_charge(
             "name": "detection_method",
             "label": "Detection Method:",
             "type": "choice",
-            "options": ["Absolute Peak", "Negative Peak"],
+            "choices": ["Absolute Peak", "Negative Peak", "Positive Peak"],
             "default": "Absolute Peak",
         },
         {
             "name": "window_start",
             "label": "Search Window Start (s):",
             "type": "float",
-            "default": 0.0,
+            "default": 0.02,
             "min": 0.0,
             "max": 1e9,
             "decimals": 4,
@@ -1169,7 +1170,7 @@ def calculate_synaptic_charge(
             "name": "window_end",
             "label": "Search Window End (s):",
             "type": "float",
-            "default": 0.1,
+            "default": 0.25,
             "min": 0.0,
             "max": 1e9,
             "decimals": 4,
@@ -1196,7 +1197,6 @@ def calculate_synaptic_charge(
             "x": "_int_x",
             "y1": "_int_y",
             "y2": "_baseline",
-            "brush": (0, 150, 255, 100),
         },
         {
             "type": "markers",
@@ -1204,10 +1204,11 @@ def calculate_synaptic_charge(
             "y": "_peak_v",
             "color": "r",
             "symbol": "star",
+            "size": 13,
         },
         {
             "type": "hlines",
-            "data": ["Baseline_pA"],
+            "data": ["_baseline_level"],
             "color": "b",
             "styles": ["dash"],
         },
@@ -1219,7 +1220,7 @@ def run_synaptic_charge_wrapper(
     sampling_rate: float,
     **kwargs: Any,
 ) -> Dict[str, Any]:
-    """Registry wrapper for synaptic charge transfer analysis."""
+    """Registry wrapper for synaptic charge / postsynaptic AUC analysis."""
     return calculate_synaptic_charge(
         data=data,
         time=time,
@@ -1229,6 +1230,7 @@ def run_synaptic_charge_wrapper(
         baseline_method=str(kwargs.get("baseline_method", "Pre-Window")),
         detection_method=str(kwargs.get("detection_method", "Absolute Peak")),
         local_baseline_window_ms=float(kwargs.get("local_baseline_window_ms", 10.0)),
+        channel_units=str(kwargs.get("channel_units", "pA") or "pA"),
     )
 ```
 
@@ -1236,14 +1238,19 @@ Key design points demonstrated above:
 
 - **NumPy 2.0 compatibility:** Uses `np.trapezoid(int_y_bs, int_x)` rather than
   the removed `np.trapz` function.
-- **Channel unit guard:** Declares `supported_channel_units=("pA",)` so charge
-  in picocoulombs is only computed on current-clamp picoampere channels.
-- **Single interactive search window:** Declares one `interactive_region` bound
-  to `["window_start", "window_end"]`, paired with `fill_between`, a peak `star`
-  marker, and a dashed `hlines` overlay reading `"data": ["Baseline_pA"]`.
-- **Flat return dictionary:** Returns scalar metrics directly alongside
-  `_`-prefixed overlay arrays; `AnalysisRegistry.execute` normalizes the output
-  into `AnalysisResult` (schema v1).
+- **Unit-aware voltage-clamp and current-clamp support:** Declares
+  `supported_channel_units=("pA", "nA", "uA", "A", "mV", "V", "uV")` and reads
+  `channel_units` (injected automatically by `MetadataDrivenAnalysisTab`) so
+  current channels report `Charge_pC` (`nA` scaled by `1000x`) while voltage
+  channels report `AUC (mV*ms)` and `AUC (mV*s)`.
+- **Single interactive search window and customizable AUC fill:** Declares one
+  `interactive_region` bound to `["window_start", "window_end"]`, paired with
+  `fill_between` (omitting `"brush"` so it inherits **AUC Fill** from
+  **View > Plot Customization...**), a peak `star` marker, and a dashed `hlines`
+  overlay reading `"data": ["_baseline_level"]` in raw trace Y-units.
+- **Canonical return dictionary:** Returns scalar metrics alongside `_`-prefixed
+  overlay arrays; `AnalysisRegistry.execute` normalizes the output into
+  `AnalysisResult` (schema v1).
 
 ---
 
@@ -1367,8 +1374,8 @@ cp examples/plugins/spike_interface_integration.py ~/.synaptipy/plugins/
 
 | Parameter | Default | Description |
 |---|---|---|
-| `freq_min` | `300.0` Hz | Lower bandpass cutoff (removes local field potential drift) |
-| `freq_max` | `6000.0` Hz | Upper bandpass cutoff (attenuates high-frequency noise) |
+| `freq_min` | `300.0` Hz | Lower bandpass cutoff (`300 Hz` for extracellular spikes; `10-50 Hz` for intracellular APs, automatically sets `ignore_low_freq_error=True` with bounded sweep margin) |
+| `freq_max` | `6000.0` Hz | Upper bandpass cutoff (auto-clamps below Nyquist with a warning on lower-rate recordings; snaps markers to raw AP peaks when `< 2000 Hz`) |
 | `threshold_mad` | `5.0` | Detection threshold as a multiple of the MAD noise estimate |
 | `peak_sign` | `"neg"` | Spike polarity (`"neg"`, `"pos"`, or `"both"`) |
 | `exclude_sweep_ms` | `5.0` ms | Refractory lockout window preventing duplicate peak triggers |
@@ -1432,12 +1439,18 @@ to `pyproject.toml`, `requirements.txt`, or `environment.yml`.
    in-process without restarting.
 
 4. **Select model paths in the GUI:**
-   - Open a voltage-clamp recording, switch to **Analyser**, and select the
-     **miniML Events** tab.
-   - Click **Browse...** beside **miniML core/ Path** and select `~/miniML/core/`.
+   - Open a voltage-clamp (`pA`) or current-clamp (`mV`) recording, switch to
+     **Analyser**, and select the **miniML Events** tab (**Direction** defaults
+     automatically to `"negative"` in voltage-clamp and `"positive"` in
+     current-clamp).
+   - Click **Browse...** beside **miniML core/ Path** and select either
+     `~/miniML/core/` or the cloned `~/miniML` repository root (standard clones
+     under `~/PycharmProjects/miniML/core` or `~/miniML/core` are auto-detected).
    - Click **Browse...** beside **Model Path (.h5)** and select a trained model
-     (for example `~/miniML/models/GC_lstm_model.h5`).
+     (for example `~/miniML/models/GC_lstm_model.h5` for mEPSCs or
+     `~/miniML/models/transfer_learning/GC_mEPSP/lstm_transfer.h5` for mEPSPs).
    - Configure **Prediction Threshold** and **Direction**, then click **Run Analysis**.
+     Validated paths are persisted in `QSettings` across sessions.
 
 ### miniML Integration Screenshots
 
@@ -1490,36 +1503,33 @@ detector = EventDetection(
 )
 ```
 
-#### `detect_events()` Parameters
+#### `detect_events()` Parameters and Evaluated Statistics
 
 ```python
-detector.detect_events(
-    eval=True,
-    rel_prom_cutoff=rel_prom_cutoff,              # default 0.25
-    convolve_win=convolve_win,                    # default 20 (must be > 0)
-    gradient_convolve_win=gradient_convolve_win,  # default 40 (must be > 0)
-)
+detect_kwargs = {
+    "eval": True,
+    "rel_prom_cutoff": rel_prom_cutoff,  # default 0.25
+}
+if convolve_win > 0:
+    detect_kwargs["convolve_win"] = convolve_win
+if gradient_convolve_win > 0:
+    detect_kwargs["gradient_convolve_win"] = gradient_convolve_win
+detector.detect_events(**detect_kwargs)
 ```
 
-> **Warning:** Never pass `convolve_win=0` or `gradient_convolve_win=0`.
-> miniML uses `-convolve_win` as a slice index (`smth_gradient[-0:]`), which
-> zeroes the gradient array and triggers `ValueError: cannot convert float NaN
-> to integer` under NumPy >= 2.0. Always keep both windows strictly positive.
+> **Note:** Leaving `convolve_win=0` and `gradient_convolve_win=0` (the GUI
+> defaults) omits those overrides so upstream `miniML` uses its sampling-rate-adaptive
+> `filter_factor` window automatically.
 
-#### Marker Placement: Onset vs. Amplitude Peak
+#### Peak Locations vs. Baseline-Subtracted Event Amplitudes
 
-`detector.event_locations` stores steepest-slope **onset** sample indices rather
-than peak amplitude indices. Search forward within `window_size // 2` samples to
-place markers on the true event extremum:
-
-```python
-half_win = max(1, window_size // 2)
-find_extremum = np.argmin if direction == "negative" else np.argmax
-for k, onset in enumerate(valid_locs):
-    end_idx = min(int(onset) + half_win, len(data))
-    seg = data[int(onset):end_idx]
-    peak_indices[k] = int(onset) + int(find_extremum(seg)) if len(seg) > 0 else int(onset)
-```
+When `detect_events(eval=True)` runs, `miniML` populates both
+`detector.event_peak_locations` (sample indices of evaluated event peaks) and
+`detector.event_stats` (`amplitudes`, `risetimes`, `halfdecays`). Always report
+`detector.event_stats.amplitudes` for scalar amplitude metrics (so holding
+current or resting membrane potential DC offsets are subtracted), while reading
+`data[peak_indices]` for `_event_peaks` so scatter markers sit directly on the
+plotted trace.
 
 ### Adapting the Pattern to Other Inference Libraries
 
