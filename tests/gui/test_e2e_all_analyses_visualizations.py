@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import ast
 import importlib
+import importlib.util
 import logging
 from pathlib import Path
 from typing import List
@@ -340,8 +341,13 @@ def _exercise_plugin_branches(tab: object, a_name: str, widgets: dict, qapp: obj
         tab._trigger_analysis()
         qapp.processEvents()
         si_metrics = (tab._last_analysis_result or {}).get("metrics", {})
-        assert "error" not in si_metrics, f"SpikeInterface low freq_min failed: {si_metrics}"
-        assert si_metrics.get("Spike_Count", 0) >= 8
+        if importlib.util.find_spec("spikeinterface") is not None:
+            assert "error" not in si_metrics, f"SpikeInterface low freq_min failed: {si_metrics}"
+            assert si_metrics.get("Spike_Count", 0) >= 8
+        else:
+            assert "SpikeInterface is not installed" in str(
+                si_metrics.get("error", "")
+            ), f"Expected graceful missing-dependency message when spikeinterface is absent, got: {si_metrics}"
 
 
 def _assert_evoked_overlays_and_vlines(tab: object, a_name: str) -> None:
